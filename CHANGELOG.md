@@ -8,6 +8,13 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.34
+
+Tighten the variant score treatment (results-screen section 3). Dropped the
+wordy "Motivation AI … · sample" label; the card's top row now reads as a
+balanced pair — the emotion pill on the left, a prominent score figure with a
+small muted "sample" qualifier on the right, on the same baseline.
+
 ## 0.6.33
 
 Fix the compliance pill (results-screen section 2). The clear pill drops the

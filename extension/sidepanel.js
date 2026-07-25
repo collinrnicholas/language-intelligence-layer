@@ -1070,7 +1070,9 @@ function scoreSlot(i){
     return `<span class="vc-score lift">+${pct}% CTR</span>`;
   }
   const val=MOCK_SCORES[i%MOCK_SCORES.length];
-  return `<span class="vc-score"><span class="lbl">Motivation AI</span> <b>${val}</b> <span class="mark">· sample</span></span>`;
+  // Just the figure plus a small muted qualifier — the "Motivation AI" label made
+  // this consume the whole row and unbalanced the card against the emotion pill.
+  return `<span class="vc-score"><b>${val}</b> <span class="mark">sample</span></span>`;
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
