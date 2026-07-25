@@ -32,7 +32,17 @@ chrome.tabs.onActivated.addListener(async(a)=>{try{const t=await chrome.tabs.get
 chrome.runtime.onMessage.addListener((msg)=>{
   if(msg.type==='TRANSCRIPT_READY'){narrationTranscript=msg.transcript;liveTranscript.style.display='none';spt();recTimer.style.display='none';btnStopRec.style.display='none';btnRecord.style.display='none';generateRecommendations(msg.transcript);}
   if(msg.type==='TRANSCRIPT_ERROR'){liveTranscript.style.display='none';spt();recTimer.style.display='none';btnStopRec.style.display='none';btnRecord.style.display='none';recStatus.textContent='Transcription failed — try again.';recStatus.style.color='#92400E';}
-  if(msg.type==='LIVE_TRANSCRIPT'){liveTranscript.style.display='block';liveTranscript.textContent=msg.text||'';}
+  if(msg.type==='LIVE_TRANSCRIPT'){
+    liveTranscript.style.display='block';
+    // Accumulate transcript — don't replace, append so user sees full history
+    if (!liveTranscript._fullText) liveTranscript._fullText = '';
+    const prev = liveTranscript._fullText;
+    if (msg.text && msg.text.length > prev.length) {
+      liveTranscript._fullText = msg.text;
+      liveTranscript.textContent = msg.text;
+      liveTranscript.scrollTop = liveTranscript.scrollHeight;
+    }
+  }
 });
 
 // ─── Configure → Record ──────────────────────────────────────────
@@ -42,6 +52,7 @@ btnStart.addEventListener('click',()=>{
   fallbackArea.style.display='none';fallbackInput.value='';genStatus.style.display='none';
   btnGenerate.style.display='none';recTimer.style.display='none';recStatus.textContent='';recStatus.style.color='';
   btnRecord.style.display='';btnStopRec.style.display='none';spt();
+  liveTranscript._fullText='';liveTranscript.textContent='';liveTranscript.style.display='none';
   document.querySelector('.instructions').style.display='';
   chrome.storage.local.remove(['persado:recording','persado:transcript','persado:recordingStart']);
   sh(pnlRecord);st('Ready');
