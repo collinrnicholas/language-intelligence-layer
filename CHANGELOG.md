@@ -8,6 +8,18 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.22
+
+Results 1d — removed Export PDF.
+
+- Deleted the Export PDF button, its click handler, and all the now-dead
+  PDF-generation code (the `window.open` print document, its inline styles, the
+  variant/meta HTML builders). Nothing else referenced it. This also removes the
+  last `#5C2D91`/emoji-bearing code path in the panel, which lived only in that
+  print template.
+
+---
+
 ## 0.6.21
 
 Results 1d — compliance is a bordered pill.
