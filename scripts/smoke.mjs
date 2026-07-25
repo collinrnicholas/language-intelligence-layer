@@ -23,7 +23,9 @@ const BG = read('src/background.js');
 const CONTENT = read('src/content.js');
 const MESSAGES = read('src/messages.js');
 const BOOT = read('src/boot.js');
+const CONFIG = read('src/config.js');
 const MANIFEST = JSON.parse(read('manifest.json'));
+const GATEWAY_SRC = readFileSync(join(ROOT, 'gateway/server.mjs'), 'utf8');
 
 const failures = [];
 const notes = [];
@@ -238,7 +240,52 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   if (HTML.indexOf('</style>') < 0) fail('sidepanel.html', 'no </style> found');
 }
 
-// ── 11. manifest version is documented in the changelog ───────────
+// ── 11. gateway URL lives in exactly one place ────────────────────
+{
+  // Two hardcoded copies of the base URL is how a port change becomes an
+  // unexplainable "Failed to fetch". manifest host_permissions are allowed to
+  // name it (they must), so only .js sources are counted.
+  const sources = { 'src/config.js': CONFIG, 'sidepanel.js': PANEL, 'src/background.js': BG,
+                    'src/content.js': CONTENT, 'src/messages.js': MESSAGES, 'src/boot.js': BOOT };
+  const hits = [];
+  for (const [name, src] of Object.entries(sources)) {
+    const n = (src.match(/https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/g) || []).length;
+    if (n) hits.push(`${name} (${n})`);
+  }
+  if (hits.length !== 1 || !hits[0].startsWith('src/config.js')) {
+    fail('gateway url', `must appear ONLY in src/config.js — found in ${hits.join(', ') || 'nowhere'}`);
+  }
+  if (!/GATEWAY_URL\s*=\s*'http:\/\/127\.0\.0\.1:/.test(CONFIG)) {
+    fail('gateway url', 'config.js should target 127.0.0.1 (not localhost) to avoid IPv6/IPv4 drift');
+  }
+  // ...and the manifest must actually permit it.
+  const port = (CONFIG.match(/127\.0\.0\.1:(\d+)/) || [])[1];
+  const host = MANIFEST.host_permissions || [];
+  for (const h of [`http://127.0.0.1:${port}/*`, `http://localhost:${port}/*`]) {
+    if (!host.includes(h)) fail('gateway url', `manifest host_permissions is missing ${h}`);
+  }
+  notes.push(`gateway url declared once in src/config.js (port ${port})`);
+}
+
+// ── 12. every endpoint the extension calls has a gateway route ────
+{
+  const declared = [...CONFIG.matchAll(/^\s{4}[A-Z_]+:\s*'(\/[^']+)'/gm)].map(m => m[1]);
+  if (!declared.length) fail('endpoints', 'no ENDPOINTS found in src/config.js');
+  for (const ep of declared) {
+    // Routes look like: req.url === '/health'  /  req.url === '/v1/ai/recommend'
+    if (!new RegExp(`['"\`]${ep.replace(/\//g, '\\/')}['"\`]`).test(GATEWAY_SRC)) {
+      fail('endpoint drift', `extension calls ${ep} but gateway/server.mjs has no route for it`);
+    }
+  }
+  // And every ENDPOINTS entry should actually be used by the extension.
+  const used = uniq(all(/ENDPOINTS\.([A-Z_]+)/g, PANEL_C + BG_C));
+  const names = [...CONFIG.matchAll(/^\s{4}([A-Z_]+):\s*'\//gm)].map(m => m[1]);
+  const unused = names.filter(n => !used.includes(n));
+  if (unused.length) notes.push(`endpoints declared but unused: ${unused.join(', ')}`);
+  notes.push(`${declared.length} endpoints checked against gateway routes`);
+}
+
+// ── 13. manifest version is documented in the changelog ───────────
 {
   const version = MANIFEST.version;
   if (!/^\d+\.\d+\.\d+$/.test(version)) fail('version', `manifest version "${version}" is not x.y.z`);
@@ -250,7 +297,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`manifest version ${version}`);
 }
 
-// ── 12. no emoji in the panel UI ──────────────────────────────────
+// ── 14. no emoji in the panel UI ──────────────────────────────────
 {
   const start = HTML.indexOf('id="panelResults"');
   const rebuilt = HTML.slice(0, start < 0 ? HTML.length : start);

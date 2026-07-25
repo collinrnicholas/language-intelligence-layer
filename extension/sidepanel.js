@@ -24,7 +24,9 @@ const shotCount=$('shotCount'),shotStrip=$('shotStrip');
 const transcriptBlock=$('transcriptBlock'),transcriptText=$('transcriptText');
 const pnlProcess=$('panelProcess');
 const procSub=$('procSub'),pbarFill=$('pbarFill'),briefLine=$('briefLine'),procErr=$('procErr');
-const btnRetry=$('btnRetry'),btnStartOver=$('btnStartOver');
+const btnRetry=$('btnRetry'),btnStartOver=$('btnStartOver'),btnSaveAudio=$('btnSaveAudio');
+const retainNote=$('retainNote'),offlineHint=$('offlineHint');
+const resumeCard=$('resumeCard'),resumeMsg=$('resumeMsg'),btnResume=$('btnResume'),btnDiscard=$('btnDiscard'),btnSaveAudio2=$('btnSaveAudio2');
 const stepGenerateLabel=$('stepGenerateLabel'),stepComplianceLabel=$('stepComplianceLabel');
 const resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
@@ -223,14 +225,69 @@ function procFail(id,reason,retry){
   st('Error');setActionState('ready');
 }
 
-btnRetry.addEventListener('click',()=>{const f=retryFn;if(f){procErr.style.display='none';f();}});
+btnRetry.addEventListener('click',()=>{const f=retryFn;if(f){procErr.style.display='none';retainNote.style.display='none';f();}});
+btnResume.addEventListener('click',()=>{resumeCard.style.display='none';procShow();retryTranscribe();});
+btnDiscard.addEventListener('click',async()=>{
+  // Explicit only — a recording is never discarded automatically.
+  await chrome.runtime.sendMessage({type:MSG.DISCARD_PENDING_AUDIO}).catch(()=>{});
+  resumeCard.style.display='none';tm('Unsent brief discarded');
+});
 btnStartOver.addEventListener('click',()=>resetAll());
 
+/**
+ * Turn a typed failure into something a bank marketer can act on. A raw
+ * "TypeError: Failed to fetch" is never shown — that string is what sent us here.
+ */
+function gatewayMessage(kind,error,url){
+  const at=url||GATEWAY_URL;
+  if(kind===ERR.UNREACHABLE)return `Can't reach the Persado service on this machine (${at}). Start it with \`npm run gateway\`, then Try again.`;
+  if(kind===ERR.TIMEOUT)return "The service didn't respond in time. Check it is still running, then Try again.";
+  if(kind==='no_pending_audio')return 'The recording is no longer available. Record the brief again.';
+  // Reachable but unhappy: the gateway's own message is the useful one.
+  return error||'The service returned an error.';
+}
+
+/** Non-blocking hint on the start screen so the user learns before narrating. */
+async function refreshOfflineHint(){
+  try{
+    const h=await chrome.runtime.sendMessage({type:MSG.GATEWAY_HEALTH});
+    if(h?.ok){offlineHint.style.display='none';return;}
+    offlineHint.textContent=`Persado service offline at ${h?.url||GATEWAY_URL} — start it with \`npm run gateway\` before recording.`;
+    offlineHint.style.display='';
+  }catch{offlineHint.style.display='none';}
+}
+
+/** Offer the raw narration as a file so it is never trapped in the extension. */
+async function saveAudio(){
+  try{
+    const p=await chrome.runtime.sendMessage({type:MSG.GET_PENDING_AUDIO});
+    if(!p?.ok||!p.audioData){tm('No recording to save','err');return;}
+    const blob=await fetch(p.audioData).then(r=>r.blob());
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=`persado-brief-${new Date(p.at||Date.now()).toISOString().replace(/[:.]/g,'-')}.webm`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+    tm('Audio saved');
+  }catch(e){tm('Could not save the audio','err');}
+}
+btnSaveAudio.addEventListener('click',saveAudio);
+btnSaveAudio2.addEventListener('click',saveAudio);
+
 function dispatchTranscribe(){
-  if(!lastAudio){procFail('stepTranscribe','No audio was captured for this brief.',null);return;}
-  procErr.style.display='none';
+  if(!lastAudio){retryTranscribe();return;}   // no local copy — use the retained one
+  procErr.style.display='none';retainNote.style.display='none';
   setStep('stepTranscribe','active');stage(STAGE.transcribe);armTimeout();
-  chrome.runtime.sendMessage({type:MSG.TRANSCRIBE_AUDIO,audioData:lastAudio});
+  chrome.runtime.sendMessage({type:MSG.TRANSCRIBE_AUDIO,audioData:lastAudio}).catch(()=>{});
+}
+
+/** Try again re-runs ONLY transcription, against the audio already retained. */
+function retryTranscribe(){
+  procErr.style.display='none';retainNote.style.display='none';
+  setStep('stepTranscribe','active');stage(STAGE.transcribe);armTimeout();
+  chrome.runtime.sendMessage({type:MSG.RETRY_TRANSCRIBE}).then((r)=>{
+    if(r&&!r.ok&&r.kind==='no_pending_audio')procFail('stepTranscribe',gatewayMessage(r.kind,r.error),null);
+  }).catch(()=>{});
 }
 
 // ─── Screens captured ────────────────────────────────────────────
@@ -275,7 +332,16 @@ chrome.runtime.onMessage.addListener((msg)=>{
   }
   if(msg.type===MSG.TRANSCRIPT_ERROR){
     endRecordingUi();
-    procFail('stepTranscribe','Transcription failed'+(msg.error?' — '+msg.error:'.'),lastAudio?dispatchTranscribe:null);
+    procFail('stepTranscribe',gatewayMessage(msg.kind,msg.error,msg.url),retryTranscribe);
+    // Say plainly that the narration is safe, or offer to save it if it is not.
+    if(msg.retained){
+      retainNote.textContent='Your recording is saved on this device — Try again re-sends it, no need to record again.';
+      btnSaveAudio.style.display='';
+    }else{
+      retainNote.textContent='This recording could not be held in memory. Save the audio to keep it.';
+      btnSaveAudio.style.display='';
+    }
+    retainNote.style.display='';
   }
   if(msg.type===MSG.LIVE_TRANSCRIPT){
     if(typeof msg.final==='string'){trFinal=msg.final;trInterim=msg.interim||'';}
@@ -555,7 +621,7 @@ async function generateRecommendations(narration){
     renderResults();sh(pnlResults);st('Done');
     setActionState('results',recommendations.length);
   }catch(e){
-    procFail('stepGenerate',e.message||'Generation failed.',()=>generateRecommendations(narration));
+    procFail('stepGenerate',gatewayMessage(e.kind,e.message,e.url),()=>generateRecommendations(narration));
   }
 }
 
@@ -582,6 +648,10 @@ btnExport.addEventListener('click',()=>{
 // ─── New ─────────────────────────────────────────────────────────
 
 function resetAll(){
+  // Start over is an explicit discard of the retained recording — the only path
+  // besides a successful transcription that drops it.
+  chrome.runtime.sendMessage({type:MSG.DISCARD_PENDING_AUDIO}).catch(()=>{});
+  resumeCard.style.display='none';retainNote.style.display='none';
   // Best-effort: never abandon a live recorder in the page.
   chrome.tabs.query({active:true,currentWindow:true})
     .then(([t])=>t?.id&&chrome.tabs.sendMessage(t.id,{type:MSG.STOP_RECORDING}).catch(()=>{}))
@@ -599,11 +669,26 @@ function resetAll(){
 }
 btnNew.addEventListener('click',resetAll);
 
+/** "You have an unsent brief from {time}" — shown on the start screen. */
+async function offerResume(){
+  try{
+    const p=await chrome.runtime.sendMessage({type:MSG.GET_PENDING_AUDIO});
+    if(!p?.ok)return false;
+    const when=new Date(p.at||Date.now());
+    const hhmm=when.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    resumeMsg.textContent=`You have an unsent brief from ${hhmm} that was never transcribed. Try again to send it, or discard it.`;
+    resumeCard.style.display='';
+    return true;
+  }catch{return false;}
+}
+
 async function init(){
   await dp();
   // The version strip is gone from the header (design target); keep the version
   // discoverable on hover instead of adding a visible element back.
   try{$('brandLockup').title='Persado Demo v'+chrome.runtime.getManifest().version;}catch{}
+  refreshOfflineHint();
+  await offerResume();
   try{const s=await chrome.storage.local.get([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
     if(s[KEYS.RECORDING]){
       // Reopened mid-session: content.js is still recording and still posting

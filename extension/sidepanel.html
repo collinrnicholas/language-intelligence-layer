@@ -218,6 +218,13 @@
     .btn-quiet{background:none;border:none;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text-3);cursor:pointer;padding:6px 2px;}
     .btn-quiet:hover{color:var(--text-1);}
 
+    /* Retained-recording note under a failed step, and the resume offer on 1a. */
+    .retain-note{margin-top:12px;font-size:11.5px;line-height:1.5;color:var(--text-3);}
+    .resume{margin-bottom:20px;padding:14px 16px;border:1px solid var(--amber);border-radius:var(--rc);background:var(--amber-bg);}
+    .resume-m{margin:6px 0 12px;font-size:12.5px;line-height:1.5;color:var(--amber-text);}
+    .resume-a{display:flex;align-items:center;gap:10px;}
+    .offline{margin-bottom:20px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--rctl);background:var(--surface-2);font-size:11.5px;line-height:1.5;color:var(--text-2);}
+
     .brief-card{flex:none;margin-top:24px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rc);padding:16px;}
     .brief-line{margin-top:6px;font-size:11.5px;line-height:1.45;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 
@@ -270,6 +277,17 @@
       <div class="scr-title">Record your brief</div>
       <div class="scr-sub">Talk through the page and what you want it to do. Persado listens, captures the screen, and returns compliant copy scored to perform.</div>
     </div>
+
+    <div class="resume" id="resumeCard" style="display:none;">
+      <div class="sec-label">Unsent brief</div>
+      <div class="resume-m" id="resumeMsg"></div>
+      <div class="resume-a">
+        <button class="btn btn-outline btn-sm" id="btnResume">Try again</button>
+        <button class="btn-quiet" id="btnSaveAudio2">Save audio</button>
+        <button class="btn-quiet" id="btnDiscard">Discard</button>
+      </div>
+    </div>
+    <div class="offline" id="offlineHint" style="display:none;"></div>
 
     <div class="field">
       <label>Capturing</label>
@@ -384,8 +402,10 @@
 
     <div class="proc-err" id="procErr" style="display:none;">
       <button class="btn btn-outline btn-sm" id="btnRetry">Try again</button>
+      <button class="btn-quiet" id="btnSaveAudio" style="display:none;">Save audio</button>
       <button class="btn-quiet" id="btnStartOver">Start over</button>
     </div>
+    <div class="retain-note" id="retainNote" style="display:none;"></div>
   </div>
 
   <div class="brief-card">

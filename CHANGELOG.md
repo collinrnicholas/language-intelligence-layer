@@ -8,6 +8,51 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.2
+
+A failed transcription no longer costs the user their recording, and a stopped
+gateway now says so in plain language.
+
+### The recording is never lost
+
+- The recorded audio is retained in `chrome.storage.session` the moment it arrives
+  and BEFORE transcription is attempted, so it survives the failure, a panel
+  close, and service-worker eviction. It never touches disk — the start screen
+  promises audio stays on the device until results are reviewed.
+- Exactly one pending recording is kept. It is cleared on successful
+  transcription and on **Start over**, and never automatically otherwise.
+- **Try again** re-runs only transcription against the retained audio
+  (`RETRY_TRANSCRIBE`). It does not re-record and does not discard.
+- Reopening the panel with an unsent brief offers "You have an unsent brief from
+  {time}" with Try again / Save audio / Discard. Discarding is explicit.
+- **Save audio** downloads the raw `.webm` so a narration is never trapped, and is
+  offered automatically when a recording is too large to retain rather than
+  silently dropping it.
+
+### Failures explain themselves
+
+- `GET /health` preflight (2s) before transcription, so a stopped service is
+  reported as stopped rather than as a transport error mid-upload.
+- Typed failures replace raw strings. `gateway_unreachable` →
+  "Can't reach the Persado service on this machine (URL). Start it with
+  `npm run gateway`, then Try again." `gateway_timeout` → "The service didn't
+  respond in time." `gateway_error` → the gateway's own message (quota, API key).
+  A raw `TypeError: Failed to fetch` can no longer reach a user.
+- AbortController timeouts on both gateway calls (2s health, 60s
+  transcribe/recommend), so a hung service surfaces a message instead of spinning.
+- Optional "service offline" hint on the start screen, so the user finds out
+  before narrating for a minute.
+
+### Smoke test
+
+- Fails if the gateway base URL appears anywhere under `extension/` other than
+  `src/config.js`, if it targets `localhost` instead of `127.0.0.1`, or if the
+  local `host_permissions` entries are missing.
+- Fails on endpoint drift: every path in `ENDPOINTS` must have a matching route in
+  `gateway/server.mjs`, and vice versa — the same guard as the storage-key check.
+
+---
+
 ## 0.6.1
 
 Gateway connectivity: one URL, explicit bind, and visible requests.

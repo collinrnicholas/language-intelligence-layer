@@ -20,20 +20,125 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 
 function relay(msg) { chrome.runtime.sendMessage(msg).catch(() => {}); }
 
+/**
+ * A failure the UI can explain. `kind` is one of ERR.*; the panel maps it to plain
+ * language. A raw "TypeError: Failed to fetch" must never reach a bank marketer.
+ */
+function gwError(kind, message, extra = {}) {
+  return Object.assign(new Error(message), { kind, url: GATEWAY_URL, ...extra });
+}
+
+/**
+ * fetch with a timeout, translating transport failures into typed errors.
+ * A rejected fetch() means the request never arrived — that is categorically
+ * different from an HTTP error response, and the two used to be indistinguishable.
+ */
+async function gwFetch(path, init = {}, timeoutMs = TIMEOUTS.REQUEST_MS) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    return await fetch(GATEWAY_URL + path, { ...init, signal: ac.signal });
+  } catch (e) {
+    if (e?.name === 'AbortError') throw gwError(ERR.TIMEOUT, `No response from the service within ${Math.round(timeoutMs / 1000)}s`);
+    // TypeError: Failed to fetch / NetworkError — nothing is listening.
+    throw gwError(ERR.UNREACHABLE, `Cannot reach the service at ${GATEWAY_URL}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Cheap preflight so a stopped gateway is reported as such, not as a bug. */
+async function gatewayHealth() {
+  try {
+    const r = await gwFetch(ENDPOINTS.HEALTH, { method: 'GET' }, TIMEOUTS.HEALTH_MS);
+    if (!r.ok) return { ok: false, kind: ERR.GATEWAY, url: GATEWAY_URL, error: `Service returned ${r.status}` };
+    const body = await r.json().catch(() => ({}));
+    return { ok: true, url: GATEWAY_URL, openai: !!body.openai, models: body.models };
+  } catch (e) {
+    return { ok: false, kind: e.kind || ERR.UNREACHABLE, url: GATEWAY_URL, error: e.message };
+  }
+}
+
 async function transcribe(dataUrl) {
-  const blob = await fetch(dataUrl).then(r => r.blob());
-  if (blob.size < 100) throw new Error('Audio too short — no speech detected');
+  const blob = await fetch(dataUrl).then(r => r.blob());   // data: URL, not the network
+  if (blob.size < 100) throw gwError('audio_too_short', 'Audio too short — no speech detected');
+
+  // Preflight: if the service is not there, say so instead of failing mid-upload
+  // with a transport error that reads like a bug.
+  const health = await gatewayHealth();
+  if (!health.ok) throw gwError(health.kind, health.error);
+
   const fd = new FormData();
   fd.append('file', blob, 'narration.webm');
-  const r = await fetch(GATEWAY_URL + ENDPOINTS.TRANSCRIBE, { method: 'POST', body: fd });
+  const r = await gwFetch(ENDPOINTS.TRANSCRIBE, { method: 'POST', body: fd });
   if (!r.ok) {
+    // Reachable but unhappy — surface the gateway's own message.
     const e = await r.json().catch(() => ({}));
-    const msg = e.error || 'Transcription failed';
-    if (msg.includes('429') || msg.includes('quota')) throw new Error('OpenAI quota exceeded');
-    if (msg.includes('401')) throw new Error('API key invalid');
-    throw new Error(msg);
+    const msg = e.error || `Transcription failed (${r.status})`;
+    if (msg.includes('429') || msg.includes('quota')) throw gwError(ERR.GATEWAY, 'OpenAI quota exceeded');
+    if (msg.includes('401')) throw gwError(ERR.GATEWAY, 'API key invalid');
+    throw gwError(ERR.GATEWAY, msg);
   }
   return (await r.json()).text || '(no speech detected)';
+}
+
+// ─── Pending audio retention ─────────────────────────────────────
+//
+// A failed transcription must never cost the user their narration. The audio is
+// held in session storage (survives a panel close and worker eviction, never
+// touches disk) until transcription SUCCEEDS or the user explicitly discards it.
+// Exactly one pending recording is kept.
+
+const AUDIO_KEY = KEYS.PENDING_AUDIO;
+// chrome.storage.session has a ~10MB quota; stay well clear of it.
+const MAX_AUDIO_CHARS = 7_000_000;
+
+async function keepAudio(dataUrl) {
+  if (!dataUrl) return { stored: false, reason: 'no audio' };
+  if (dataUrl.length > MAX_AUDIO_CHARS) {
+    // Do NOT silently drop it — the panel offers a download instead.
+    console.warn('[persado] recording too large to retain', dataUrl.length);
+    return { stored: false, reason: 'too_large', bytes: dataUrl.length };
+  }
+  try {
+    await store.set({ [AUDIO_KEY]: { audioData: dataUrl, at: Date.now(), bytes: dataUrl.length } });
+    return { stored: true, bytes: dataUrl.length };
+  } catch (e) {
+    console.warn('[persado] could not retain audio', e);
+    return { stored: false, reason: 'storage_failed' };
+  }
+}
+async function readAudio() {
+  try { return (await store.get(AUDIO_KEY))[AUDIO_KEY] || null; } catch { return null; }
+}
+async function dropAudio() {
+  try { await store.remove(AUDIO_KEY); } catch {}
+}
+
+/**
+ * One transcription attempt against a retained recording. The audio is kept on
+ * failure so Try again re-runs only this step, and cleared on success.
+ */
+async function runTranscribe(dataUrl) {
+  try {
+    const text = await transcribe(dataUrl);
+    await dropAudio();
+    chrome.storage.local.set({ [KEYS.TRANSCRIPT]: text });
+    relay({ type: MSG.TRANSCRIPT_READY, transcript: text });
+    return { ok: true, transcript: text };
+  } catch (err) {
+    setSessionState('ready');
+    const pending = await readAudio();
+    relay({
+      type: MSG.TRANSCRIPT_ERROR,
+      error: err.message,
+      kind: err.kind || ERR.GATEWAY,
+      url: err.url || GATEWAY_URL,
+      retained: !!pending,           // did we keep the recording?
+      at: pending?.at || null,
+    });
+    return { ok: false, error: err.message, kind: err.kind };
+  }
 }
 
 // ─── Page context ────────────────────────────────────────────────
@@ -329,17 +434,37 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Transcribe audio from sidepanel (or content script)
   if (msg.type === MSG.TRANSCRIBE_AUDIO && msg.audioData) {
     setSessionState('working');
-    transcribe(msg.audioData)
-      .then(text => {
-        chrome.storage.local.set({ [KEYS.TRANSCRIPT]: text });
-        relay({ type: MSG.TRANSCRIPT_READY, transcript: text });
-        sendResponse({ ok: true, transcript: text });
-      })
-      .catch(err => {
-        setSessionState('ready');
-        relay({ type: MSG.TRANSCRIPT_ERROR, error: err.message });
-        sendResponse({ ok: false, error: err.message });
-      });
+    // Retain FIRST, attempt second: if anything below throws, the recording is
+    // already safe. This ordering is the whole point.
+    keepAudio(msg.audioData)
+      .then(kept => runTranscribe(msg.audioData).then(r => sendResponse({ ...r, kept })))
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  // Try again — re-runs only the failed step, against the retained recording.
+  if (msg.type === MSG.RETRY_TRANSCRIBE) {
+    setSessionState('working');
+    readAudio()
+      .then(p => p?.audioData
+        ? runTranscribe(p.audioData)
+        : { ok: false, error: 'The recording is no longer available.', kind: 'no_pending_audio' })
+      .then(sendResponse)
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  // Resume offer + the download escape hatch both read through this.
+  if (msg.type === MSG.GET_PENDING_AUDIO) {
+    readAudio().then(p => sendResponse(p ? { ok: true, at: p.at, bytes: p.bytes, audioData: p.audioData } : { ok: false }));
+    return true;
+  }
+  if (msg.type === MSG.DISCARD_PENDING_AUDIO) {
+    dropAudio().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  if (msg.type === MSG.GATEWAY_HEALTH) {
+    gatewayHealth().then(sendResponse);
     return true;
   }
 

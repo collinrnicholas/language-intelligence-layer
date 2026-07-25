@@ -29,6 +29,10 @@
 
     // ── panel → worker
     TRANSCRIBE_AUDIO: 'TRANSCRIBE_AUDIO',
+    RETRY_TRANSCRIBE: 'RETRY_TRANSCRIBE',
+    GET_PENDING_AUDIO: 'GET_PENDING_AUDIO',
+    DISCARD_PENDING_AUDIO: 'DISCARD_PENDING_AUDIO',
+    GATEWAY_HEALTH: 'GATEWAY_HEALTH',
     CAPTURE_PAGE_CONTEXT: 'CAPTURE_PAGE_CONTEXT',
     GET_PAGE_CONTEXT: 'GET_PAGE_CONTEXT',
     CLEAR_PAGE_CONTEXT: 'CLEAR_PAGE_CONTEXT',
@@ -47,6 +51,10 @@
     RECORDING_START: 'persado:recordingStart',
     PAGE_CONTEXT: 'persado:pageContext',
     ACTION_STATE: 'persado:actionState',
+    // The recorded audio awaiting a successful transcription. Session storage, so
+    // it survives a panel close and worker eviction but never reaches disk — the
+    // start screen promises audio stays on the device until results are reviewed.
+    PENDING_AUDIO: 'persado:pendingAudio',
   });
 
   // Field names inside the stored page-context object. The producer
