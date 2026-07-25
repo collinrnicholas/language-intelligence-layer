@@ -8,6 +8,19 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.23
+
+Results 1d — footer is one clean row.
+
+- After the PDF removal the footer has two items: `Re-record brief` (quiet, left)
+  and `Send all to Portal →` (primary, right). Removed the `res-foot-l` wrapper;
+  both are now direct children with `justify-content: space-between`.
+- Neither uses `flex:1` (that was stretching and wrapping them); both are
+  `white-space: nowrap`, equal height, vertically centred, on one row. The row is
+  pinned by layout, never `position: fixed`.
+
+---
+
 ## 0.6.22
 
 Results 1d — removed Export PDF.

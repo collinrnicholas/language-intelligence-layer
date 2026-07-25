@@ -113,8 +113,11 @@
     .vcard.sel .vc-use{background:var(--red);}
 
     /* Pinned footer + Portal handoff stub. */
-    .res-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:14px;border-top:1px solid var(--border);}
-    .res-foot-l{display:flex;align-items:center;gap:16px;}
+    /* Two items, one row, vertically centred, equal height, neither wrapping. No
+       flex:1 on either — that is what stretched and wrapped them. */
+    .res-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;border-top:1px solid var(--border);}
+    .res-foot>*{flex:none;height:34px;white-space:nowrap;}
+    .res-foot .btn-quiet{display:inline-flex;align-items:center;}
     .portal-ok{flex:none;margin-top:12px;padding:12px 14px;background:var(--green-bg);border:1px solid var(--green);border-radius:10px;}
     .portal-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--green-text);}
     .portal-dot{position:relative;flex:none;width:15px;height:15px;border-radius:50%;background:var(--green);}
@@ -565,9 +568,7 @@
   </div>
 
   <div class="res-foot">
-    <div class="res-foot-l">
-      <button class="btn-quiet" id="btnNewBrief">Re-record brief</button>
-    </div>
+    <button class="btn-quiet" id="btnNewBrief">Re-record brief</button>
     <button class="btn btn-primary btn-sm" id="btnSendPortal">Send all to Portal →</button>
   </div>
 </div>
