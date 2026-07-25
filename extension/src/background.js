@@ -1,10 +1,12 @@
 // ─── Persado Demo — Background Worker ────────────────────────────
 //
-// Transcribes audio sent from sidepanel via gateway Whisper.
+// Relays messages between content script and sidepanel.
+// Transcribes audio via gateway Whisper.
 
 const GATEWAY = 'http://localhost:8787';
-
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
+function relay(msg) { chrome.runtime.sendMessage(msg).catch(() => {}); }
 
 async function transcribe(dataUrl) {
   const blob = await fetch(dataUrl).then(r => r.blob());
@@ -23,16 +25,24 @@ async function transcribe(dataUrl) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Relay content script events to sidepanel
+  if (msg.type === 'RECORDING_STARTED') { relay(msg); return false; }
+  if (msg.type === 'RECORDING_ERROR') { relay(msg); return false; }
+
+  // Transcribe audio from sidepanel (or content script)
   if (msg.type === 'TRANSCRIBE_AUDIO' && msg.audioData) {
     transcribe(msg.audioData)
       .then(text => {
         chrome.storage.local.set({ 'persado:transcript': text });
+        relay({ type: 'TRANSCRIPT_READY', transcript: text });
         sendResponse({ ok: true, transcript: text });
       })
       .catch(err => {
+        relay({ type: 'TRANSCRIPT_ERROR', error: err.message });
         sendResponse({ ok: false, error: err.message });
       });
     return true;
   }
+
   return false;
 });

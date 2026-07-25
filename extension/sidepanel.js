@@ -1,7 +1,5 @@
 // ─── Persado Demo — Side Panel ───────────────────────────────────
-//
-// Tells content script to inject a floating record button into the
-// page. User clicks it there → getUserMedia in page context → works.
+// Injects floating record button into page. User clicks → getUserMedia in page context.
 
 const GATEWAY = 'http://localhost:8787';
 const $ = (id) => document.getElementById(id);
@@ -26,13 +24,32 @@ function spt(){if(recTimerId){clearInterval(recTimerId);recTimerId=null;}}
 
 async function dp(){try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(t?.url){currentUrl=t.url;try{pageUrlEl.textContent=new URL(t.url).hostname}catch{pageUrlEl.textContent=t.url.slice(0,40)}}}catch{pageUrlEl.textContent='current page';}}
 
-// ─── Messages from background ────────────────────────────────────
+// ─── Messages relayed from content script via background ─────────
 
 chrome.runtime.onMessage.addListener((msg)=>{
-  if(msg.type==='RECORDING_STARTED'){stt();recStatus.textContent='Recording… speak now.';recStatus.style.color='#EF4444';}
-  if(msg.type==='RECORDING_ERROR'){spt();recTimer.style.display='none';btnStopRec.style.display='none';btnRecord.style.display='';recStatus.textContent=msg.error;recStatus.style.color='#EF4444';chrome.storage.local.remove('persado:recording');}
-  if(msg.type==='TRANSCRIPT_READY'){narrationTranscript=msg.transcript;recStatus.textContent='';spt();recTimer.style.display='none';btnStopRec.style.display='none';btnRecord.style.display='none';generateRecommendations(narrationTranscript);}
-  if(msg.type==='TRANSCRIPT_ERROR'){fallbackArea.style.display='';btnGenerate.style.display='';recStatus.textContent='Transcription failed: '+(msg.error||'unknown')+' — type below.';recStatus.style.color='#92400E';spt();recTimer.style.display='none';btnStopRec.style.display='none';btnRecord.style.display='none';}
+  if(msg.type==='RECORDING_STARTED'){
+    // Recording is active on the page — show indicator in sidepanel
+    stt();recStatus.textContent='🔴 Recording… speak now.';recStatus.style.color='#EF4444';
+    st('Recording');
+  }
+  if(msg.type==='RECORDING_ERROR'){
+    spt();recTimer.style.display='none';btnStopRec.style.display='none';btnRecord.style.display='';
+    recStatus.textContent=msg.error||'Recording failed';recStatus.style.color='#EF4444';
+    chrome.storage.local.remove('persado:recording');st('Ready');
+  }
+  if(msg.type==='TRANSCRIPT_READY'){
+    // Auto-generate results immediately — no extra click
+    narrationTranscript=msg.transcript;spt();recTimer.style.display='none';
+    btnStopRec.style.display='none';btnRecord.style.display='none';
+    recStatus.textContent='';recStatus.style.color='';
+    transcriptBlock.style.display='block';transcriptText.textContent=msg.transcript;
+    generateRecommendations(msg.transcript);
+  }
+  if(msg.type==='TRANSCRIPT_ERROR'){
+    spt();recTimer.style.display='none';btnStopRec.style.display='none';btnRecord.style.display='none';
+    recStatus.textContent='Transcription failed — type your brief below.';recStatus.style.color='#92400E';
+    fallbackArea.style.display='';btnGenerate.style.display='';st('Ready');
+  }
 });
 
 // ─── Start ───────────────────────────────────────────────────────
@@ -53,46 +70,43 @@ btnRecord.addEventListener('click',async()=>{
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id){recStatus.textContent='No active tab';recStatus.style.color='#EF4444';return;}
-    // Inject content script if not already loaded (page was open before extension)
     try{await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});}
-    catch{
-      await chrome.scripting.executeScript({target:{tabId:tab.id},files:['src/content.js']});
-      await new Promise(r=>setTimeout(r,200));
-      await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});
-    }
+    catch{await chrome.scripting.executeScript({target:{tabId:tab.id},files:['src/content.js']});await new Promise(r=>setTimeout(r,300));await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});}
   }catch(err){recStatus.textContent='Cannot access page. Refresh and retry.';recStatus.style.color='#EF4444';return;}
   btnRecord.style.display='none';btnStopRec.style.display='';
   document.querySelector('.instructions').style.display='none';
-  recStatus.textContent='Click the purple button on the page → speak.';recStatus.style.color='#5C2D91';
+  recStatus.textContent='Click the purple Record button on the page → speak.';recStatus.style.color='#5C2D91';
   chrome.storage.local.set({'persado:recording':true,'persado:transcript':'','persado:recordingStart':Date.now()});
 });
 
-// ─── Stop — tells content script to stop recording ───────────────
+// ─── Stop — tells content script to stop, then transcribes ───────
 
 btnStopRec.addEventListener('click',async()=>{
   spt();btnStopRec.style.display='none';recTimer.style.display='none';
-  recStatus.textContent='Transcribing…';recStatus.style.color='';
+  recStatus.textContent='Processing…';recStatus.style.color='';
   chrome.storage.local.remove('persado:recording');st('Processing');
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
-    if(!tab?.id){recStatus.textContent='No active tab — type below.';recStatus.style.color='#92400E';fallbackArea.style.display='';btnGenerate.style.display='';return;}
+    if(!tab?.id)throw new Error('No active tab');
     chrome.tabs.sendMessage(tab.id,{type:'STOP_RECORDING'},(r)=>{
-      if(chrome.runtime.lastError||!r?.ok){recStatus.textContent=(r?.error||'Failed to stop')+' — type below.';recStatus.style.color='#92400E';fallbackArea.style.display='';btnGenerate.style.display='';return;}
-      // Send audio to background for transcription
+      if(chrome.runtime.lastError){recStatus.textContent='Recording stopped — type below.';recStatus.style.color='#92400E';fallbackArea.style.display='';btnGenerate.style.display='';st('Ready');return;}
+      if(!r?.ok){recStatus.textContent=(r?.error||'No audio')+' — type below.';recStatus.style.color='#92400E';fallbackArea.style.display='';btnGenerate.style.display='';st('Ready');return;}
+      // Got audio — send to background for transcription
+      recStatus.textContent='Transcribing…';recStatus.style.color='';
       chrome.runtime.sendMessage({type:'TRANSCRIBE_AUDIO',audioData:r.audioData});
     });
-  }catch(err){recStatus.textContent='Error — type below.';recStatus.style.color='#92400E';fallbackArea.style.display='';btnGenerate.style.display='';}
+  }catch(err){recStatus.textContent='Error — type below.';recStatus.style.color='#92400E';fallbackArea.style.display='';btnGenerate.style.display='';st('Ready');}
 });
 
-// ─── Generate ────────────────────────────────────────────────────
+// ─── Generate (called automatically on transcript ready) ─────────
 
 async function generateRecommendations(narration){
   if(!narration){tm('No brief','err');return;}
   btnGenerate.style.display='none';genStatus.style.display='block';genSpinner.style.display='block';
-  recStatus.textContent='';recStatus.style.color='';transcriptBlock.style.display='none';fallbackArea.style.display='none';
+  recStatus.textContent='';transcriptBlock.style.display='none';fallbackArea.style.display='none';
   st('Generating');
-  const steps=['Generating optimized variants…','Checking regulatory compliance…','Estimating campaign impact…'];
-  let si=0;genText.textContent=steps[0];
+  genText.textContent='Generating optimized variants…';
+  let si=0;const steps=['Generating optimized variants…','Checking regulatory compliance…','Estimating campaign impact…'];
   const sti=setInterval(()=>{if(si<steps.length){genText.textContent=steps[si];si++;}},1500);
   try{
     const resp=await fetch(GATEWAY+'/v1/ai/recommend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({narration,audience:audienceSelect.value,goal:goalSelect.value,pageUrl:currentUrl})});
@@ -101,6 +115,7 @@ async function generateRecommendations(narration){
   }catch(e){tm(e.message||'Generation failed','err');st('Error');}
   finally{clearInterval(sti);genStatus.style.display='none';genSpinner.style.display='none';}
 }
+// Generate button only used for text fallback
 btnGenerate.addEventListener('click',()=>{generateRecommendations(fallbackInput.value.trim());});
 
 // ─── Results ─────────────────────────────────────────────────────
