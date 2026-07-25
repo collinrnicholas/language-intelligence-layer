@@ -1,9 +1,14 @@
 // ─── Persado Demo — Background Worker ────────────────────────────
 //
+// - Side panel opens on action click
 // - START_RECORDING_ONCE → open offscreen, start MediaRecorder
 // - STOP_AND_TRANSCRIBE → stop recorder, transcribe via Whisper, respond
 
 const GATEWAY = 'http://localhost:8787';
+
+// ─── Side Panel ──────────────────────────────────────────────────
+
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 // ─── Offscreen ───────────────────────────────────────────────────
 

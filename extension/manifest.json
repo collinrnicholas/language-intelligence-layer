@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Persado Demo",
-  "version": "0.2.2",
-  "description": "Persado Marketing Brief Demo — point at an element, narrate, get AI-optimized compliant copy variants.",
+  "version": "0.3.0",
+  "description": "Persado Marketing Brief Demo — record your marketing problem, get AI-optimized compliant copy variants.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "offscreen"
+    "offscreen",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -16,20 +17,11 @@
     "service_worker": "src/background.js",
     "type": "module"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "src/content.js"
-      ],
-      "run_at": "document_start"
-    }
-  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "action": {
-    "default_popup": "popup/index.html",
-    "default_title": "Persado Demo",
+    "default_title": "Persado Demo — Open Side Panel",
     "default_icon": {
       "16": "public/icon16.png",
       "32": "public/icon32.png",

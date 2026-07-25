@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Persado Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --prp: #5C2D91; --mag: #E8388C; --grad: linear-gradient(135deg, #5C2D91 0%, #E8388C 100%);
+      --surf: #FFFFFF; --smut: #F8F7FA; --t1: #1A1128; --t2: #5C506C; --tm: #9088A0;
+      --bdr: #E8E4F0; --bds: #D4CCE0;
+      --grn: #10B981; --gt: #ECFDF5; --red: #EF4444; --rt: #FEF2F2; --amb: #F59E0B; --at: #FFFBEB;
+      --rc: 14px; --rctl: 10px;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', monospace;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:var(--sans);background:var(--surf);color:var(--t1);font-size:13px;line-height:1.5;min-height:100vh;}
+
+    .hdr{background:var(--grad);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+    .logo{font-weight:800;font-size:18px;letter-spacing:-0.02em;color:#fff;}
+    .logo .badge{font-size:9px;font-weight:500;opacity:.7;margin-left:6px;letter-spacing:.04em;}
+    .hdr-st{font-family:var(--mono);font-size:10px;color:rgba(255,255,255,.7);display:flex;align-items:center;gap:6px;}
+    .hdr-st .dot{width:6px;height:6px;border-radius:50%;background:#fff;}
+    .hdr-st.rec .dot{background:var(--red);animation:pulse 1.4s ease-in-out infinite;}
+
+    .ver{font-family:var(--mono);font-size:8px;color:rgba(255,255,255,.35);text-align:right;padding:0 20px 4px;background:var(--grad);}
+
+    .view{padding:24px 20px;}
+    .panel{display:none;}.panel.active{display:block;}
+
+    .field{margin-bottom:16px;}
+    .field label{display:block;font-family:var(--mono);font-size:9px;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;}
+    .field select{width:100%;padding:10px 14px;border:1px solid var(--bdr);border-radius:var(--rctl);font-family:var(--sans);font-size:13px;color:var(--t1);background:var(--surf);outline:none;}
+    .field select:focus{border-color:var(--prp);box-shadow:0 0 0 3px rgba(92,45,145,.1);}
+    .field-row{display:flex;gap:12px;}.field-row .field{flex:1;}
+
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:var(--rctl);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;padding:12px 20px;transition:all .16s;height:46px;}
+    .btn:disabled{opacity:.4;cursor:not-allowed;}
+    .btn-block{width:100%;}
+    .btn-primary{background:var(--grad);color:#fff;}
+    .btn-primary:hover:not(:disabled){opacity:.92;transform:translateY(-1px);}
+    .btn-outline{background:transparent;border:1px solid var(--bds);color:var(--t1);}
+    .btn-outline:hover:not(:disabled){background:var(--smut);}
+    .btn-sm{height:34px;padding:7px 14px;font-size:12px;}
+    .btn-ghost{background:none;border:none;font-family:var(--sans);font-size:12px;font-weight:500;color:var(--tm);cursor:pointer;}
+    .btn-ghost:hover{color:var(--prp);}
+    .btn-rec{background:var(--red);color:#fff;animation:recPulse 1.5s ease-in-out infinite;height:60px;font-size:17px;border-radius:30px;}
+
+    .card{border:1px solid var(--bds);border-radius:var(--rc);padding:16px;margin-bottom:14px;background:var(--smut);}
+
+    .rec-area{text-align:center;padding:24px 0 12px;}
+    .rec-time{font-family:var(--mono);font-size:28px;font-weight:600;color:var(--red);margin:12px 0;}
+    .rec-status{font-size:13px;color:var(--tm);line-height:1.4;margin-bottom:14px;}
+
+    .instructions{background:var(--smut);border:1px solid var(--bdr);border-radius:var(--rc);padding:14px 16px;margin:16px 0;font-size:12px;color:var(--t2);line-height:1.7;}
+    .instructions strong{color:var(--prp);font-size:13px;}
+    .instructions ul{margin:8px 0 0 18px;padding:0;}
+    .instructions li{margin-bottom:4px;}
+
+    .narr-block{background:var(--smut);border:1px solid var(--bdr);border-radius:var(--rc);padding:14px;margin-bottom:16px;}
+    .narr-block .nl{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;}
+    .narr-block .nt{font-size:13px;color:var(--t1);line-height:1.6;font-style:italic;}
+
+    .rec-card{border:1px solid var(--bdr);border-radius:var(--rc);margin-bottom:12px;overflow:hidden;}
+    .rec-card .rh{padding:12px 16px;background:linear-gradient(135deg,rgba(92,45,145,.06) 0%,rgba(232,56,140,.04) 100%);border-bottom:1px solid var(--bdr);}
+    .rec-card .rn{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--prp);text-transform:uppercase;letter-spacing:.06em;}
+    .rec-card .rv{font-size:15px;font-weight:700;color:var(--t1);margin-top:4px;line-height:1.4;}
+    .rec-card .rb{padding:12px 16px;}
+    .rec-card .rr{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:11px;}
+    .rrationale{color:var(--t2);line-height:1.5;font-size:12px;}
+    .badge{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;}
+    .badge.clear{background:var(--gt);color:#065F46;}.badge.flag{background:var(--at);color:#92400E;}
+    .badge.lift{background:linear-gradient(135deg,rgba(92,45,145,.1) 0%,rgba(232,56,140,.08) 100%);color:var(--prp);font-weight:700;}
+
+    .disc{background:var(--at);border:1px solid rgba(245,158,11,.25);border-radius:var(--rctl);padding:10px 14px;font-size:11px;color:#92400E;line-height:1.5;margin-top:12px;font-weight:500;}
+    .disc strong{color:#B45309;}
+
+    .proc{text-align:center;padding:12px 0;}
+    .spinner{width:28px;height:28px;border-radius:50%;border:3px solid var(--bdr);border-top-color:var(--prp);animation:spin .8s linear infinite;margin:0 auto 10px;}
+
+    .toast{display:none;padding:10px 16px;border-radius:var(--rctl);margin:0 20px 12px;font-size:12px;text-align:center;font-weight:600;}
+    .toast.ok{display:block;background:var(--gt);color:#065F46;}.toast.err{display:block;background:var(--rt);color:var(--red);}
+    .empty-state{text-align:center;padding:32px 12px;color:var(--tm);font-size:13px;line-height:1.5;}
+
+    textarea{width:100%;padding:12px 14px;border:1px solid var(--bdr);border-radius:var(--rctl);font-family:var(--sans);font-size:13px;min-height:80px;resize:vertical;outline:none;color:var(--t1);line-height:1.5;}
+    textarea:focus{border-color:var(--prp);}
+
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    @keyframes recPulse{0%,100%{opacity:1}50%{opacity:.8}}
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">persado<span class="badge">DEMO</span></div>
+  <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
+</div>
+<div class="ver"><span id="versionTag">v—</span></div>
+<div class="toast" id="toast"></div>
+
+<!-- ═══ CONFIGURE ═══ -->
+<div class="panel active view" id="panelConfigure">
+  <div style="padding:8px 0 16px;">
+    <div style="font-size:18px;font-weight:700;color:var(--prp);margin-bottom:4px;">Marketing Brief → Variants</div>
+    <div style="font-size:13px;color:var(--tm);">Record your marketing problem. Get compliant, optimized copy.</div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:var(--prp);text-transform:uppercase;letter-spacing:.08em;">Page</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--t2);" id="pageUrl">detecting…</span>
+    </div>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label>Product Line</label>
+      <select id="audience">
+        <option value="retail">Retail Banking</option>
+        <option value="cards">Credit Cards</option>
+        <option value="mortgage">Mortgage &amp; Lending</option>
+        <option value="wealth">Wealth Management</option>
+        <option value="business">Small Business Banking</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Objective</label>
+      <select id="goal">
+        <option value="acquisition">Acquisition</option>
+        <option value="cross-sell">Cross-Sell</option>
+        <option value="engagement">Engagement</option>
+        <option value="retention">Retention</option>
+        <option value="trust">Trust &amp; Compliance</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn btn-primary btn-block" id="btnStart">Record Marketing Brief</button>
+</div>
+
+<!-- ═══ RECORD ═══ -->
+<div class="panel view" id="panelRecord">
+  <div class="rec-area">
+    <button class="btn btn-rec" id="btnRecord" style="width:auto;padding:12px 36px;">Start Recording</button>
+    <button class="btn btn-outline" id="btnStopRec" style="display:none;width:auto;padding:12px 36px;">Stop Recording</button>
+    <div class="rec-time" id="recTimer" style="display:none;">00:00</div>
+    <div class="rec-status" id="recStatus"></div>
+  </div>
+
+  <div class="instructions">
+    <strong>Describe what you're trying to accomplish:</strong>
+    <ul>
+      <li>What page or element you're looking at</li>
+      <li>What's not working and why</li>
+      <li>Who the audience is</li>
+      <li>What outcome you want</li>
+    </ul>
+  </div>
+
+  <div class="narr-block" id="transcriptBlock" style="display:none;">
+    <div class="nl">Your Brief</div>
+    <div class="nt" id="transcriptText"></div>
+  </div>
+
+  <div id="fallbackArea" style="display:none;">
+    <div class="field"><label>Type your brief</label><textarea id="fallbackInput" placeholder="Describe the page, the concern, the audience, and what outcome you want…"></textarea></div>
+    <button class="btn btn-primary btn-block" id="btnGenerate" style="display:none;">Generate</button>
+  </div>
+
+  <div class="proc" id="genStatus" style="display:none;">
+    <div class="spinner" id="genSpinner"></div>
+    <div id="genText" style="font-size:13px;font-weight:600;color:var(--prp);">Generating…</div>
+  </div>
+</div>
+
+<!-- ═══ RESULTS ═══ -->
+<div class="panel view" id="panelResults">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:600;color:var(--prp);text-transform:uppercase;letter-spacing:.06em;">Recommendations</div>
+    <span class="badge lift">Illustrative — Persado Stand-In</span>
+  </div>
+  <div id="resultsContainer"></div>
+  <div class="disc"><strong>⚠ Demo only.</strong> Variants generated by a general-purpose LLM standing in for Persado's Motivation AI. Compliance flags are illustrative. Predicted lift is stubbed.</div>
+  <div style="display:flex;gap:10px;margin-top:14px;">
+    <button class="btn btn-outline btn-block btn-sm" id="btnExportBrief">📋 Export Brief</button>
+    <button class="btn btn-ghost btn-sm" id="btnNewBrief">New Brief</button>
+  </div>
+</div>
+
+<script src="sidepanel.js" type="module"></script>
+</body>
+</html>
