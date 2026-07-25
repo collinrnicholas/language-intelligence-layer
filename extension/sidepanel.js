@@ -47,18 +47,18 @@ btnStart.addEventListener('click',()=>{
   sh(pnlRecord);st('Ready');
 });
 
-// ─── Record ──────────────────────────────────────────────────────
+// ─── Record — sends START_RECORDING directly to content script ───
 
 btnRecord.addEventListener('click',async()=>{
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id){recStatus.textContent='No active tab';recStatus.style.color='#EF4444';return;}
-    try{await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});}
-    catch{await chrome.scripting.executeScript({target:{tabId:tab.id},files:['src/content.js']});await new Promise(r=>setTimeout(r,300));await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});}
+    try{await chrome.tabs.sendMessage(tab.id,{type:'START_RECORDING'});}
+    catch{await chrome.scripting.executeScript({target:{tabId:tab.id},files:['src/content.js']});await new Promise(r=>setTimeout(r,300));await chrome.tabs.sendMessage(tab.id,{type:'START_RECORDING'});}
   }catch(err){recStatus.textContent='Cannot access page. Refresh.';recStatus.style.color='#EF4444';return;}
   btnRecord.style.display='none';btnStopRec.style.display='';
   document.querySelector('.instructions').style.display='none';
-  recStatus.textContent='Click Record button on the page → speak.';recStatus.style.color='#5C2D91';
+  recStatus.textContent='Speak now — describe the problem.';recStatus.style.color='#EF4444';
   chrome.storage.local.set({'persado:recording':true,'persado:transcript':'','persado:recordingStart':Date.now()});
 });
 
