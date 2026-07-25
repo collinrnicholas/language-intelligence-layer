@@ -8,6 +8,26 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.25
+
+Options page for the screen-capture toggle (section 1).
+
+- `options.html` + `options.js` (opened via `options_ui` with `open_in_tab`),
+  styled from claude-design: white surface, `[ Persado ]` lockup, ink/red tokens,
+  no emoji, single-file inline CSS.
+- One setting: **Screen capture during recording** — a labelled switch, default
+  OFF, with plain-language help (off → only narration + page text, no screenshots
+  taken or stored) and a note that a managed deployment sets this by administrator
+  policy, not by the end user.
+- Persisted to `chrome.storage.local` under a new declared key
+  `KEYS.CAPTURE_SCREENSHOTS` (no bare string literal). No new permission — `storage`
+  already granted. There is deliberately NO capture control in the side panel.
+
+This commit adds the page and the key; the flag still reads the config constant
+(the wiring lands in the next commit).
+
+---
+
 ## 0.6.24
 
 Results 1d — payload confirmation no longer clipped under the footer.

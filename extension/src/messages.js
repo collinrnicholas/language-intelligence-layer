@@ -55,6 +55,11 @@
     // it survives a panel close and worker eviction but never reaches disk — the
     // start screen promises audio stays on the device until results are reviewed.
     PENDING_AUDIO: 'persado:pendingAudio',
+    // Screen-capture toggle, set from the options page. local storage (persists
+    // across restarts). Absent → the config default (CAPTURE_SCREENSHOTS, off).
+    // In a managed deployment this would be an administrator/enterprise-policy
+    // decision, not an end-user preference.
+    CAPTURE_SCREENSHOTS: 'persado:captureScreenshots',
   });
 
   // Field names inside the stored page-context object. The producer
