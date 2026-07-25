@@ -137,6 +137,7 @@ btnStart.addEventListener('click', () => {
   recStatus.style.color = '';
   btnRecord.style.display = '';
   btnStopRec.style.display = 'none';
+  document.querySelector('.instructions').style.display = '';
   stopTimer();
   chrome.storage.local.remove(['persado:recording','persado:transcript','persado:recordingStart']);
   show(pnlRecord);
@@ -148,6 +149,8 @@ btnStart.addEventListener('click', () => {
 btnRecord.addEventListener('click', () => {
   btnRecord.style.display = 'none';
   btnStopRec.style.display = '';
+  // Hide instructions during recording
+  document.querySelector('.instructions').style.display = 'none';
   recStatus.textContent = 'Requesting microphone access…';
   recStatus.style.color = '';
   recTimer.style.display = 'none';
@@ -169,7 +172,7 @@ btnStopRec.addEventListener('click', () => {
   let si = 0;
   const st = setInterval(() => { if (si < steps.length) { recStatus.textContent = steps[si]; si++; } }, 1200);
 
-  chrome.runtime.sendMessage({type:'STOP_AND_TRANSCRIBE'}, (r) => {
+  chrome.runtime.sendMessage({type:'STOP_AND_TRANSCRIBE'}, async (r) => {
     clearInterval(st);
 
     if (chrome.runtime.lastError || !r?.ok) {
@@ -181,37 +184,36 @@ btnStopRec.addEventListener('click', () => {
       return;
     }
 
+    // Auto-generate: skip the review step, go straight to results
     narrationTranscript = r.transcript;
-    transcriptText.textContent = r.transcript;
-    transcriptBlock.style.display = 'block';
-    fallbackArea.style.display = 'none';
-    btnGenerate.style.display = '';
     recStatus.textContent = '';
     recStatus.style.color = '';
-    status('Ready');
+    await generateRecommendations(narrationTranscript);
   });
 });
 
 // ─── Generate ────────────────────────────────────────────────────
 
-btnGenerate.addEventListener('click', async () => {
-  const narration = narrationTranscript || fallbackInput.value.trim();
+async function generateRecommendations(narration) {
   if (!narration) { toastMsg('No brief provided','err'); return; }
 
   btnGenerate.style.display = 'none';
   genStatus.style.display = 'block';
   genSpinner.style.display = 'block';
+  recStatus.textContent = '';
+  recStatus.style.color = '';
+  transcriptBlock.style.display = 'none';
+  fallbackArea.style.display = 'none';
   status('Generating');
 
-  const al = audienceSelect.selectedOptions[0]?.text || 'Customers';
-  const gl = goalSelect.selectedOptions[0]?.text || 'performance';
   const steps = [
-    ['Generating optimized variants…',  ''],
-    ['Checking regulatory compliance…', ''],
-    ['Estimating campaign impact…',     ''],
+    'Generating optimized variants…',
+    'Checking regulatory compliance…',
+    'Estimating campaign impact…',
   ];
   let si = 0;
-  const st = setInterval(() => { if (si < steps.length) { genText.textContent = steps[si][0]; si++; } }, 1500);
+  genText.textContent = steps[0];
+  const st = setInterval(() => { if (si < steps.length) { genText.textContent = steps[si]; si++; } }, 1500);
 
   try {
     const resp = await fetch(GATEWAY+'/v1/ai/recommend',{
@@ -231,8 +233,12 @@ btnGenerate.addEventListener('click', async () => {
     clearInterval(st);
     genStatus.style.display = 'none';
     genSpinner.style.display = 'none';
-    btnGenerate.style.display = '';
   }
+}
+
+// Keep btnGenerate for fallback (text input) only
+btnGenerate.addEventListener('click', () => {
+  generateRecommendations(fallbackInput.value.trim());
 });
 
 // ─── Results ─────────────────────────────────────────────────────
@@ -321,18 +327,11 @@ async function init() {
     }
 
     if (stored['persado:transcript']) {
+      // Transcript arrived while popup was closed — auto-generate
       narrationTranscript = stored['persado:transcript'];
-      transcriptText.textContent = narrationTranscript;
-      transcriptBlock.style.display = 'block';
-      fallbackArea.style.display = 'none';
-      btnGenerate.style.display = '';
-      btnRecord.style.display = 'none';
-      btnStopRec.style.display = 'none';
-      recTimer.style.display = 'none';
-      recStatus.textContent = '';
-      show(pnlRecord);
       await chrome.storage.local.remove('persado:transcript');
-      status('Ready');
+      show(pnlRecord);
+      await generateRecommendations(narrationTranscript);
       return;
     }
   } catch {}

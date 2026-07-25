@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Persado Demo",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Persado Marketing Brief Demo — point at an element, narrate, get AI-optimized compliant copy variants.",
   "permissions": [
     "storage",
