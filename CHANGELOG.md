@@ -8,6 +8,15 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.29
+
+Condense the brief to fit ~360px without scrolling (brief-view section 2).
+Coverage collapses to a single tappable "N of N" line when all four items are
+covered (the only case with nothing to act on), and expands to the itemised
+list on tap or when something is missing. The Element row drops the raw CSS
+selector from the visible UI (kept in the copied JSON and on hover via title).
+Long narration clamps to ~4 lines behind "Show more". Metadata spacing tightened.
+
 ## 0.6.28
 
 Brief is now a destination, not an interstitial (brief-view section 1). After

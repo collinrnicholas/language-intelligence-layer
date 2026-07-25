@@ -34,7 +34,10 @@ const retainNote=$('retainNote'),offlineHint=$('offlineHint');
 const resumeCard=$('resumeCard'),resumeMsg=$('resumeMsg'),btnResume=$('btnResume'),btnDiscard=$('btnDiscard'),btnSaveAudio2=$('btnSaveAudio2');
 const stepGenerateLabel=$('stepGenerateLabel'),stepComplianceLabel=$('stepComplianceLabel');
 const briefSub=$('briefSub'),briefCoverage=$('briefCoverage'),briefFields=$('briefFields');
-const briefNarration=$('briefNarration'),briefShots=$('briefShots'),briefShotCount=$('briefShotCount');
+const briefNarration=$('briefNarration'),btnNarrMore=$('btnNarrMore'),briefShots=$('briefShots'),briefShotCount=$('briefShotCount');
+// Narration longer than this (~4 lines at the brief width) collapses behind a
+// "Show more" toggle so the brief fits ~360px without scrolling.
+const NARR_CLAMP_CHARS=200;
 const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
 const btnSendPersado=$('btnSendPersado'),handoffResult=$('handoffResult'),handoffPayload=$('handoffPayload');
 const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnNew=$('btnNewBrief'),btnViewBrief=$('btnViewBrief');
@@ -460,12 +463,24 @@ function evaluateBrief(narration,hints){
 function renderCoverage(host,cov){
   if(!cov){host.style.display='none';host.innerHTML='';return;}
   host.style.display='';
-  host.innerHTML=`<div class="sec-label">Brief coverage — ${cov.covered} of 4</div>`
-    +`<div class="cov-list">`+cov.items.map(i=>
+  const n=cov.items.length;
+  const list=`<div class="cov-list">`+cov.items.map(i=>
       `<div class="cov ${i.covered?'yes':'no'}"><span class="cov-i"></span>`
       +`<span class="cov-l">${esc(i.label)}</span>`
       +(i.covered?'':`<button class="cov-add" data-add="${i.key}">Add</button>`)
       +`</div>`).join('')+`</div>`;
+  if(cov.covered>=n){
+    // Everything is covered — the only case with nothing to act on. Collapse to a
+    // single line (one check, "N of N"); tapping reveals the itemised list.
+    host.innerHTML=`<button class="cov-sum" data-cov-toggle="1" aria-expanded="false">`
+      +`<span class="cov-i"></span>`
+      +`<span class="cov-sum-l">Brief coverage — ${cov.covered} of ${n}</span>`
+      +`<span class="cov-caret"></span></button>`
+      +`<div class="cov-detail" style="display:none;">${list}</div>`;
+  }else{
+    // Something is missing — show the full list so the gap (and its Add) is visible.
+    host.innerHTML=`<div class="sec-label">Brief coverage — ${cov.covered} of ${n}</div>`+list;
+  }
 }
 
 // ─── Screens captured ────────────────────────────────────────────
@@ -764,7 +779,7 @@ function renderBrief(){
 
   const rows=[
     ['Page',`<span class="mono">${esc(b.pageUrl||currentUrl||'—')}</span>`],
-    el?['Element',`${esc(el.type||'element')} · <span class="mono">${esc(el.selector||'')}</span><span class="sub">“${esc(el.text||'')}”</span>`]:null,
+    el?['Element',`<span class="bf-el"${el.selector?` title="${esc(el.selector)}"`:''}>${esc(el.type||'element')}</span><span class="sub">“${esc(el.text||'')}”</span>`]:null,
     ['Product line',esc(PRODUCT_LABELS[b.audience]||b.audience||'—')],
     ['Objective',esc(b.goal||'—')],
     ['Asset type',`<select class="asset-sel" id="assetSelect" aria-label="Asset type">${ASSET_TYPES.map(t=>`<option value="${t}"${t===(b.assetType||'web-headline')?' selected':''}>${esc(ASSET_LABELS[t])}</option>`).join('')}</select>`],
@@ -772,7 +787,15 @@ function renderBrief(){
   ].filter(Boolean);
   briefFields.innerHTML=rows.map(([k,v])=>`<div class="bf"><div class="bf-k">${esc(k)}</div><div class="bf-v">${v}</div></div>`).join('');
 
-  briefNarration.textContent=narrationTranscript||'(no narration captured)';
+  const narr=narrationTranscript||'(no narration captured)';
+  briefNarration.textContent=narr;
+  // Clamp long narration to ~4 lines behind a "Show more" toggle so the brief
+  // fits without scrolling. Threshold is a character heuristic — the panel is
+  // hidden when this renders, so measured heights are unreliable.
+  const longNarr=narr.length>NARR_CLAMP_CHARS;
+  briefNarration.classList.toggle('clamp',longNarr);
+  btnNarrMore.style.display=longNarr?'':'none';
+  btnNarrMore.textContent='Show more';
   briefShotCount.textContent=shotTotal||0;
   briefShots.innerHTML='';
   if(lastThumbs.length){
@@ -789,6 +812,15 @@ briefFields.addEventListener('change',(e)=>{
   const sel=e.target.closest('.asset-sel');if(!sel)return;
   assetTypeOverride=sel.value;
   generateRecommendations(narrationTranscript);
+});
+
+// Expand the collapsed "N of N" summary line into the full itemised list.
+briefCoverage.addEventListener('click',(e)=>{
+  const sum=e.target.closest('.cov-sum');if(!sum)return;
+  const detail=briefCoverage.querySelector('.cov-detail');if(!detail)return;
+  const open=detail.style.display==='none';
+  detail.style.display=open?'':'none';
+  sum.setAttribute('aria-expanded',open?'true':'false');
 });
 
 // One-tap gap filler: type the missing piece, or re-record just that piece.
@@ -838,6 +870,12 @@ btnBriefContinue.addEventListener('click',()=>{
 btnViewBrief.addEventListener('click',()=>{
   if(!briefPayload){tm('No brief captured','err');return;}
   renderBrief();setUiState('brief');
+});
+
+// Expand/collapse the clamped narration.
+btnNarrMore.addEventListener('click',()=>{
+  const clamped=briefNarration.classList.toggle('clamp');
+  btnNarrMore.textContent=clamped?'Show more':'Show less';
 });
 
 /** The payload as it would go over the wire, with images summarised for reading. */
