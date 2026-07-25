@@ -128,6 +128,16 @@
     .cap-tag{flex:none;font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
 
     /* Choice chip — single-select, wraps, never scrolls (§2). */
+    /* Context disclosure — defaults are set, so recording is the immediate action. */
+    .ctx{margin-top:4px;border:1px solid var(--border);border-radius:var(--rctl);}
+    .ctx-s{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;list-style:none;}
+    .ctx-s::-webkit-details-marker{display:none;}
+    .ctx-s::after{content:'';margin-left:auto;width:6px;height:6px;border-right:1.5px solid var(--text-3);border-bottom:1.5px solid var(--text-3);transform:rotate(45deg);transition:transform .16s;}
+    .ctx[open] .ctx-s::after{transform:rotate(-135deg);}
+    .ctx-t{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
+    .ctx-v{font-size:12.5px;color:var(--text-1);}
+    .ctx-b{padding:0 14px 14px;}
+
     .chips{display:flex;flex-wrap:wrap;gap:8px;}
     .chip{font-family:var(--sans);font-size:13px;font-weight:500;color:var(--text-1);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:10px 16px;cursor:pointer;transition:color .14s,border-color .14s;}
     .chip:hover{border-color:var(--text-3);}
@@ -242,6 +252,15 @@
     .brief-actions{display:flex;gap:10px;align-items:center;}
     .brief-actions .btn-primary{flex:1;}
 
+    /* Handoff stub — plumbing, explicitly labelled as not wired. */
+    .handoff{display:flex;align-items:center;gap:10px;margin-top:12px;}
+    .handoff-n{font-size:11px;color:var(--text-3);}
+    .handoff-r{margin-top:12px;padding:12px 14px;background:var(--green-bg);border:1px solid var(--green);border-radius:var(--rctl);}
+    .handoff-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--green-text);}
+    .handoff-ok{position:relative;flex:none;width:16px;height:16px;border-radius:50%;background:var(--green);}
+    .handoff-ok::after{content:'';position:absolute;left:4px;top:5px;width:6px;height:3px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg);}
+    .handoff-p{margin-top:8px;max-height:180px;overflow:auto;font-family:var(--mono);font-size:10.5px;line-height:1.5;color:var(--text-2);white-space:pre-wrap;word-break:break-word;}
+
     .bfields{margin-top:20px;border-top:1px solid var(--border);}
     .bf{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
     .bf-k{flex:0 0 96px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;padding-top:2px;}
@@ -339,29 +358,35 @@
       </div>
     </div>
 
-    <div class="field">
-      <label for="audience">Product line</label>
-      <select id="audience">
-        <option value="retail">Retail Banking</option>
-        <option value="cards">Credit Cards</option>
-        <option value="mortgage">Mortgage &amp; Lending</option>
-        <option value="wealth">Wealth Management</option>
-        <option value="business">Small Business Banking</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label>Objective</label>
-      <div class="chips" id="goalChips" role="radiogroup" aria-label="Objective">
-        <button type="button" class="chip selected" data-value="cross-sell" role="radio" aria-checked="true">Cross-sell</button>
-        <button type="button" class="chip" data-value="acquisition" role="radio" aria-checked="false">Acquisition</button>
-        <button type="button" class="chip" data-value="engagement" role="radio" aria-checked="false">Engagement</button>
-        <button type="button" class="chip" data-value="conversion" role="radio" aria-checked="false">Conversion</button>
-        <button type="button" class="chip" data-value="retention" role="radio" aria-checked="false">Retention</button>
+    <details class="ctx" id="ctxBox">
+      <summary class="ctx-s">
+        <span class="ctx-t">Context</span>
+        <span class="ctx-v" id="ctxSummary">Retail Banking · Cross-sell</span>
+      </summary>
+      <div class="ctx-b">
+        <div class="field">
+          <label for="audience">Product line</label>
+          <select id="audience">
+            <option value="retail">Retail Banking</option>
+            <option value="cards">Credit Cards</option>
+            <option value="mortgage">Mortgage &amp; Lending</option>
+            <option value="wealth">Wealth Management</option>
+            <option value="business">Small Business Banking</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Objective</label>
+          <div class="chips" id="goalChips" role="radiogroup" aria-label="Objective">
+            <button type="button" class="chip selected" data-value="cross-sell" role="radio" aria-checked="true">Cross-sell</button>
+            <button type="button" class="chip" data-value="acquisition" role="radio" aria-checked="false">Acquisition</button>
+            <button type="button" class="chip" data-value="engagement" role="radio" aria-checked="false">Engagement</button>
+            <button type="button" class="chip" data-value="conversion" role="radio" aria-checked="false">Conversion</button>
+            <button type="button" class="chip" data-value="retention" role="radio" aria-checked="false">Retention</button>
+          </div>
+          <div class="help">Or just say it — your narration overrides the selection.</div>
+        </div>
       </div>
-      <div class="help">Or just say it — your narration overrides the selection.</div>
-    </div>
-  </div>
+    </details>
 
   <div class="start-foot">
     <button class="btn btn-primary btn-block" id="btnStart"><span class="rec-dot"></span>Record marketing brief</button>
@@ -472,6 +497,14 @@
     <div class="brief-actions">
       <button class="btn btn-primary" id="btnBriefContinue">See variants</button>
       <button class="btn btn-outline btn-sm" id="btnCopyJson">Copy brief as JSON</button>
+    </div>
+    <div class="handoff" id="handoff">
+      <button class="btn-quiet" id="btnSendPersado">Send to Persado Motivation AI</button>
+      <span class="handoff-n">Not connected in this prototype</span>
+    </div>
+    <div class="handoff-r" id="handoffResult" style="display:none;">
+      <div class="handoff-h"><span class="handoff-ok"></span><span>Would deliver this payload</span></div>
+      <pre class="handoff-p" id="handoffPayload"></pre>
     </div>
   </div>
 </div>

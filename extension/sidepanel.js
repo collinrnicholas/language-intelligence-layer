@@ -31,6 +31,7 @@ const stepGenerateLabel=$('stepGenerateLabel'),stepComplianceLabel=$('stepCompli
 const briefSub=$('briefSub'),briefCoverage=$('briefCoverage'),briefFields=$('briefFields');
 const briefNarration=$('briefNarration'),briefShots=$('briefShots'),briefShotCount=$('briefShotCount');
 const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
+const btnSendPersado=$('btnSendPersado'),handoffResult=$('handoffResult'),handoffPayload=$('handoffPayload');
 const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief'),btnBackToBrief=$('btnBackToBrief');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 
@@ -63,7 +64,14 @@ goalChips.addEventListener('click',(e)=>{
   const chip=e.target.closest('.chip');if(!chip)return;
   goalChips.querySelectorAll('.chip').forEach(c=>{const on=c===chip;c.classList.toggle('selected',on);c.setAttribute('aria-checked',on?'true':'false');});
   goalValue=chip.dataset.value;
+  syncCtxSummary();
 });
+// The collapsed Context row must always state what is actually selected.
+function syncCtxSummary(){
+  const chip=goalChips.querySelector('.chip.selected');
+  $('ctxSummary').textContent=`${PRODUCT_LABELS[audienceSelect.value]||audienceSelect.value} · ${chip?chip.textContent:goalValue}`;
+}
+audienceSelect.addEventListener('change',syncCtxSummary);
 
 // ─── Timer ───────────────────────────────────────────────────────
 function ut(s){const m=String(Math.floor(s/60)).padStart(2,'0'),ss=String(s%60).padStart(2,'0');recTimer.textContent=m+':'+ss;}
@@ -615,6 +623,7 @@ function pickElement(narration,elements){
 let briefCov=null,lastThumbs=[];
 
 function renderBrief(){
+  handoffResult.style.display='none';   // a fresh brief has not been handed off
   const b=briefPayload||{};
   const el=b.element;
   briefSub.textContent=`Captured in ${mmss(briefSec)}${shotTotal?` · ${shotTotal} screen${shotTotal===1?'':'s'}`:''} · ${(b.images||[]).length} sent to the model`;
@@ -684,14 +693,28 @@ btnBriefContinue.addEventListener('click',()=>{
 
 btnBackToBrief.addEventListener('click',()=>{renderBrief();sh(pnlBrief);});
 
+/** The payload as it would go over the wire, with images summarised for reading. */
+function readablePayload(){
+  const p={...(briefPayload||{})};
+  if(p.images)p.images=p.images.map((u,i)=>`<image ${i+1}: ${u.length} chars, ${u.slice(0,23)}…>`);
+  return JSON.stringify(p,null,2);
+}
+
+// Deliberately a stub: it shows the exact object a real integration would receive,
+// so the remaining work reads as plumbing. Never claims to have sent anything.
+btnSendPersado.addEventListener('click',()=>{
+  if(!briefPayload){tm('No brief to send','err');return;}
+  handoffPayload.textContent=readablePayload();
+  handoffResult.style.display='';
+  handoffResult.scrollIntoView({block:'nearest'});
+});
+
 btnCopyJson.addEventListener('click',async()=>{
   if(!briefPayload){tm('No brief to copy','err');return;}
   // Images are the real payload but unreadable as text; summarise them and keep
   // everything else byte-identical to what the gateway received.
-  const shown={...briefPayload};
-  if(shown.images)shown.images=shown.images.map((u,i)=>`<image ${i+1}: ${u.length} chars, ${u.slice(0,23)}…>`);
   try{
-    await navigator.clipboard.writeText(JSON.stringify(shown,null,2));
+    await navigator.clipboard.writeText(readablePayload());
     tm('Brief JSON copied');
   }catch{tm('Could not copy','err');}
 });
@@ -875,6 +898,7 @@ async function offerResume(){
 }
 
 async function init(){
+  syncCtxSummary();
   // Impossible to mistake a canned run for a live one.
   if(DEMO_MODE)$('demoFlag').style.display='';
   await dp();

@@ -8,6 +8,21 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.8
+
+Friction removed from the start, and the integration shown as plumbing.
+
+- **One-click record.** Product line and objective now default to Retail Banking /
+  Cross-sell and collapse into a "Context" disclosure that states the current
+  selection, so the record button is the immediate action. Asking for two form
+  fields before listening contradicted the reduce-friction argument the demo makes.
+  Narration still overrides the selection.
+- **Send to Persado Motivation AI** on the Brief view: shows a success state and
+  the exact payload a real integration would receive, labelled "Not connected in
+  this prototype". It never claims to have sent anything.
+
+---
+
 ## 0.6.7
 
 Demo-day reliability, and a completion line.
