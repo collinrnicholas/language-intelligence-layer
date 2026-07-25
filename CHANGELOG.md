@@ -8,6 +8,23 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.7
+
+Demo-day reliability, and a completion line.
+
+- **Demo mode** (`DEMO_MODE` in `extension/src/config.js`, **off by default**).
+  When on, only the two network calls — transcribe and recommend — return canned
+  responses after a realistic delay (2.2s / 3.2s). The microphone, waveform,
+  screenshots, element extraction and coverage check all still run for real, so
+  the part of the demo worth watching is not faked; a dead gateway or a hotel
+  network just cannot end the presentation. A dashed amber "Demo mode" chip sits
+  in the header whenever it is on.
+- **Completion line** on the results screen: "Brief captured in {M:SS} · 1 click ·
+  0 email threads", using the real recording duration. No invented benchmark
+  figures — the click and thread counts are structural facts about the flow.
+
+---
+
 ## 0.6.6
 
 The captured brief becomes a first-class screen, with a coverage check.

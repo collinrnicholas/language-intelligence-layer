@@ -11,11 +11,11 @@
 // be a classic script and this is the only way all three contexts share one copy.
 importScripts('messages.js', 'config.js');
 const { MSG, KEYS, CTX } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT } = self.PERSADO_CONFIG;
 
 // Log the resolved target once, so "which URL is it even calling" is answerable
 // from the service-worker console without reading code.
-console.log('[persado] gateway →', GATEWAY_URL);
+console.log('[persado] gateway →', GATEWAY_URL, DEMO_MODE ? '(DEMO MODE — transcribe/recommend are canned)' : '');
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 function relay(msg) { chrome.runtime.sendMessage(msg).catch(() => {}); }
@@ -62,6 +62,14 @@ async function gatewayHealth() {
 async function transcribe(dataUrl) {
   const blob = await fetch(dataUrl).then(r => r.blob());   // data: URL, not the network
   if (blob.size < 100) throw gwError('audio_too_short', 'Audio too short — no speech detected');
+
+  // Demo mode stubs THIS CALL ONLY. The recording above is real — it was captured
+  // by a real microphone and is a real blob; we simply do not send it anywhere.
+  if (DEMO_MODE) {
+    console.warn('[persado] DEMO MODE: returning a canned transcript, no network call');
+    await new Promise(r => setTimeout(r, DEMO_DELAYS.TRANSCRIBE_MS));
+    return DEMO_TRANSCRIPT;
+  }
 
   // Preflight: if the service is not there, say so instead of failing mid-upload
   // with a transport error that reads like a bug.

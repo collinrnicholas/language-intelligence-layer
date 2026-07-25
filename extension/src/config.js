@@ -35,5 +35,42 @@
     GATEWAY: 'gateway_error',
   });
 
-  root.PERSADO_CONFIG = Object.freeze({ GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR });
+  // ── Demo mode ──────────────────────────────────────────────────
+  //
+  // OFF BY DEFAULT. When true, ONLY the two network calls (transcribe, recommend)
+  // return canned responses after a realistic delay. Everything that makes the
+  // demo worth watching still runs for real: microphone, waveform, screenshots,
+  // element extraction, the coverage check. This exists so a dead gateway, a slow
+  // API or a hotel network cannot end a presentation — not to fake the product.
+  //
+  // The panel shows a persistent "Demo mode" indicator whenever this is true, so
+  // a canned run can never be mistaken for a live one.
+  const DEMO_MODE = false;
+
+  const DEMO_DELAYS = Object.freeze({ TRANSCRIBE_MS: 2200, RECOMMEND_MS: 3200 });
+
+  const DEMO_TRANSCRIPT =
+    'Our premier checking landing page is getting good paid traffic but the main '
+    + 'call to action converts well below target. The button just says Open Your '
+    + 'Account, which feels generic for a premium product. The audience is younger '
+    + 'professionals opening their first serious account, and we want to cross-sell '
+    + 'the high-yield savings account to them. We need to lift signups this quarter.';
+
+  const DEMO_VARIANTS = Object.freeze([
+    { copy: 'Open your account in 3 minutes',
+      rationale: 'Replaces a generic instruction with a concrete time cost, which reduces perceived friction at the decision point.',
+      compliance: 'clear', complianceNote: '', predictedLift: '+8–14%' },
+    { copy: 'Start earning 4.30% APY today',
+      rationale: 'Leads with the rate to anchor value before the ask; requires the APY qualifier to stay compliant.',
+      compliance: 'flag', complianceNote: 'Reg DD — APY stated without its compounding basis or qualifying conditions',
+      predictedLift: '+12–20%' },
+    { copy: 'Join 40,000 professionals banking smarter',
+      rationale: 'Social proof reframes the action as joining an existing group rather than starting a transaction.',
+      compliance: 'clear', complianceNote: '', predictedLift: '+9–15%' },
+  ]);
+
+  root.PERSADO_CONFIG = Object.freeze({
+    GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR,
+    DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT, DEMO_VARIANTS,
+  });
 })(typeof self !== 'undefined' ? self : globalThis);

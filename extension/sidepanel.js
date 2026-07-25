@@ -5,7 +5,7 @@
 // this module's evaluation paints the fatal banner instead of dying silently.
 
 const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
 const fatal = (e) => self.__persadoFatal?.(e);
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -31,7 +31,7 @@ const stepGenerateLabel=$('stepGenerateLabel'),stepComplianceLabel=$('stepCompli
 const briefSub=$('briefSub'),briefCoverage=$('briefCoverage'),briefFields=$('briefFields');
 const briefNarration=$('briefNarration'),briefShots=$('briefShots'),briefShotCount=$('briefShotCount');
 const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
-const resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief'),btnBackToBrief=$('btnBackToBrief');
+const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief'),btnBackToBrief=$('btnBackToBrief');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 
 const LISTENING='Listening — describe the problem and the audience.';
@@ -255,6 +255,7 @@ function gatewayMessage(kind,error,url){
 
 /** Non-blocking hint on the start screen so the user learns before narrating. */
 async function refreshOfflineHint(){
+  if(DEMO_MODE){offlineHint.style.display='none';return;}   // no calls to be offline for
   try{
     const h=await chrome.runtime.sendMessage({type:MSG.GATEWAY_HEALTH});
     if(h?.ok){offlineHint.style.display='none';return;}
@@ -755,9 +756,18 @@ async function generateRecommendations(narration){
     ...(images.length?{images}:{}),
   };
   try{
-    const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(briefPayload)});
-    if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
-    const variants=(await resp.json()).variants||[];
+    let variants;
+    if(DEMO_MODE){
+      // Stubs the network call only. The payload above was still assembled from a
+      // real recording, real screenshots and real extracted copy.
+      console.warn('[persado] DEMO MODE: returning canned variants, no network call');
+      await new Promise(r=>setTimeout(r,DEMO_DELAYS.RECOMMEND_MS));
+      variants=DEMO_VARIANTS.map(v=>({...v}));
+    }else{
+      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(briefPayload)});
+      if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
+      variants=(await resp.json()).variants||[];
+    }
     if(!variants.length)throw new Error('The gateway returned no variants.');
     recommendations=variants;
     setStep('stepGenerate','done');
@@ -788,6 +798,9 @@ async function generateRecommendations(narration){
 // ─── Results ─────────────────────────────────────────────────────
 
 function renderResults(){
+  // Real duration; the click and thread counts are structural facts about this
+  // flow, not invented benchmark figures.
+  capLine.innerHTML=`Brief captured in <b>${esc(mmss(briefSec))}</b> · <b>1</b> click · <b>0</b> email threads`;
   if(!recommendations?.length){resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>';return;}
   // `current` is the copy actually on the page, so the card reads current → proposed
   // and the grounding is visible rather than implied. Omitted when nothing was
@@ -862,6 +875,8 @@ async function offerResume(){
 }
 
 async function init(){
+  // Impossible to mistake a canned run for a live one.
+  if(DEMO_MODE)$('demoFlag').style.display='';
   await dp();
   // The version strip is gone from the header (design target); keep the version
   // discoverable on hover instead of adding a visible element back.
