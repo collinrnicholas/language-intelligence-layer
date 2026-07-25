@@ -8,6 +8,23 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.20
+
+Results 1d — mock Motivation AI score on each card (honest label, real form).
+
+- `MOCK_SCORES = [87, 79, 74]` and `MOCK_LIFTS = [38, 31, 24]` in config, assigned
+  in order to the variants — deterministic, identical every run, never randomised.
+- Rendered top-right of each card, mirroring the emotion pill. Default
+  `MOCK_SCORE_STYLE = 'index'` reads "Motivation AI 87 · sample" — an index, not a
+  percentage, with a muted "sample" marker. `'lift'` renders "+38% CTR" in green
+  per the original mockup. The default must stay 'index' — a lift figure is a
+  performance claim the prototype cannot support; the numbers are sample data.
+- `predictedLift` from the gateway is still never displayed in either mode.
+- A single muted footnote beneath the list: "Scores are sample data, not
+  Motivation AI output." — once, not per card.
+
+---
+
 ## 0.6.19
 
 Results 1d — emotion pills render again, and the tag is styled to target.

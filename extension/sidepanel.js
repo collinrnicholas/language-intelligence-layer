@@ -5,7 +5,7 @@
 // this module's evaluation paints the fatal banner instead of dying silently.
 
 const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, ASSET_TYPES, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, ASSET_TYPES, MOCK_SCORES, MOCK_LIFTS, MOCK_SCORE_STYLE, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
 const fatal = (e) => self.__persadoFatal?.(e);
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -34,7 +34,7 @@ const briefNarration=$('briefNarration'),briefShots=$('briefShots'),briefShotCou
 const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
 const btnSendPersado=$('btnSendPersado'),handoffResult=$('handoffResult'),handoffPayload=$('handoffPayload');
 const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief');
-const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrigText=$('resOrigText');
+const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrigText=$('resOrigText'),resNote=$('resNote');
 const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 
@@ -959,6 +959,9 @@ function renderResults(){
   if(!n){resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>';return;}
   const reg=REG_BY_AUDIENCE[b.audience||audienceSelect.value]||'Reg DD';
   resultsContainer.innerHTML=recommendations.map((v,i)=>vcard(v,i,reg)).join('');
+  // Single footnote — the scores above are sample data, not model output.
+  resNote.textContent='Scores are sample data, not Motivation AI output.';
+  resNote.style.display='';
 }
 
 function vcard(v,i,reg){
@@ -974,9 +977,7 @@ function vcard(v,i,reg){
     ? `<span class="comp clear">UDAAP · ${esc(reg)} · illustrative</span>`
     : `<span class="comp flag" title="${esc(v.complianceNote||'')}">Review: ${esc(trunc(v.complianceNote||'flagged',44))}</span>`;
   return `<div class="vcard" data-i="${i}">`
-    +`<div class="vc-top">${emoPill}`
-      // predictedLift still arrives; it is deliberately NEVER shown as a number.
-      +`<span class="vc-seam">Motivation AI score — not connected</span></div>`
+    +`<div class="vc-top">${emoPill}${scoreSlot(i)}</div>`
     +`<div class="vc-copy">${esc(v.copy)}</div>`
     +`<div class="vc-why">${esc(v.rationale||'')}</div>`
     +`<div class="vc-foot">${comp}`
@@ -985,6 +986,19 @@ function vcard(v,i,reg){
         +`<button class="vc-use" data-i="${i}">Use this</button>`
       +`</span></div>`
   +`</div>`;
+}
+/**
+ * Sample Motivation AI score — deterministic (MOCK_SCORES/MOCK_LIFTS in config),
+ * NEVER the gateway's predictedLift. 'index' (default) reads as a neutral score;
+ * 'lift' reads as a CTR-lift % per the original mockup. Marked "sample" either way.
+ */
+function scoreSlot(i){
+  if(MOCK_SCORE_STYLE==='lift'){
+    const pct=MOCK_LIFTS[i%MOCK_LIFTS.length];
+    return `<span class="vc-score lift">+${pct}% CTR</span>`;
+  }
+  const val=MOCK_SCORES[i%MOCK_SCORES.length];
+  return `<span class="vc-score"><span class="lbl">Motivation AI</span> <b>${val}</b> <span class="mark">· sample</span></span>`;
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 

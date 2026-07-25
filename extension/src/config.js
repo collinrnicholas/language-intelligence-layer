@@ -64,6 +64,21 @@
     'web-headline', 'web-cta', 'email-subject', 'push', 'sms', 'banner', 'social',
   ]);
 
+  // ── Mock Motivation AI score ───────────────────────────────────
+  //
+  // Deterministic sample values assigned in order to the returned variants, so the
+  // demo is identical on every run — never randomised. Shown on the results card
+  // where Persado's real Motivation AI score would go, clearly marked "sample".
+  const MOCK_SCORES = [87, 79, 74];   // index/score form (default)
+  const MOCK_LIFTS  = [38, 31, 24];   // CTR-lift form, matching the original mockup
+
+  // 'index' (default) shows a neutral score like "Motivation AI  87  ·  sample" —
+  // an index, not a percentage. 'lift' shows "+38% CTR" in green, matching the
+  // mockup. Default MUST stay 'index': a lift figure is a PERFORMANCE CLAIM this
+  // prototype cannot support — the numbers are sample data, not model output. Flip
+  // to 'lift' only when a viewer explicitly wants the mockup's framing.
+  const MOCK_SCORE_STYLE = 'index';
+
   // ── Demo mode ──────────────────────────────────────────────────
   //
   // OFF BY DEFAULT. When true, ONLY the two network calls (transcribe, recommend)
@@ -100,6 +115,7 @@
 
   root.PERSADO_CONFIG = Object.freeze({
     GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, ASSET_TYPES,
+    MOCK_SCORES, MOCK_LIFTS, MOCK_SCORE_STYLE,
     DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT, DEMO_VARIANTS,
   });
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -91,7 +91,14 @@
     /* Emotion tag — the rhetorical approach the model took. Not a performance claim. */
     .emotion{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--red);background:rgba(220,40,40,.08);border:none;border-radius:999px;padding:3px 9px;}
     /* Motivation AI seam — empty by design. Plain text, no fill/border/green, no number. */
-    .vc-seam{font-size:11px;color:var(--text-3);}
+    /* Mock Motivation AI score — top-right, mirrors the emotion pill. Sample data. */
+    .vc-score{font-size:12px;color:var(--text-2);white-space:nowrap;}
+    .vc-score b{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;}
+    .vc-score .lbl{color:var(--text-3);}
+    .vc-score .mark{color:var(--text-3);font-size:11px;}
+    .vc-score.lift{color:var(--green-text);font-weight:700;}
+    /* One muted footnote beneath the list — not per card. */
+    .res-note{margin:2px 2px 4px;font-size:11px;color:var(--text-3);line-height:1.4;}
     .vc-copy{font-size:15px;font-weight:700;color:var(--ink);line-height:1.35;margin:11px 0;}
     /* Rationale — the "why", shown only on the selected card. */
     .vc-why{display:none;font-size:13px;color:var(--text-2);line-height:1.55;margin:-2px 0 11px;}
@@ -548,6 +555,7 @@
     </div>
 
     <div id="resultsContainer"></div>
+    <div class="res-note" id="resNote" style="display:none;"></div>
 
     <div class="portal-ok" id="portalResult" style="display:none;">
       <div class="portal-h"><span class="portal-dot"></span><span>Would deliver this payload</span></div>
