@@ -344,15 +344,17 @@ async function handleRecommend(req, res) {
     'Generate 2–3 optimized variants for this element. Return ONLY the JSON.',
   ].join('\n');
 
-  // Use the standard model (no need for premium on this task)
+  // Resolve model through tier mapping (same logic as handleComplete)
   const requested = body.model || 'standard';
+  const honorExplicit = MODEL_ALLOWED.has(requested) || KNOWN_PROVIDER_ID.test(requested);
+  const model = honorExplicit ? requested : MODEL_STANDARD;
 
   try {
     let content;
-    if (isAnthropicModel(requested)) {
-      content = await completeAnthropic(requested, { prompt: userPrompt, systemPrompt }, false);
+    if (isAnthropicModel(model)) {
+      content = await completeAnthropic(model, { prompt: userPrompt, systemPrompt }, false);
     } else {
-      content = await completeOpenAI(requested, { prompt: userPrompt, systemPrompt }, false);
+      content = await completeOpenAI(model, { prompt: userPrompt, systemPrompt }, false);
     }
 
     // Parse the LLM response as JSON
