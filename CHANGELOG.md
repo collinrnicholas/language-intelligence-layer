@@ -24,6 +24,16 @@ Part 4 — stale session state no longer resurrects a ghost recording.
 Verified: stale flag with a non-recording page → Ready (flag cleared); a genuinely
 recording page → recording mounted; a >2h flag → Ready; no flag → Ready.
 
+### Part 5 — prevention (scripts only, no version change)
+
+- `npm run smoke` now fails if any `sh(pnl…)` or `st('…')` call bypasses
+  `setUiState`, or if `.rec-live.on` is toggled outside it — so a future change
+  cannot reintroduce a panel switch that skips the header or `.on`.
+- It also asserts `ensureContentScript` PINGs, compares `CONTENT_VERSION`, and
+  re-injects on absence or mismatch. Confirmed behaviourally: matching version →
+  no re-injection; mismatch/absent → re-injects, and a persistently mismatched
+  script lands on the retry state, never blank.
+
 ---
 
 ## 0.6.11

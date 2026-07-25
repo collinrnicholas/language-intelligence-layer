@@ -307,6 +307,45 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   if (bad.length) fail('emoji', `found ${bad.map(c => JSON.stringify(c)).join(', ')} on a rebuilt surface`);
 }
 
+// ── 15. panel/header/.on move ONLY through setUiState ─────────────
+{
+  // The recording screen went blank because the active panel (sh), the header
+  // (st), and the .rec-live.on toggle were set by separate call sites that could
+  // disagree. setUiState is the single source of truth; nothing may bypass it.
+  // setUiState itself uses sh(s.panel)/st(s.header) — variables, not literals — so
+  // a literal sh(pnl…) or st('…') call anywhere is a bypass.
+  const shCalls = (PANEL_C.match(/\bsh\(pnl[A-Za-z]+\)/g) || []);
+  if (shCalls.length) fail('ui state', `direct panel switch bypasses setUiState: ${uniq(shCalls).join(', ')}`);
+  const stCalls = (PANEL_C.match(/\bst\('[^']*'\)/g) || []);
+  if (stCalls.length) fail('ui state', `direct header set bypasses setUiState: ${uniq(stCalls).join(', ')}`);
+  // The .on toggle may appear only inside the setUiState/assert/heal region.
+  const region = PANEL_C.slice(PANEL_C.indexOf('function setUiState'), PANEL_C.indexOf('// ─── Objective chips'));
+  const onAll = (PANEL_C.match(/recLive\.classList\.(add|remove|toggle)\([^)]*\)/g) || []);
+  const onRegion = (region.match(/recLive\.classList\.(add|remove|toggle)\([^)]*\)/g) || []);
+  if (onAll.length !== onRegion.length) fail('ui state', `.rec-live.on toggled outside setUiState (${onAll.length - onRegion.length} site(s))`);
+  if (!/function setUiState/.test(PANEL_C)) fail('ui state', 'setUiState is missing');
+  notes.push(`ui state: ${onRegion.length} .on toggle(s), all inside setUiState; no sh(pnl…)/st('…') bypass`);
+}
+
+// ── 16. content-script version handshake forces re-injection ──────
+{
+  // The blank/ghost failure traces to a stale content script surviving an
+  // extension reload. ensureContentScript must PING, compare CONTENT_VERSION, and
+  // re-inject on absence OR mismatch — never drive an unverified script.
+  const fn = PANEL_C.slice(PANEL_C.indexOf('async function ensureContentScript'), PANEL_C.indexOf('async function ensureContentScript') + 700);
+  if (!fn) fail('handshake', 'ensureContentScript missing');
+  else {
+    if (!/MSG\.PING/.test(fn)) fail('handshake', 'ensureContentScript does not PING');
+    if (!/version\s*===?\s*CONTENT_VERSION/.test(fn)) fail('handshake', 'ensureContentScript does not compare CONTENT_VERSION');
+    if (!/executeScript/.test(fn)) fail('handshake', 'ensureContentScript never re-injects');
+    // The early-return must be gated on BOTH ok and a version match.
+    if (!/if\(r\?\.ok&&r\.version===CONTENT_VERSION\)return/.test(fn.replace(/\s+/g, ''))) {
+      fail('handshake', 'ensureContentScript returns without confirming version match');
+    }
+  }
+  notes.push('handshake: ensureContentScript PINGs + version-gates + re-injects');
+}
+
 // ── report ───────────────────────────────────────────────────────
 console.log('persado smoke\n');
 for (const n of notes) console.log(`  · ${n}`);
