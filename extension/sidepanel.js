@@ -37,7 +37,7 @@ const briefSub=$('briefSub'),briefCoverage=$('briefCoverage'),briefFields=$('bri
 const briefNarration=$('briefNarration'),briefShots=$('briefShots'),briefShotCount=$('briefShotCount');
 const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
 const btnSendPersado=$('btnSendPersado'),handoffResult=$('handoffResult'),handoffPayload=$('handoffPayload');
-const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnNew=$('btnNewBrief');
+const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnNew=$('btnNewBrief'),btnViewBrief=$('btnViewBrief');
 const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrigText=$('resOrigText'),resNote=$('resNote');
 const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload'),portalDismiss=$('portalDismiss');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
@@ -826,9 +826,18 @@ briefCoverage.addEventListener('click',(e)=>{
   }
 });
 
+// Brief → variants, one tap. If generation somehow has not run yet, fall back to
+// kicking it off (the brief is only reachable post-results in the normal flow).
 btnBriefContinue.addEventListener('click',()=>{
   if(recommendations?.length){renderResults();setUiState('results');}
   else generateRecommendations(narrationTranscript);
+});
+
+// Results → brief, one tap. The brief was rendered when results first opened, so
+// this only needs to swap the visible panel.
+btnViewBrief.addEventListener('click',()=>{
+  if(!briefPayload){tm('No brief captured','err');return;}
+  renderBrief();setUiState('brief');
 });
 
 /** The payload as it would go over the wire, with images summarised for reading. */
@@ -954,10 +963,11 @@ async function generateRecommendations(narration){
     // Brief hold so the finished checklist and the full bar actually render before
     // the next screen replaces them. Nothing is computed during it.
     await new Promise(r=>setTimeout(r,REDUCED?0:420));
+    // Land on results — the variants are the payoff. The brief becomes a
+    // destination reached with one tap ("View brief") and left with one tap
+    // ("Back to variants"); we render it now so it is ready behind that tap.
     renderResults();
-    // The captured brief is the point of the demo, so it is the screen we land on;
-    // results are one tap away and stay reachable.
-    renderBrief();setUiState('brief');
+    renderBrief();setUiState('results');
     setActionState('results',recommendations.length);
   }catch(e){
     procFail('stepGenerate',gatewayMessage(e.kind,e.message,e.url),()=>generateRecommendations(narration));

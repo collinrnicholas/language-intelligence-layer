@@ -8,6 +8,13 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.28
+
+Brief is now a destination, not an interstitial (brief-view section 1). After
+generation the panel lands directly on Results; the brief is reached with one
+tap ("View brief", by the results heading) and left with one tap ("Back to
+variants"). No intermediate screen or click between processing and variants.
+
 ## 0.6.27
 
 Visible indicator when screen capture is ON (section 3).
