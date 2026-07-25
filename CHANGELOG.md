@@ -8,6 +8,14 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.30
+
+Consolidate the duplicated handoff action (brief-view section 3). The brief's
+"Send to Persado Motivation AI" and the results' "Send all to Portal" were the
+same concept in two places; now there is one action, "Send to Motivation AI",
+in one place — the results footer. The handoff action and its payload preview
+are removed from the brief view.
+
 ## 0.6.29
 
 Condense the brief to fit ~360px without scrolling (brief-view section 2).

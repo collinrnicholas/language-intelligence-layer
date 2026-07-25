@@ -39,7 +39,6 @@ const briefNarration=$('briefNarration'),btnNarrMore=$('btnNarrMore'),briefShots
 // "Show more" toggle so the brief fits ~360px without scrolling.
 const NARR_CLAMP_CHARS=200;
 const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
-const btnSendPersado=$('btnSendPersado'),handoffResult=$('handoffResult'),handoffPayload=$('handoffPayload');
 const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnNew=$('btnNewBrief'),btnViewBrief=$('btnViewBrief');
 const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrigText=$('resOrigText'),resNote=$('resNote');
 const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload'),portalDismiss=$('portalDismiss');
@@ -767,7 +766,6 @@ function pickElement(narration,elements){
 let briefCov=null,lastThumbs=[];
 
 function renderBrief(){
-  handoffResult.style.display='none';   // a fresh brief has not been handed off
   const b=briefPayload||{};
   const el=b.element;
   briefSub.textContent=CAPTURE_SCREENSHOTS
@@ -884,15 +882,6 @@ function readablePayload(){
   if(p.images)p.images=p.images.map((u,i)=>`<image ${i+1}: ${u.length} chars, ${u.slice(0,23)}…>`);
   return JSON.stringify(p,null,2);
 }
-
-// Deliberately a stub: it shows the exact object a real integration would receive,
-// so the remaining work reads as plumbing. Never claims to have sent anything.
-btnSendPersado.addEventListener('click',()=>{
-  if(!briefPayload){tm('No brief to send','err');return;}
-  handoffPayload.textContent=readablePayload();
-  handoffResult.style.display='';
-  handoffResult.scrollIntoView({block:'nearest'});
-});
 
 btnCopyJson.addEventListener('click',async()=>{
   if(!briefPayload){tm('No brief to copy','err');return;}
