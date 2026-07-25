@@ -64,6 +64,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     transcribe(msg.audioData)
       .then(text => {
         if (pendingSend) { pendingSend({ ok: true, transcript: text }); pendingSend = null; }
+        chrome.storage.local.set({ 'persado:transcript': text });
         chrome.runtime.sendMessage({ type: 'TRANSCRIPT_READY', transcript: text }).catch(() => {});
       })
       .catch(err => {

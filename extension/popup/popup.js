@@ -87,13 +87,15 @@ btnStart.addEventListener('click', () => {
 btnRecord.addEventListener('click', () => {
   btnRecord.style.display = 'none';
   btnStopRec.style.display = '';
-  recStatus.textContent = '🎤 Listening… describe the marketing problem.';
+  recStatus.textContent = 'Listening… describe the marketing problem.';
   recSec = 0;
   recTimer.textContent = '00:00';
   recTimer.style.display = 'block';
   recTimerId = setInterval(() => {recSec++;const m=String(Math.floor(recSec/60)).padStart(2,'0');const s=String(recSec%60).padStart(2,'0');recTimer.textContent=m+':'+s;},1000);
 
-  // Start offscreen recording
+  // Persist recording state so popup can restore on reopen
+  chrome.storage.local.set({'persado:recording':true,'persado:transcript':''});
+
   chrome.runtime.sendMessage({type:'START_RECORDING_ONCE'});
 });
 
@@ -103,6 +105,8 @@ btnStopRec.addEventListener('click', () => {
   recTimer.style.display = 'none';
   recStatus.textContent = 'Transcribing…';
   status('Processing');
+
+  chrome.storage.local.remove('persado:recording');
 
   const steps = [
     'Transcribing your brief…',
@@ -237,5 +241,45 @@ btnNew.addEventListener('click',()=>{
 
 // ─── Init ────────────────────────────────────────────────────────
 
-async function init() { await detectPage(); status('Ready'); }
+async function init() {
+  await detectPage();
+
+  // Check if recording was active when popup closed
+  try {
+    const stored = await chrome.storage.local.get(['persado:recording','persado:transcript']);
+    if (stored['persado:recording']) {
+      // Restore recording state
+      btnRecord.style.display = 'none';
+      btnStopRec.style.display = '';
+      recStatus.textContent = 'Recording in progress…';
+      recTimer.textContent = '--:--';
+      recTimer.style.display = 'block';
+      transcriptBlock.style.display = 'none';
+      fallbackArea.style.display = 'none';
+      btnGenerate.style.display = 'none';
+      genStatus.style.display = 'none';
+      show(pnlRecord);
+      status('Recording');
+      return;
+    }
+    if (stored['persado:transcript']) {
+      // Transcript arrived while popup was closed
+      narrationTranscript = stored['persado:transcript'];
+      transcriptText.textContent = narrationTranscript;
+      transcriptBlock.style.display = 'block';
+      fallbackArea.style.display = 'none';
+      btnGenerate.style.display = '';
+      btnRecord.style.display = 'none';
+      btnStopRec.style.display = 'none';
+      recTimer.style.display = 'none';
+      recStatus.textContent = '';
+      show(pnlRecord);
+      await chrome.storage.local.remove('persado:transcript');
+      status('Ready');
+      return;
+    }
+  } catch {}
+
+  status('Ready');
+}
 init();
