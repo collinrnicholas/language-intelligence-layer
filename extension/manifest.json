@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Persado Demo",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Persado Marketing Brief Demo — point at an element, narrate, get AI-optimized compliant copy variants.",
   "permissions": [
     "storage",
@@ -9,15 +9,21 @@
     "scripting",
     "offscreen"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content.js"
+      ],
       "run_at": "document_start"
     }
   ],

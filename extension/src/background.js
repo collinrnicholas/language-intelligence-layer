@@ -1,8 +1,7 @@
-// ─── Persado Demo — Background Worker (simplified) ───────────────
+// ─── Persado Demo — Background Worker ────────────────────────────
 //
 // - START_RECORDING_ONCE → open offscreen, start MediaRecorder
 // - STOP_AND_TRANSCRIBE → stop recorder, transcribe via Whisper, respond
-// - Element capture relay
 
 const GATEWAY = 'http://localhost:8787';
 
@@ -25,35 +24,37 @@ async function closeOffscreen() {
 
 async function transcribe(dataUrl) {
   const blob = await fetch(dataUrl).then(r => r.blob());
+  if (blob.size < 100) throw new Error('Audio too short or empty — no speech captured');
+
   const fd = new FormData();
   fd.append('file', blob, 'narration.webm');
   const r = await fetch(GATEWAY + '/v1/ai/transcribe', { method: 'POST', body: fd });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
-    throw new Error(e.error || 'Transcription failed');
+    const msg = e.error || 'Transcription failed';
+    // Surface actionable errors
+    if (msg.includes('429') || msg.includes('quota')) throw new Error('OpenAI quota exceeded — cannot transcribe');
+    if (msg.includes('401')) throw new Error('API key invalid — check gateway config');
+    throw new Error(msg);
   }
-  return (await r.json()).text || '';
+  const data = await r.json();
+  return data.text || '(no speech detected)';
 }
 
 // ─── Messages ────────────────────────────────────────────────────
 
-let pendingSend = null; // sendResponse for active stop+transcribe request
+let pendingSend = null;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  // Element capture
-  if (msg.type === 'PERSADO_ELEMENT_CAPTURED' && msg.element) {
-    chrome.storage.local.set({ 'persado:pendingCapture': msg.element });
-    chrome.runtime.sendMessage(msg).catch(() => {});
-    return false;
-  }
-
-  // Offscreen callbacks
+  // Offscreen callbacks — relay to popup
   if (msg.type === 'RECORDING_STARTED') {
+    chrome.storage.local.set({ 'persado:recordingStart': Date.now() });
     chrome.runtime.sendMessage(msg).catch(() => {});
     return false;
   }
 
   if (msg.type === 'RECORDING_ERROR') {
+    chrome.storage.local.remove('persado:recording');
     if (pendingSend) { pendingSend({ ok: false, error: msg.error }); pendingSend = null; }
     chrome.runtime.sendMessage(msg).catch(() => {});
     closeOffscreen();
@@ -63,11 +64,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'AUDIO_CAPTURED' && msg.audioData) {
     transcribe(msg.audioData)
       .then(text => {
-        if (pendingSend) { pendingSend({ ok: true, transcript: text }); pendingSend = null; }
         chrome.storage.local.set({ 'persado:transcript': text });
+        chrome.storage.local.remove('persado:recording');
+        if (pendingSend) { pendingSend({ ok: true, transcript: text }); pendingSend = null; }
         chrome.runtime.sendMessage({ type: 'TRANSCRIPT_READY', transcript: text }).catch(() => {});
       })
       .catch(err => {
+        chrome.storage.local.remove('persado:recording');
+        chrome.storage.local.set({ 'persado:transcript': '' });
         if (pendingSend) { pendingSend({ ok: false, error: err.message }); pendingSend = null; }
         chrome.runtime.sendMessage({ type: 'TRANSCRIPT_ERROR', error: err.message }).catch(() => {});
       });
@@ -80,7 +84,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     ensureOffscreen().then(() => {
       chrome.runtime.sendMessage({ type: 'START_RECORDING' });
     }).catch(err => {
-      chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: err.message });
+      chrome.runtime.sendMessage({ type: 'RECORDING_ERROR', error: 'Microphone access failed: ' + err.message });
     });
     return false;
   }
@@ -89,15 +93,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'STOP_AND_TRANSCRIBE') {
     pendingSend = sendResponse;
     chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
-    // Timeout: 20s
     setTimeout(() => {
       if (pendingSend) {
-        pendingSend({ ok: false, error: 'Transcription timed out' });
+        pendingSend({ ok: false, error: 'Transcription timed out after 20s' });
         pendingSend = null;
         closeOffscreen();
       }
     }, 20000);
-    return true; // async
+    return true;
   }
 
   return false;

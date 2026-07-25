@@ -1,7 +1,6 @@
 // ─── Persado Demo — Voice-First Brief Recorder ───────────────────
 //
 // Flow: Configure → Record Brief → Transcribe → Generate → Results
-// No element selection. The marketer describes their problem by voice.
 
 const GATEWAY = 'http://localhost:8787';
 
@@ -25,8 +24,8 @@ const recTimer       = $('recTimer');
 const recStatus      = $('recStatus');
 const transcriptBlock = $('transcriptBlock');
 const transcriptText  = $('transcriptText');
-const fallbackInput  = $('fallbackInput');
 const fallbackArea   = $('fallbackArea');
+const fallbackInput  = $('fallbackInput');
 const genStatus      = $('genStatus');
 const genSpinner     = $('genSpinner');
 const genText        = $('genText');
@@ -50,9 +49,26 @@ let recTimerId = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-function toastMsg(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(()=>toast.className='toast',3000);}
+function toastMsg(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(()=>toast.className='toast',4000);}
 function show(p){[pnlConfig,pnlRecord,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
 function status(t){headerText.textContent=t;}
+
+function updateTimer(seconds) {
+  const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const s = String(seconds % 60).padStart(2, '0');
+  recTimer.textContent = m + ':' + s;
+}
+
+function startTimer(startSec = 0) {
+  recSec = startSec;
+  updateTimer(recSec);
+  recTimer.style.display = 'block';
+  recTimerId = setInterval(() => { recSec++; updateTimer(recSec); }, 1000);
+}
+
+function stopTimer() {
+  if (recTimerId) { clearInterval(recTimerId); recTimerId = null; }
+}
 
 // ─── Page detection ──────────────────────────────────────────────
 
@@ -61,10 +77,54 @@ async function detectPage() {
   catch{pageUrlEl.textContent='current page';}
 }
 
+// ─── Messages from background (live updates) ─────────────────────
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'RECORDING_STARTED') {
+    // Recording confirmed active
+    recStatus.textContent = 'Recording… speak clearly.';
+    recStatus.style.color = '#EF4444';
+    chrome.storage.local.set({'persado:recordingStart': Date.now()});
+  }
+  if (msg.type === 'RECORDING_ERROR') {
+    stopTimer();
+    recStatus.textContent = 'Mic error: ' + msg.error;
+    recStatus.style.color = '#EF4444';
+    btnRecord.style.display = '';
+    btnStopRec.style.display = 'none';
+    recTimer.style.display = 'none';
+    chrome.storage.local.remove('persado:recording');
+  }
+  if (msg.type === 'TRANSCRIPT_READY') {
+    narrationTranscript = msg.transcript;
+    transcriptText.textContent = msg.transcript;
+    transcriptBlock.style.display = 'block';
+    fallbackArea.style.display = 'none';
+    btnGenerate.style.display = '';
+    recStatus.textContent = '';
+    recStatus.style.color = '';
+    stopTimer();
+    recTimer.style.display = 'none';
+    btnStopRec.style.display = 'none';
+    btnRecord.style.display = 'none';
+    status('Ready');
+  }
+  if (msg.type === 'TRANSCRIPT_ERROR') {
+    fallbackArea.style.display = '';
+    btnGenerate.style.display = '';
+    recStatus.textContent = 'Transcription failed: ' + (msg.error || 'unknown error') + ' — type below.';
+    recStatus.style.color = '#92400E';
+    stopTimer();
+    recTimer.style.display = 'none';
+    btnStopRec.style.display = 'none';
+    btnRecord.style.display = 'none';
+    status('Ready');
+  }
+});
+
 // ─── Start briefing flow ─────────────────────────────────────────
 
 btnStart.addEventListener('click', () => {
-  // Reset
   narrationTranscript = '';
   transcriptText.textContent = '';
   transcriptBlock.style.display = 'none';
@@ -72,12 +132,13 @@ btnStart.addEventListener('click', () => {
   fallbackInput.value = '';
   genStatus.style.display = 'none';
   btnGenerate.style.display = 'none';
-  recTimer.textContent = '';
   recTimer.style.display = 'none';
   recStatus.textContent = '';
+  recStatus.style.color = '';
   btnRecord.style.display = '';
   btnStopRec.style.display = 'none';
-
+  stopTimer();
+  chrome.storage.local.remove(['persado:recording','persado:transcript','persado:recordingStart']);
   show(pnlRecord);
   status('Ready');
 });
@@ -87,41 +148,34 @@ btnStart.addEventListener('click', () => {
 btnRecord.addEventListener('click', () => {
   btnRecord.style.display = 'none';
   btnStopRec.style.display = '';
-  recStatus.textContent = 'Listening… describe the marketing problem.';
-  recSec = 0;
-  recTimer.textContent = '00:00';
-  recTimer.style.display = 'block';
-  recTimerId = setInterval(() => {recSec++;const m=String(Math.floor(recSec/60)).padStart(2,'0');const s=String(recSec%60).padStart(2,'0');recTimer.textContent=m+':'+s;},1000);
+  recStatus.textContent = 'Requesting microphone access…';
+  recStatus.style.color = '';
+  recTimer.style.display = 'none';
 
-  // Persist recording state so popup can restore on reopen
   chrome.storage.local.set({'persado:recording':true,'persado:transcript':''});
-
   chrome.runtime.sendMessage({type:'START_RECORDING_ONCE'});
 });
 
 btnStopRec.addEventListener('click', () => {
-  if (recTimerId) { clearInterval(recTimerId); recTimerId = null; }
+  stopTimer();
   btnStopRec.style.display = 'none';
   recTimer.style.display = 'none';
   recStatus.textContent = 'Transcribing…';
+  recStatus.style.color = '';
   status('Processing');
-
   chrome.storage.local.remove('persado:recording');
 
-  const steps = [
-    'Transcribing your brief…',
-    'Identifying key themes…',
-    'Matching language patterns…',
-  ];
+  const steps = ['Transcribing your brief…','Identifying key themes…','Matching language patterns…'];
   let si = 0;
   const st = setInterval(() => { if (si < steps.length) { recStatus.textContent = steps[si]; si++; } }, 1200);
 
   chrome.runtime.sendMessage({type:'STOP_AND_TRANSCRIBE'}, (r) => {
     clearInterval(st);
-    recStatus.textContent = '';
 
     if (chrome.runtime.lastError || !r?.ok) {
-      recStatus.textContent = 'Voice unavailable — type your brief below.';
+      const err = r?.error || chrome.runtime.lastError?.message || 'Transcription failed';
+      recStatus.textContent = err + ' — type your brief below.';
+      recStatus.style.color = '#92400E';
       fallbackArea.style.display = '';
       btnGenerate.style.display = '';
       return;
@@ -133,6 +187,7 @@ btnStopRec.addEventListener('click', () => {
     fallbackArea.style.display = 'none';
     btnGenerate.style.display = '';
     recStatus.textContent = '';
+    recStatus.style.color = '';
     status('Ready');
   });
 });
@@ -151,9 +206,9 @@ btnGenerate.addEventListener('click', async () => {
   const al = audienceSelect.selectedOptions[0]?.text || 'Customers';
   const gl = goalSelect.selectedOptions[0]?.text || 'performance';
   const steps = [
-    ['Generating optimized variants…',  'Applying '+gl.toLowerCase()+'-focused frameworks for '+al],
-    ['Checking regulatory compliance…', 'Verifying against UDAAP and disclosure guidelines'],
-    ['Estimating campaign impact…',     'Predicting lift based on similar finance campaigns'],
+    ['Generating optimized variants…',  ''],
+    ['Checking regulatory compliance…', ''],
+    ['Estimating campaign impact…',     ''],
   ];
   let si = 0;
   const st = setInterval(() => { if (si < steps.length) { genText.textContent = steps[si][0]; si++; } }, 1500);
@@ -161,12 +216,7 @@ btnGenerate.addEventListener('click', async () => {
   try {
     const resp = await fetch(GATEWAY+'/v1/ai/recommend',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        narration,
-        audience: audienceSelect.value,
-        goal: goalSelect.value,
-        pageUrl: currentUrl,
-      }),
+      body:JSON.stringify({narration,audience:audienceSelect.value,goal:goalSelect.value,pageUrl:currentUrl}),
     });
     if (!resp.ok) throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
     const data = await resp.json();
@@ -191,10 +241,7 @@ function renderResults() {
   if (!recommendations?.length) { resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>'; return; }
   resultsContainer.innerHTML = recommendations.map((v,i)=>`
     <div class="rec-card">
-      <div class="rh">
-        <div class="rn">Variant ${i+1}</div>
-        <div class="rv">${esc(v.copy)}</div>
-      </div>
+      <div class="rh"><div class="rn">Variant ${i+1}</div><div class="rv">${esc(v.copy)}</div></div>
       <div class="rb">
         <div class="rrationale">${esc(v.rationale||'')}</div>
         <div class="rr" style="margin-top:8px;justify-content:space-between;">
@@ -205,7 +252,6 @@ function renderResults() {
     </div>
   `).join('');
 }
-
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
 // ─── Export ──────────────────────────────────────────────────────
@@ -216,9 +262,8 @@ btnExport.addEventListener('click',()=>{
   const ob={acquisition:'Acquisition','cross-sell':'Cross-Sell',engagement:'Engagement',retention:'Retention',trust:'Trust & Compliance'};
   const md=[
     '# Persado Marketing Brief','',`**Page:** ${currentUrl}`,`**Product Line:** ${pl[audienceSelect.value]}`,
-    `**Objective:** ${ob[goalSelect.value]}`,'','## Brief',
-    `> ${narrationTranscript||fallbackInput.value||'(none)'}`,'',
-    '## Recommendations','','> ⚠️ **Demo only.** Generated by a general-purpose LLM standing in for Persado Motivation AI.','',
+    `**Objective:** ${ob[goalSelect.value]}`,'','## Brief',`> ${narrationTranscript||fallbackInput.value||'(none)'}`,'',
+    '## Recommendations','','> ⚠️ **Demo only.** Generated by general-purpose LLM standing in for Persado Motivation AI.','',
     ...recommendations.flatMap((v,i)=>[`### Variant ${i+1}`,`- **Copy:** ${v.copy}`,`- **Rationale:** ${v.rationale||'—'}`,
     `- **Compliance:** ${v.compliance==='clear'?'✓ Clear':'⚠ '+(v.complianceNote||'Flag')}`,
     `- **Predicted Lift:** ${v.predictedLift||'+5–12%'} *(illustrative)*`,'']),
@@ -235,41 +280,47 @@ btnNew.addEventListener('click',()=>{
   resultsContainer.innerHTML='';
   btnGenerate.style.display='none';genStatus.style.display='none';
   btnRecord.style.display='';btnStopRec.style.display='none';
-  recTimer.style.display='none';recStatus.textContent='';
+  recTimer.style.display='none';recStatus.textContent='';recStatus.style.color='';
+  stopTimer();
+  chrome.storage.local.remove(['persado:recording','persado:transcript','persado:recordingStart']);
   show(pnlConfig);status('Ready');
 });
 
-// ─── Init ────────────────────────────────────────────────────────
+// ─── Init (restore state after popup close) ──────────────────────
 
 async function init() {
   await detectPage();
 
-  // Show version from manifest
-  try {
-    const manifest = chrome.runtime.getManifest();
-    document.getElementById('versionTag').textContent = 'v' + manifest.version;
-  } catch {}
+  // Show version
+  try { document.getElementById('versionTag').textContent = 'v' + chrome.runtime.getManifest().version; } catch {}
 
-  // Check if recording was active when popup closed
+  // Restore recording state
   try {
-    const stored = await chrome.storage.local.get(['persado:recording','persado:transcript']);
+    const stored = await chrome.storage.local.get(['persado:recording','persado:transcript','persado:recordingStart']);
+
     if (stored['persado:recording']) {
-      // Restore recording state
       btnRecord.style.display = 'none';
       btnStopRec.style.display = '';
       recStatus.textContent = 'Recording in progress…';
-      recTimer.textContent = '--:--';
-      recTimer.style.display = 'block';
+      recStatus.style.color = '#EF4444';
       transcriptBlock.style.display = 'none';
       fallbackArea.style.display = 'none';
       btnGenerate.style.display = 'none';
       genStatus.style.display = 'none';
       show(pnlRecord);
+
+      // Calculate elapsed from stored start time
+      if (stored['persado:recordingStart']) {
+        const elapsed = Math.floor((Date.now() - stored['persado:recordingStart']) / 1000);
+        startTimer(elapsed);
+      } else {
+        startTimer(0);
+      }
       status('Recording');
       return;
     }
+
     if (stored['persado:transcript']) {
-      // Transcript arrived while popup was closed
       narrationTranscript = stored['persado:transcript'];
       transcriptText.textContent = narrationTranscript;
       transcriptBlock.style.display = 'block';
@@ -288,4 +339,5 @@ async function init() {
 
   status('Ready');
 }
+
 init();
