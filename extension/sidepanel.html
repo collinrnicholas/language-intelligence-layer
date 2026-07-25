@@ -33,7 +33,11 @@
     html,body{height:100%;}
     body{font-family:var(--sans);background:var(--surface);color:var(--text-1);font-size:13px;line-height:1.5;display:flex;flex-direction:column;overflow:hidden;}
 
-    .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex:none;}
+    .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:flex-end;flex:none;}
+    /* Results screen carries its Done status inline on the heading row, so the global
+       header bar is redundant there and is hidden (the chip stays in the DOM for
+       setUiState). Every other screen keeps the header status chip. */
+    body:has(#panelResults.active) .hdr{display:none;}
     .logo{font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--ink);display:flex;align-items:center;gap:3px;}
     .logo .br{color:var(--red);}
     /* Status chip: green READY / completed, red recording, amber working (§2). */
@@ -83,7 +87,11 @@
     .res-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
     .res-h{font-size:20px;font-weight:700;color:var(--ink);line-height:1.2;}
     .res-ctx{margin-top:5px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
-    .view-brief{flex:none;margin-top:2px;white-space:nowrap;}
+    /* View brief + the relocated Done status, right-aligned on the heading row. */
+    .res-head-r{flex:none;display:inline-flex;align-items:center;gap:12px;margin-top:2px;}
+    .view-brief{flex:none;white-space:nowrap;}
+    .res-status{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--green-text);white-space:nowrap;}
+    .res-status .dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--green);}
     .res-cap{margin-top:6px;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 
     /* One original block, from the page. No strikethrough — we improve on it.
@@ -388,7 +396,11 @@
 <body>
 
 <div class="hdr">
-  <div class="logo" id="brandLockup"><span class="br">[</span>Persado<span class="br">]</span></div>
+  <!-- The in-panel [Persado] wordmark was removed: Chrome's native side-panel bar
+       already shows the [P] Persado Capture mark, so it was a duplicate. The status
+       chip stays for non-results screens (Recording/Working); on the results screen
+       this whole bar is hidden and the Done status is shown inline on the results
+       heading row instead (see .res-status / body:has(#panelResults.active) .hdr). -->
   <div class="hdr-right">
     <span class="hdr-flag capture" id="captureFlag" style="display:none;"><span class="cap-i"></span>Screen capture on</span>
     <span class="hdr-flag demo" id="demoFlag" style="display:none;">Demo mode</span>
@@ -585,7 +597,10 @@
         <div class="res-h" id="resHeading">Variants ready</div>
         <div class="res-ctx" id="resCtx"></div>
       </div>
-      <button class="btn-quiet view-brief" id="btnViewBrief">View brief</button>
+      <div class="res-head-r">
+        <button class="btn-quiet view-brief" id="btnViewBrief">View brief</button>
+        <span class="res-status" id="resStatus"><span class="dot"></span>Done</span>
+      </div>
     </div>
     <div class="res-cap" id="capLine"></div>
 

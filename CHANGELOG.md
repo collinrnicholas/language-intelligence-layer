@@ -1,12 +1,24 @@
 # Changelog
 
 Versions track `extension/manifest.json`, which is what users see (hover the
-`[ Persado ]` lockup in the panel header). `scripts/check-version.mjs` blocks a
+header status chip, or the results Done status). `scripts/check-version.mjs` blocks a
 commit that changes `extension/` or `gateway/` without a bump and an entry here.
 
 Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
+
+## 0.6.40
+
+Header de-duplication (item 1 of the results update). Removed the in-panel
+`[Persado]` wordmark row — Chrome's native side-panel bar already shows the
+`[P] Persado Capture` mark, so it was a duplicate. The green Done status can't be
+placed in Chrome's native bar, so it now lives inline on the results heading row,
+right-aligned after "View brief" (12px mono green with a dot). On the results
+screen the global header bar is hidden via `body:has(#panelResults.active) .hdr`;
+every other screen keeps its status chip, and `setUiState` is untouched (the
+chip stays in the DOM). The version tooltip moved from the wordmark to the header
+status chip and the results Done status.
 
 ## 0.6.39
 

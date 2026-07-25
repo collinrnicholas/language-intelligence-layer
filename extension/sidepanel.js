@@ -1179,9 +1179,12 @@ async function init(){
   // Impossible to mistake a canned run for a live one.
   if(DEMO_MODE)$('demoFlag').style.display='';
   await dp();
-  // The version strip is gone from the header (design target); keep the version
-  // discoverable on hover instead of adding a visible element back.
-  try{$('brandLockup').title='Persado Capture v'+chrome.runtime.getManifest().version;}catch{}
+  // The [Persado] wordmark was removed (Chrome's native side-panel bar already shows
+  // the mark); keep the version discoverable on hover via the header status chip and
+  // the results Done status, both of which persist.
+  const ver='Persado Capture v'+chrome.runtime.getManifest().version;
+  try{$('headerStatus').title=ver;}catch{}
+  try{$('resStatus').title=ver;}catch{}
   refreshOfflineHint();
   // A pending unsent brief means a recording that was STOPPED and failed to
   // transcribe — so the page is not recording. Honour that offer and stop; do not
