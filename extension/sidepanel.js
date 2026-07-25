@@ -52,10 +52,59 @@ const PRODUCT_LABELS={retail:'Retail Banking',cards:'Credit Cards',mortgage:'Mor
 const REG_BY_AUDIENCE={retail:'Reg DD',business:'Reg DD',wealth:'Reg DD',cards:'Reg Z',mortgage:'Reg Z'};
 
 function tm(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(()=>toast.className='toast',4000);}
+// PRIMITIVES — only setUiState may call these. sh() switches the active panel; st()
+// renders the header chip. Calling them directly is what let the active panel, the
+// header, and the .rec-live.on toggle drift apart (see setUiState).
 function sh(p){[pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
 // Status chip colour follows real recorder state (§2): red RECORDING, amber
 // PAUSED/WORKING/needs-attention, green READY/complete.
 function st(t){headerText.textContent=t;headerStatus.className='hdr-st '+(/record/i.test(t)?'rec':/process|generat|error|pause|work/i.test(t)?'work':'');}
+
+// ─── UI state — single source of truth (Part 2) ──────────────────
+//
+// The active panel, the header chip, and the .rec-live.on / #recRetry toggle were
+// previously set by ~10 independent call sites that could disagree — the failure
+// mode was a live RECORDING header over a blank body. setUiState is now the ONLY
+// place all three move, so they cannot desync. Every former sh()/st()/recLive
+// mutation routes through here.
+const UI_STATES={
+  ready:       {panel:pnlConfig,  header:'Ready'},
+  starting:    {panel:pnlRecord,  header:'Starting…', live:true},  // mounted, not yet confirmed live
+  recording:   {panel:pnlRecord,  header:'Recording', live:true},
+  paused:      {panel:pnlRecord,  header:'Paused',    live:true},  // live shell stays, frozen
+  micError:    {panel:pnlRecord,  header:'Error',     retry:true}, // record panel, retry card shown
+  working:     {panel:pnlProcess, header:'Working'},
+  workingError:{panel:pnlProcess, header:'Error'},                 // process panel, its own error row
+  brief:       {panel:pnlBrief,   header:'Done'},
+  results:     {panel:pnlResults, header:'Done'},
+};
+let uiState=null;
+function setUiState(state){
+  const s=UI_STATES[state];
+  if(!s){console.error('[persado] setUiState: unknown state',state);return;}
+  uiState=state;
+  sh(s.panel);
+  st(s.header);
+  recLive.classList.toggle('on',!!s.live);
+  recRetry.style.display=s.retry?'':'none';
+  assertUiCoherent();
+}
+
+// Dev-time invariant: it must be impossible to show RECORDING without the live UI
+// mounted, or to mount .on outside the record panel, or to show the record panel
+// blank. Logs loudly (never throws — a broken panel must not also be a dead one).
+function assertUiCoherent(){
+  const onRecord=pnlRecord.classList.contains('active');
+  const live=recLive.classList.contains('on');
+  const retry=recRetry.style.display!=='none';
+  const recHdr=/record/i.test(headerText.textContent);
+  const problems=[];
+  if(recHdr && !(onRecord&&live)) problems.push('RECORDING header without a mounted live recorder');
+  if(live && !onRecord)           problems.push('.on set while the record panel is not active');
+  if(onRecord && !live && !retry) problems.push('record panel shown blank (neither live nor retry)');
+  if(problems.length) console.error('[persado] UI INCOHERENT ['+uiState+']: '+problems.join('; '),{onRecord,live,retry,header:headerText.textContent});
+  return problems;
+}
 
 // ─── Objective chips (single-select) ─────────────────────────────
 // Replaces the old <select id="goal">; `goalValue` is what reaches the gateway.
@@ -224,7 +273,7 @@ function procShow(){
   briefLine.textContent=briefSummary();
   stepGenerateLabel.textContent=`Generating ${goalValue} variants`;
   stepComplianceLabel.textContent=`Compliance check — UDAAP, ${REG_BY_AUDIENCE[audienceSelect.value]||'Reg DD'}`;
-  sh(pnlProcess);st('Working');
+  setUiState('working');
 }
 
 /** Fail one step, leave everything downstream Pending, and offer a way out. */
@@ -235,8 +284,7 @@ function procFail(id,reason,retry){
   retryFn=typeof retry==='function'?retry:null;
   btnRetry.style.display=retryFn?'':'none';
   procErr.style.display='';
-  if(!pnlProcess.classList.contains('active'))sh(pnlProcess);
-  st('Error');setActionState('ready');
+  setUiState('workingError');setActionState('ready');
 }
 
 btnRetry.addEventListener('click',()=>{const f=retryFn;if(f){procErr.style.display='none';retainNote.style.display='none';f();}});
@@ -396,12 +444,12 @@ chrome.runtime.onMessage.addListener((msg)=>{
   if(msg.type===MSG.CONTENT_ERROR){fatal('Recorder error in the page: '+msg.error);return;}
   if(msg.type===MSG.SHOTS_UPDATED){renderShots(msg.thumbs,msg.count);return;}
   if(msg.type===MSG.TRANSCRIPT_READY){
-    narrationTranscript=msg.transcript;endRecordingUi();
+    narrationTranscript=msg.transcript;endRecordingUi('working');
     setStep('stepTranscribe','done');
     generateRecommendations(msg.transcript);
   }
   if(msg.type===MSG.TRANSCRIPT_ERROR){
-    endRecordingUi();
+    endRecordingUi('working');
     procFail('stepTranscribe',gatewayMessage(msg.kind,msg.error,msg.url),retryTranscribe);
     // Say plainly that the narration is safe, or offer to save it if it is not.
     if(msg.retained){
@@ -427,7 +475,6 @@ btnStart.addEventListener('click',async()=>{
   recRetry.style.display='none';
   chrome.storage.local.remove([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
   chrome.runtime.sendMessage({type:MSG.CLEAR_PAGE_CONTEXT}).catch(()=>{});
-  sh(pnlRecord);
   await beginRecording();
 });
 
@@ -468,8 +515,7 @@ function awaitRecordingStarted(ms){
 }
 
 async function beginRecording(){
-  recRetry.style.display='none';
-  recLive.classList.add('on');
+  setUiState('starting');
   recStatus.textContent='Starting…';
   btnPause.disabled=false;btnStopRec.disabled=false;
   try{
@@ -499,7 +545,7 @@ async function beginRecording(){
   trFinal='';trInterim='';renderTranscript();
   renderShots([],0);
   startWave();stt();
-  st('Recording');
+  setUiState('recording');
   chrome.storage.local.set({[KEYS.RECORDING]:true,[KEYS.TRANSCRIPT]:'',[KEYS.RECORDING_START]:Date.now()});
   return true;
 }
@@ -507,19 +553,22 @@ async function beginRecording(){
 /** Mic/stop/transcribe failure → show the retry state instead of the live UI. */
 function recFailed(m){
   spt();stopWave();
-  recLive.classList.remove('on');
-  recRetry.style.display='';
   recRetryMsg.textContent=m;
   btnRecord.textContent='Try again';
   btnPause.disabled=false;btnStopRec.disabled=false;
+  setUiState('micError');   // record panel + retry card, .on cleared, header Error
   // RECORDING_STARTED may already have flipped the toolbar to recording.
-  st('Error');setActionState('ready');
+  setActionState('ready');
 }
 
-/** Tear down the live UI once recording is over (transcribing/generating next). */
-function endRecordingUi(){
+/**
+ * Tear down the live capture (timer, wave, analyser) and MOVE to `next`. It no
+ * longer clears .on by hand — leaving .on dangling while the panel/header stayed
+ * put was the blank-panel bug. Routing through setUiState makes that impossible.
+ */
+function endRecordingUi(next='working'){
   spt();stopWave();recPaused=false;
-  recLive.classList.remove('on');
+  setUiState(next);
 }
 
 // ─── Pause / Resume ──────────────────────────────────────────────
@@ -539,11 +588,11 @@ btnPause.addEventListener('click',async()=>{
   if(recPaused){
     spt();freezeWave(true);
     btnPause.textContent='Resume';recStatus.textContent=PAUSED_MSG;
-    st('Paused');capturePageContext('pause');
+    setUiState('paused');capturePageContext('pause');
   }else{
     runTimer();freezeWave(false);              // recSec is NOT reset
     btnPause.textContent='Pause';recStatus.textContent=LISTENING;
-    st('Recording');capturePageContext('resume');
+    setUiState('recording');capturePageContext('resume');
   }
 });
 
@@ -557,7 +606,7 @@ btnStopRec.addEventListener('click',async()=>{
   chrome.storage.local.remove(KEYS.RECORDING);
   // 1c owns everything from here, so step 1 is visible as Active while the audio
   // is still being pulled out of the page.
-  endRecordingUi();
+  endRecordingUi('working');
   procShow();
   setStep('stepTranscribe','active');stage(STAGE.transcribe);armTimeout();
   try{
@@ -682,16 +731,16 @@ briefCoverage.addEventListener('click',(e)=>{
     box.remove();
     // Re-recording appends to this same brief rather than starting a new one.
     tm('Recording again — this adds to the same brief');
-    sh(pnlRecord);beginRecording();
+    beginRecording();
   }
 });
 
 btnBriefContinue.addEventListener('click',()=>{
-  if(recommendations?.length){renderResults();sh(pnlResults);st('Done');}
+  if(recommendations?.length){renderResults();setUiState('results');}
   else generateRecommendations(narrationTranscript);
 });
 
-btnBackToBrief.addEventListener('click',()=>{renderBrief();sh(pnlBrief);});
+btnBackToBrief.addEventListener('click',()=>{renderBrief();setUiState('brief');});
 
 /** The payload as it would go over the wire, with images summarised for reading. */
 function readablePayload(){
@@ -740,7 +789,7 @@ async function generateRecommendations(narration){
   briefLine.textContent=briefSummary();
   setStep('stepTranscribe','done');
   procErr.style.display='none';
-  st('Working');armTimeout();
+  setUiState('working');armTimeout();
 
   // ── Step 2: read the captured screens
   setStep('stepScreens','active');stage(STAGE.screens);
@@ -811,7 +860,7 @@ async function generateRecommendations(narration){
     renderResults();
     // The captured brief is the point of the demo, so it is the screen we land on;
     // results are one tap away and stay reachable.
-    renderBrief();sh(pnlBrief);st('Done');
+    renderBrief();setUiState('brief');
     setActionState('results',recommendations.length);
   }catch(e){
     procFail('stepGenerate',gatewayMessage(e.kind,e.message,e.url),()=>generateRecommendations(narration));
@@ -873,14 +922,14 @@ function resetAll(){
     .catch(()=>{});
   narrationTranscript='';recommendations=null;briefPayload=null;briefCov=null;lastThumbs=[];transcriptText.textContent='';transcriptBlock.style.display='none';
   resultsContainer.innerHTML='';
-  recRetry.style.display='none';recLive.classList.remove('on');procErr.style.display='none';
+  procErr.style.display='none';
   recStatus.textContent='';trFinal='';trInterim='';recSec=0;briefSec=0;shotTotal=0;lastAudio=null;retryFn=null;
   ut(0);spt();stopWave();stopCreep();disarmTimeout();setProgress(0);
   STEPS.forEach(id=>setStep(id,'pending'));
   btnPause.disabled=false;btnStopRec.disabled=false;
   chrome.storage.local.remove([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
   chrome.runtime.sendMessage({type:MSG.CLEAR_PAGE_CONTEXT}).catch(()=>{});setActionState('ready');
-  sh(pnlConfig);st('Ready');
+  setUiState('ready');
 }
 btnNew.addEventListener('click',resetAll);
 
@@ -912,10 +961,10 @@ async function init(){
       // Reopened mid-session: content.js is still recording and still posting
       // levels/transcript, so reattach the live UI and pick the clock back up.
       recSec=Math.max(0,Math.round((Date.now()-(s[KEYS.RECORDING_START]||Date.now()))/1000));
-      recLive.classList.add('on');recStatus.textContent=LISTENING;
+      recStatus.textContent=LISTENING;
       renderTranscript();renderShots([],0);
       startWave();ut(recSec);runTimer();
-      sh(pnlRecord);st('Recording');
+      setUiState('recording');
       try{const c=await chrome.runtime.sendMessage({type:MSG.GET_PAGE_CONTEXT});
         const cf=c?.[CTX.FRAMES];if(cf?.length)renderShots(cf.map(f=>f.thumb),cf.length);}catch{}
       return;
@@ -927,6 +976,6 @@ async function init(){
       await generateRecommendations(narrationTranscript);return;
     }
   }catch{}
-  st('Ready');
+  setUiState('ready');
 }
 init().catch(fatal);

@@ -8,6 +8,35 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.10
+
+Fix: recording screen could render blank while the header still said RECORDING.
+
+Root cause — the active panel (`sh`), the header chip (`st`), and the
+`.rec-live.on` toggle were set by ~10 independent call sites that could disagree.
+`endRecordingUi()` in particular cleared `.on` while touching neither panel nor
+header, so any call while the record panel was showing left a live RECORDING
+header over an empty body.
+
+- **`setUiState(state)` is now the single source of truth** for the active panel,
+  header chip and `.on`/`#recRetry` toggle. States: ready, starting, recording,
+  paused, micError, working, workingError, brief, results. `sh()` and `st()` are
+  now private primitives only it may call; every former call site routes through
+  it, so there are zero direct `sh(pnl…)` calls left.
+- `endRecordingUi(next)` no longer clears `.on` by hand — it tears down the timer,
+  wave and analyser, then transitions via `setUiState`, so it cannot leave the
+  panel blank.
+- `assertUiCoherent()` logs loudly (dev-time) if RECORDING shows without a mounted
+  live recorder, if `.on` is set off the record panel, or if the record panel is
+  ever blank.
+
+Verified in a harness: recording → stale TRANSCRIPT_READY and recording →
+TRANSCRIPT_ERROR both resolve coherently with no blank transient and no
+incoherence logged; the former start-time desync (record panel + "Ready" header +
+`.on`) is replaced by the coherent `starting` state.
+
+---
+
 ## 0.6.9
 
 Renamed "Persado Demo" to **Persado Capture**. The name refers to the project and
