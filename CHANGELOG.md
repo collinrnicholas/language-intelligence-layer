@@ -8,6 +8,14 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.45
+
+The proof stat now always shows on the ready screen. Dropped the first-run gate
+(and its `persado:hasRecorded` flag / `refreshProofStat` / `markHasRecorded`
+machinery): the line was hiding itself once the user had recorded once, which
+made it invisible in normal use. It lives only in `#panelConfigure`, so it
+appears on the ready screen and never on the recording or results panels.
+
 ## 0.6.44
 
 Moved the first-run proof stat from under the record button to the very bottom of

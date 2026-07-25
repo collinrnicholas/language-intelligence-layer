@@ -490,12 +490,12 @@
     <div class="privacy" id="privacyNote">Audio and screens stay on this device until you review the results.</div>
   </div>
 </div>
-  <!-- First-run credibility line, pinned to the very BOTTOM of the panel as a footer
+  <!-- Credibility line, pinned to the very BOTTOM of the ready screen as a footer
        (a flex:none sibling of .start-main, not part of the button group, so the empty
-       space falls between the button cluster and this line). Shown only while
-       KEYS.HAS_RECORDED is absent (see refreshProofStat); a returning user never sees
-       it. Hidden by default so returning users get no flash before the read resolves. -->
-  <div class="proof" id="proofStat" style="display:none;"><span class="proof-fig">↑ 40%</span> <span class="proof-txt">average engagement lift · Powered by Motivation AI</span></div>
+       space falls between the button cluster and this line). It lives only in
+       #panelConfigure, so it shows on the ready screen and never on the recording or
+       results panels. -->
+  <div class="proof" id="proofStat"><span class="proof-fig">↑ 40%</span> <span class="proof-txt">average engagement lift · Powered by Motivation AI</span></div>
 </div>
 
 <!-- ═══ RECORDING (1b) ═══ -->
