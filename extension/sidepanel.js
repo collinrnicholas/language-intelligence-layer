@@ -1026,6 +1026,9 @@ function renderResults(){
   resOrig.style.display=current?'':'none';
 
   if(!n){resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>';return;}
+  // First variant selected by default, so the selected state (red border, red
+  // "Use this", visible rationale) is present on arrival rather than empty.
+  selectedVariant=0;
   const reg=REG_BY_AUDIENCE[b.audience||audienceSelect.value]||'Reg DD';
   resultsContainer.innerHTML=recommendations.map((v,i)=>vcard(v,i,reg)).join('');
   // Single footnote — the scores above are sample data, not model output.
@@ -1048,13 +1051,13 @@ function vcard(v,i,reg){
   const comp=clear
     ? `<span class="comp clear">UDAAP · ${esc(reg)}</span>`
     : `<span class="comp flag" title="${esc(v.complianceNote||'')}">Review: ${esc(v.complianceNote||'flagged')}</span>`;
-  return `<div class="vcard" data-i="${i}">`
+  return `<div class="vcard${i===selectedVariant?' sel':''}" data-i="${i}">`
     +`<div class="vc-top">${emoPill}${scoreSlot(i)}</div>`
     +`<div class="vc-copy">${esc(v.copy)}</div>`
     +`<div class="vc-why">${esc(v.rationale||'')}</div>`
     +`<div class="vc-foot">${comp}`
       +`<span class="vc-act">`
-        +`<button class="btn-quiet vc-copybtn" data-i="${i}">Copy</button>`
+        +`<button class="vc-copybtn" data-i="${i}">Copy</button>`
         +`<button class="vc-use" data-i="${i}">Use this</button>`
       +`</span></div>`
   +`</div>`;

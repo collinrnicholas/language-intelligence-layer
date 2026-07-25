@@ -8,6 +8,14 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.35
+
+Card actions read as a real button pair (results-screen section 4). "Copy" is
+now an outlined button matching "Use this" in height and radius, instead of
+plain grey text. "Use this" stays ink-filled and turns red-filled on the
+selected card (which also gets the red border). The first variant is selected by
+default, so the selected state — and its rationale — is visible on arrival.
+
 ## 0.6.34
 
 Tighten the variant score treatment (results-screen section 3). Dropped the
