@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Persado Capture",
-  "version": "0.6.13",
-  "description": "Capture a structured, grounded marketing brief by narrating at the live page \u2014 the element, its current copy, the audience, the objective and your intent.",
+  "version": "0.6.14",
+  "description": "Capture a structured, grounded marketing brief by narrating at the live page — the element, its current copy, the audience, the objective and your intent.",
   "permissions": [
     "storage",
     "activeTab",
@@ -22,7 +22,7 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Persado Capture \u2014 Open Side Panel",
+    "default_title": "Persado Capture — Open Side Panel",
     "default_icon": {
       "16": "public/icon16.png",
       "32": "public/icon32.png",

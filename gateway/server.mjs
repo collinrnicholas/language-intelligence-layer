@@ -51,6 +51,11 @@ const MAX_IMAGES = 4;
 // citation in its compliance step (see REG_BY_AUDIENCE in extension/sidepanel.js),
 // so the UI can never cite a regulation the model was not asked to check.
 const REG_BY_AUDIENCE = { retail: 'DD', business: 'DD', wealth: 'DD', cards: 'Z', mortgage: 'Z' };
+// Fixed vocabulary for the additive `emotion` field, so the rhetorical-approach
+// tag stays consistent across runs. The panel renders no pill for anything outside
+// this set. This is the model's own description of its approach — NOT a performance
+// claim and NOT Persado's official taxonomy.
+const EMOTIONS = ['Exclusivity', 'Achievement', 'Gratification', 'Curiosity', 'Safety', 'Urgency', 'Recognition', 'Encouragement'];
 const REG_LABEL = { DD: 'Truth in Savings (Reg DD)', Z: 'TILA (Reg Z)' };
 
 const MODEL_PREMIUM = env('MODEL_PREMIUM', 'gpt-4o');
@@ -370,6 +375,7 @@ async function handleRecommend(req, res) {
     '  "variants": [',
     '    {',
     '      "copy": "The rewritten element text",',
+    `      "emotion": "one of: ${EMOTIONS.join(', ')}",`,
     '      "rationale": "One-line explanation of why this motivates (e.g., anchors savings to a concrete number, uses social proof framing, invokes loss aversion)",',
     '      "compliance": "clear",',
     '      "complianceNote": "",',
@@ -379,6 +385,9 @@ async function handleRecommend(req, res) {
     '}',
     '',
     'Rules:',
+    `- "emotion" must be EXACTLY one of this fixed set: ${EMOTIONS.join(', ')}. Choose the one that best`,
+    '  names the rhetorical approach THIS variant takes. Where the variants genuinely differ, use a',
+    '  different emotion for each — do not repeat unless two variants really pursue the same angle.',
     '- Each variant should take a DIFFERENT psychological approach (emotion, specificity, social proof,',
     '  urgency, authority, curiosity, loss aversion, etc.).',
     '- Copy should match the element TYPE: headlines are short and punchy, CTAs are action-oriented,',

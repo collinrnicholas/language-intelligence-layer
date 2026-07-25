@@ -8,6 +8,22 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.14
+
+Additive `emotion` field on `/v1/ai/recommend` (results screen rebuild, part 1).
+
+- The gateway now asks each variant for an `emotion` chosen from a FIXED set —
+  Exclusivity, Achievement, Gratification, Curiosity, Safety, Urgency,
+  Recognition, Encouragement — naming the rhetorical approach that variant takes,
+  with different tags across variants where the approaches differ.
+- Purely additive: `copy`, `rationale`, `compliance`, `complianceNote` and
+  `predictedLift` keep their names and meanings, so anything reading the old shape
+  is unaffected. A response missing `emotion` stays valid.
+- The tag is the model's description of its own approach — not a performance claim,
+  not Persado's taxonomy; the UI will not label it as either.
+
+---
+
 ## 0.6.13
 
 Fix: microphone startup failures no longer crash the panel.
