@@ -326,7 +326,7 @@ async function handleRecommend(req, res) {
   const userPrompt = [
     'MARKETING BRIEF',
     '─────────────────',
-    `Campaign: ${body.campaign || 'Unnamed'}`,
+    `Page: ${body.pageUrl || body.campaign || 'Unknown page'}`,
     `Target Audience: ${audience}`,
     `Objective: ${goal}`,
     '',

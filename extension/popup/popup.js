@@ -1,10 +1,7 @@
 // ─── Persado Demo — Popup Logic ──────────────────────────────────
 //
-// Flow: Configure → Select Element → Narrate → Generate → Results
-// Talks directly to the gateway at localhost:8787.
-//
-// Chrome popups close when they lose focus, so the element picker
-// communicates via the background worker + chrome.storage.
+// Flow: Open on any page → auto-detect URL → pick audience/goal →
+// Select Element → Narrate → Generate → Results
 
 const GATEWAY = 'http://localhost:8787';
 
@@ -20,7 +17,7 @@ const panelConfigure = $('panelConfigure');
 const panelCaptured = $('panelCaptured');
 const panelResults = $('panelResults');
 
-const campaignInput = $('campaign');
+const pageUrl = $('pageUrl');
 const audienceSelect = $('audience');
 const goalSelect = $('goal');
 const btnSelectElement = $('btnSelectElement');
@@ -43,6 +40,7 @@ const btnNewBrief = $('btnNewBrief');
 
 let capturedElement = null;
 let recommendations = null;
+let currentUrl = '';
 
 // ─── Toast ───────────────────────────────────────────────────────
 
@@ -52,11 +50,8 @@ function showToast(msg, kind = 'ok') {
   setTimeout(() => { toast.className = 'toast'; }, 3000);
 }
 
-// ─── Header status ───────────────────────────────────────────────
-
 function setStatus(text) {
   headerStatusText.textContent = text;
-  headerStatus.className = 'header-status';
 }
 
 // ─── Panel switching ─────────────────────────────────────────────
@@ -66,12 +61,27 @@ function showPanel(panel) {
   panel.classList.add('active');
 }
 
+// ─── Auto-detect page URL ────────────────────────────────────────
+
+async function detectPage() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.url) {
+      currentUrl = tab.url;
+      // Show domain + path, not full URL
+      try {
+        const u = new URL(tab.url);
+        pageUrl.textContent = u.hostname + u.pathname;
+      } catch {
+        pageUrl.textContent = tab.url.slice(0, 60);
+      }
+    }
+  } catch {
+    pageUrl.textContent = '(unknown)';
+  }
+}
+
 // ─── Element selection ───────────────────────────────────────────
-//
-// The picker runs in the page's isolated world via scripting.executeScript.
-// It communicates directly with the background worker via chrome.runtime.sendMessage.
-// The popup will close when the user clicks the page — the background stores
-// the captured element in chrome.storage for when the popup reopens.
 
 btnSelectElement.addEventListener('click', async () => {
   try {
@@ -83,20 +93,15 @@ btnSelectElement.addEventListener('click', async () => {
       func: injectElementPicker,
     });
 
-    // Popup will close when user clicks the page to select an element.
-    // The background worker stores the captured element. On next open,
-    // checkPendingCapture() picks it up.
     showToast('Click any element on the page ✦');
   } catch (err) {
     showToast('Cannot access this page. Use a regular http:// page.', 'err');
-    console.error(err);
   }
 });
 
 // ─── Element Picker (injected into the page) ─────────────────────
 
 function injectElementPicker() {
-  // Remove any previous picker
   document.querySelectorAll('#persado-picker-overlay, #persado-highlight').forEach(el => el.remove());
 
   let hovered = null;
@@ -147,7 +152,6 @@ function injectElementPicker() {
   }
 
   function pickElement(el) {
-    const rect = el.getBoundingClientRect();
     const type = classifyElement(el);
     const text = (el.textContent || '').trim().slice(0, 300);
     const context = getSurroundingContext(el);
@@ -156,7 +160,6 @@ function injectElementPicker() {
     overlay.remove();
     highlight.remove();
 
-    // Send directly to background worker (runs in isolated world)
     chrome.runtime.sendMessage({
       type: 'PERSADO_ELEMENT_CAPTURED',
       element: { type, text, context, selector },
@@ -180,7 +183,6 @@ function injectElementPicker() {
     if (hovered) pickElement(hovered);
   });
 
-  // Escape to cancel
   function onKey(e) {
     if (e.key === 'Escape') {
       overlay.remove();
@@ -191,7 +193,7 @@ function injectElementPicker() {
   document.addEventListener('keydown', onKey);
 }
 
-// ─── Listen for element capture (popup still open case) ──────────
+// ─── Listen for element capture ──────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'PERSADO_ELEMENT_CAPTURED' && msg.element) {
@@ -204,8 +206,6 @@ chrome.runtime.onMessage.addListener((msg) => {
     setStatus('Ready');
   }
 });
-
-// ─── Check for pending capture (popup reopened after picking) ────
 
 async function checkPendingCapture() {
   try {
@@ -222,13 +222,12 @@ async function checkPendingCapture() {
   } catch {}
 }
 
-// ─── Generate Recommendations ────────────────────────────────────
+// ─── Generate ────────────────────────────────────────────────────
 
 btnGenerate.addEventListener('click', async () => {
   const narration = narrationInput.value.trim();
   if (!capturedElement) { showToast('Select an element first', 'err'); return; }
 
-  // Show typed narration
   if (narration) {
     narrationText.textContent = narration;
     narrationBlock.style.display = 'block';
@@ -240,7 +239,7 @@ btnGenerate.addEventListener('click', async () => {
     narration: narration || '(no narration provided)',
     audience: audienceSelect.value,
     goal: goalSelect.value,
-    campaign: campaignInput.value || 'Unnamed Campaign',
+    pageUrl: currentUrl,
   };
 
   btnGenerate.style.display = 'none';
@@ -306,7 +305,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ─── Export Brief as Markdown ────────────────────────────────────
+// ─── Export ──────────────────────────────────────────────────────
 
 btnExportBrief.addEventListener('click', () => {
   if (!capturedElement || !recommendations) {
@@ -320,7 +319,7 @@ btnExportBrief.addEventListener('click', () => {
   const md = [
     '# Persado Marketing Brief',
     '',
-    `**Campaign:** ${campaignInput.value || 'Unnamed'}`,
+    `**Page:** ${currentUrl}`,
     `**Audience:** ${audienceLabels[audienceSelect.value]}`,
     `**Goal:** ${goalLabels[goalSelect.value]}`,
     '',
@@ -335,7 +334,7 @@ btnExportBrief.addEventListener('click', () => {
     '',
     '## Recommendations',
     '',
-    '> ⚠️ **Demo only.** Generated by a general-purpose LLM standing in for Persado Motivation AI. Compliance flags are illustrative. Predicted lift is stubbed and not validated.',
+    '> ⚠️ **Demo only.** Generated by a general-purpose LLM standing in for Persado Motivation AI.',
     '',
     ...recommendations.flatMap((v, i) => [
       `### Variant ${i + 1}`,
@@ -376,19 +375,9 @@ btnNewBrief.addEventListener('click', () => {
 // ─── Init ────────────────────────────────────────────────────────
 
 async function init() {
-  // Restore campaign name
-  try {
-    const stored = await chrome.storage.local.get('persado:campaign');
-    if (stored['persado:campaign']) campaignInput.value = stored['persado:campaign'];
-  } catch {}
-
-  campaignInput.addEventListener('change', () => {
-    chrome.storage.local.set({ 'persado:campaign': campaignInput.value });
-  });
-
-  // Check for pending capture (popup reopened after picking element)
+  await detectPage();
   await checkPendingCapture();
-
+  if (capturedElement) showPanel(panelCaptured);
   setStatus('Ready');
 }
 
