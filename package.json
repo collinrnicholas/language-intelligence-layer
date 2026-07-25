@@ -12,7 +12,8 @@
     "lint": "npm run typecheck",
     "repo:check": "node scripts/repo-check.mjs",
     "doctor": "node agent/dist/cli.js doctor",
-    "gateway": "node gateway/server.mjs"
+    "gateway": "node gateway/server.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "workspaces": [
     "extension",

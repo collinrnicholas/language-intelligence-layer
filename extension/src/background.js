@@ -6,6 +6,12 @@
 // actual page instead of inventing copy for a page it has never seen.
 // Drives the toolbar icon state system (see claude-design.md §4).
 
+// Classic (non-module) service worker so the shared message/key contract can be
+// importScripts'd — content scripts cannot be ES modules, so messages.js has to
+// be a classic script and this is the only way all three contexts share one copy.
+importScripts('messages.js');
+const { MSG, KEYS, CTX } = self.PERSADO;
+
 const GATEWAY = 'http://localhost:8787';
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
@@ -36,7 +42,7 @@ async function transcribe(dataUrl) {
 // Everything here is best-effort. Any failure logs and leaves the field absent
 // so recording and generation still work from narration alone.
 
-const CTX_KEY = 'persado:pageContext';
+const CTX_KEY = KEYS.PAGE_CONTEXT;
 const store = chrome.storage.session || chrome.storage.local;
 const MAX_SHOT_WIDTH = 1200;
 const SHOT_QUALITY = 0.7;
@@ -165,11 +171,11 @@ function extractPageElements() {
 async function addFrame(windowId) {
   const shot = await captureScreenshot(windowId);
   const ctx = await readCtx();
-  const frames = Array.isArray(ctx.frames) ? ctx.frames.slice() : [];
+  const frames = Array.isArray(ctx[CTX.FRAMES]) ? ctx[CTX.FRAMES].slice() : [];
   frames.push(shot);
   if (frames.length > MAX_FRAMES) frames.splice(1, frames.length - MAX_FRAMES);
-  await writeCtx({ frames });
-  relay({ type: 'SHOTS_UPDATED', thumbs: frames.map(f => f.thumb), count: frames.length });
+  await writeCtx({ [CTX.FRAMES]: frames });
+  relay({ type: MSG.SHOTS_UPDATED, thumbs: frames.map(f => f.thumb), count: frames.length });
   return frames.length;
 }
 
@@ -197,7 +203,7 @@ async function capturePageContext({ phase, tabId, windowId }) {
   if (phase === 'resume') { shotTarget = { tabId, windowId }; startShotTimer(); return { ok: true }; }
 
   if (phase === 'start') {
-    await writeCtx({ frames: [], elements: null, capturedAt: Date.now() });
+    await writeCtx({ [CTX.FRAMES]: [], [CTX.ELEMENTS]: null, [CTX.CAPTURED_AT]: Date.now() });
     shotTarget = { tabId, windowId };
   }
 
@@ -211,14 +217,14 @@ async function capturePageContext({ phase, tabId, windowId }) {
   if (results[0].status === 'rejected') console.warn('[persado] screenshot capture failed', results[0].reason);
   if (results[1].status === 'fulfilled' && results[1].value) {
     const els = results[1].value?.[0]?.result;
-    if (Array.isArray(els) && els.length) await writeCtx({ elements: els });
+    if (Array.isArray(els) && els.length) await writeCtx({ [CTX.ELEMENTS]: els });
   } else if (results[1].status === 'rejected') {
     console.warn('[persado] element extraction failed', results[1].reason);
   }
 
   if (phase === 'start') startShotTimer(); else stopShotTimer();
   const ctx = await readCtx();
-  return { ok: true, frames: ctx.frames?.length || 0, elements: ctx.elements?.length || 0 };
+  return { ok: true, frames: ctx[CTX.FRAMES]?.length || 0, elements: ctx[CTX.ELEMENTS]?.length || 0 };
 }
 
 // ─── Toolbar state (claude-design.md §4) ─────────────────────────
@@ -233,7 +239,7 @@ async function capturePageContext({ phase, tabId, windowId }) {
 // which would freeze the icon on whichever frame happened to be last, sometimes
 // the "off" one. A steady dot that is always correct beats a pulse that lies.
 
-const STATE_KEY = 'persado:actionState';
+const STATE_KEY = KEYS.ACTION_STATE;
 const ICONS = { 16: 'public/icon16.png', 32: 'public/icon32.png', 48: 'public/icon48.png', 128: 'public/icon.png' };
 const ICONS_DIM = { 16: 'public/icon16-disabled.png', 32: 'public/icon32-disabled.png', 48: 'public/icon48-disabled.png', 128: 'public/icon-disabled.png' };
 const RED = '#DC2828', AMBER = '#F59E0B', GREEN = '#10B981';
@@ -309,40 +315,40 @@ paintAction(); // also runs whenever the worker wakes, so the toolbar never goes
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Relay content script events to sidepanel
-  if (msg.type === 'RECORDING_STARTED') { setSessionState('recording'); relay(msg); return false; }
-  if (msg.type === 'RECORDING_ERROR') { setSessionState('ready'); relay(msg); return false; }
-  if (msg.type === 'LIVE_TRANSCRIPT') { relay(msg); return false; }
-  if (msg.type === 'AUDIO_LEVELS') { relay(msg); return false; }
+  if (msg.type === MSG.RECORDING_STARTED) { setSessionState('recording'); relay(msg); return false; }
+  if (msg.type === MSG.LIVE_TRANSCRIPT) { relay(msg); return false; }
+  if (msg.type === MSG.AUDIO_LEVELS) { relay(msg); return false; }
+  if (msg.type === MSG.CONTENT_ERROR) { console.warn('[persado] content script error', msg.error); relay(msg); return false; }
 
   // The panel owns the generate step, so it reports results/reset back to us.
-  if (msg.type === 'SET_ACTION_STATE') { setSessionState(msg.state, msg.count || 0); return false; }
+  if (msg.type === MSG.SET_ACTION_STATE) { setSessionState(msg.state, msg.count || 0); return false; }
 
   // Transcribe audio from sidepanel (or content script)
-  if (msg.type === 'TRANSCRIBE_AUDIO' && msg.audioData) {
+  if (msg.type === MSG.TRANSCRIBE_AUDIO && msg.audioData) {
     setSessionState('working');
     transcribe(msg.audioData)
       .then(text => {
-        chrome.storage.local.set({ 'persado:transcript': text });
-        relay({ type: 'TRANSCRIPT_READY', transcript: text });
+        chrome.storage.local.set({ [KEYS.TRANSCRIPT]: text });
+        relay({ type: MSG.TRANSCRIPT_READY, transcript: text });
         sendResponse({ ok: true, transcript: text });
       })
       .catch(err => {
         setSessionState('ready');
-        relay({ type: 'TRANSCRIPT_ERROR', error: err.message });
+        relay({ type: MSG.TRANSCRIPT_ERROR, error: err.message });
         sendResponse({ ok: false, error: err.message });
       });
     return true;
   }
 
   // Page context — never throws back to the caller; a miss just means no grounding.
-  if (msg.type === 'CAPTURE_PAGE_CONTEXT') {
+  if (msg.type === MSG.CAPTURE_PAGE_CONTEXT) {
     capturePageContext(msg)
       .then(sendResponse)
       .catch(err => { console.warn('[persado] page context failed', err); sendResponse({ ok: false, error: err.message }); });
     return true;
   }
-  if (msg.type === 'GET_PAGE_CONTEXT') { readCtx().then(sendResponse); return true; }
-  if (msg.type === 'CLEAR_PAGE_CONTEXT') {
+  if (msg.type === MSG.GET_PAGE_CONTEXT) { readCtx().then(sendResponse); return true; }
+  if (msg.type === MSG.CLEAR_PAGE_CONTEXT) {
     stopShotTimer(); shotTarget = null;
     store.remove(CTX_KEY).catch(() => {}).then(() => sendResponse({ ok: true }));
     return true;

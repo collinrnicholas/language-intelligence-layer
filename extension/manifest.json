@@ -14,8 +14,7 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "src/background.js",
-    "type": "module"
+    "service_worker": "src/background.js"
   },
   "side_panel": {
     "default_path": "sidepanel.html"

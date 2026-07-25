@@ -1,0 +1,8 @@
+#!/bin/sh
+# Blocks a commit when the static extension contracts are broken.
+# Enable once per clone:  git config core.hooksPath .githooks
+npm run --silent smoke || {
+  echo ""
+  echo "pre-commit: npm run smoke failed — fix the above or commit with --no-verify."
+  exit 1
+}

@@ -1,6 +1,18 @@
 // ─── Persado Demo — Side Panel ───────────────────────────────────
+//
+// src/messages.js and src/boot.js are loaded as classic scripts BEFORE this
+// module (see sidepanel.html) so the shared contract exists and any throw during
+// this module's evaluation paints the fatal banner instead of dying silently.
+
+const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
 const GATEWAY = 'http://localhost:8787';
-const $ = (id) => document.getElementById(id);
+const fatal = (e) => self.__persadoFatal?.(e);
+const $ = (id) => {
+  const el = document.getElementById(id);
+  // A missing id used to fail later and far away; fail loudly at lookup instead.
+  if (!el) throw new Error(`sidepanel.html is missing #${id}`);
+  return el;
+};
 
 const pnlConfig=$('panelConfigure'),pnlRecord=$('panelRecord'),pnlResults=$('panelResults');
 const pageUrlEl=$('pageUrl'),audienceSelect=$('audience'),goalChips=$('goalChips'),btnStart=$('btnStart');
@@ -218,7 +230,7 @@ function dispatchTranscribe(){
   if(!lastAudio){procFail('stepTranscribe','No audio was captured for this brief.',null);return;}
   procErr.style.display='none';
   setStep('stepTranscribe','active');stage(STAGE.transcribe);armTimeout();
-  chrome.runtime.sendMessage({type:'TRANSCRIBE_AUDIO',audioData:lastAudio});
+  chrome.runtime.sendMessage({type:MSG.TRANSCRIBE_AUDIO,audioData:lastAudio});
 }
 
 // ─── Screens captured ────────────────────────────────────────────
@@ -252,18 +264,20 @@ chrome.tabs.onActivated.addListener(async(a)=>{try{const t=await chrome.tabs.get
 let levelMsgCount=0; // instrumentation for the AUDIO_LEVELS rate
 
 chrome.runtime.onMessage.addListener((msg)=>{
-  if(msg.type==='AUDIO_LEVELS'){levelMsgCount++;pushLevel(msg.levels||[]);return;}
-  if(msg.type==='SHOTS_UPDATED'){renderShots(msg.thumbs,msg.count);return;}
-  if(msg.type==='TRANSCRIPT_READY'){
+  if(msg.type===MSG.AUDIO_LEVELS){levelMsgCount++;pushLevel(msg.levels||[]);return;}
+  if(msg.type===MSG.RECORDING_STARTED){recStartWaiter?.();return;}
+  if(msg.type===MSG.CONTENT_ERROR){fatal('Recorder error in the page: '+msg.error);return;}
+  if(msg.type===MSG.SHOTS_UPDATED){renderShots(msg.thumbs,msg.count);return;}
+  if(msg.type===MSG.TRANSCRIPT_READY){
     narrationTranscript=msg.transcript;endRecordingUi();
     setStep('stepTranscribe','done');
     generateRecommendations(msg.transcript);
   }
-  if(msg.type==='TRANSCRIPT_ERROR'){
+  if(msg.type===MSG.TRANSCRIPT_ERROR){
     endRecordingUi();
     procFail('stepTranscribe','Transcription failed'+(msg.error?' — '+msg.error:'.'),lastAudio?dispatchTranscribe:null);
   }
-  if(msg.type==='LIVE_TRANSCRIPT'){
+  if(msg.type===MSG.LIVE_TRANSCRIPT){
     if(typeof msg.final==='string'){trFinal=msg.final;trInterim=msg.interim||'';}
     else if(msg.text){trFinal=msg.text;trInterim='';}
     renderTranscript();
@@ -275,8 +289,8 @@ chrome.runtime.onMessage.addListener((msg)=>{
 btnStart.addEventListener('click',async()=>{
   narrationTranscript='';transcriptText.textContent='';transcriptBlock.style.display='none';
   recRetry.style.display='none';
-  chrome.storage.local.remove(['persado:recording','persado:transcript','persado:recordingStart']);
-  chrome.runtime.sendMessage({type:'CLEAR_PAGE_CONTEXT'}).catch(()=>{});
+  chrome.storage.local.remove([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
+  chrome.runtime.sendMessage({type:MSG.CLEAR_PAGE_CONTEXT}).catch(()=>{});
   sh(pnlRecord);
   await beginRecording();
 });
@@ -288,6 +302,35 @@ btnRecord.addEventListener('click',()=>beginRecording());
  * Starts a recording. The content-script injection sequence below is unchanged —
  * getUserMedia stays in the page context so the mic permission prompt works.
  */
+/**
+ * Guarantee a CURRENT content script in the tab before driving it.
+ *
+ * The old code assumed a successful sendMessage meant a usable script. After an
+ * extension reload, an open tab still hosts the previous build; and re-running
+ * the file used to throw a redeclaration error, leaving nothing listening. So:
+ * PING, and only accept a reply whose version matches ours. messages.js is
+ * injected alongside content.js because content.js reads the shared contract.
+ */
+async function ensureContentScript(tabId){
+  const ping=async()=>{try{return await chrome.tabs.sendMessage(tabId,{type:MSG.PING});}catch{return null;}};
+  let r=await ping();
+  if(r?.ok&&r.version===CONTENT_VERSION)return r;
+  await chrome.scripting.executeScript({target:{tabId},files:['src/messages.js','src/content.js']});
+  r=await ping();
+  if(!r?.ok)throw new Error('The page did not respond after injecting the recorder. Reload the page and try again.');
+  if(r.version!==CONTENT_VERSION)throw new Error(`Recorder version mismatch (page has ${r.version}, panel expects ${CONTENT_VERSION}). Reload the page.`);
+  return r;
+}
+
+// Armed BEFORE START_RECORDING is sent, so the confirmation cannot be missed.
+let recStartWaiter=null;
+function awaitRecordingStarted(ms){
+  return new Promise((resolve)=>{
+    const t=setTimeout(()=>{recStartWaiter=null;resolve(false);},ms);
+    recStartWaiter=()=>{clearTimeout(t);recStartWaiter=null;resolve(true);};
+  });
+}
+
 async function beginRecording(){
   recRetry.style.display='none';
   recLive.classList.add('on');
@@ -296,13 +339,21 @@ async function beginRecording(){
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id)throw new Error('No active tab');
-    try{await chrome.tabs.sendMessage(tab.id,{type:'START_RECORDING'});}
-    catch{await chrome.scripting.executeScript({target:{tabId:tab.id},files:['src/content.js']});await new Promise(r=>setTimeout(r,300));await chrome.tabs.sendMessage(tab.id,{type:'START_RECORDING'});}
+    const hello=await ensureContentScript(tab.id);
+    // A recorder left running by an abandoned session would make START_RECORDING
+    // a no-op; clear it first so we never drive a stale recorder.
+    if(hello.recording)await chrome.tabs.sendMessage(tab.id,{type:MSG.STOP_RECORDING}).catch(()=>{});
+    const confirmed=awaitRecordingStarted(3000);
+    const started=await chrome.tabs.sendMessage(tab.id,{type:MSG.START_RECORDING});
+    // sendMessage RESOLVES with {ok:false} on a mic failure — it does not throw.
+    // Not checking this is what let the UI show a live session over a dead recorder.
+    if(!started?.ok)throw new Error(started?.error||'The page did not start recording.');
+    if(!await confirmed)throw new Error('No confirmation from the page that recording began.');
   }catch(err){
     const m=err?.message||'';
-    recFailed(/denied|not allowed|permission/i.test(m)
+    recFailed(/denied|not allowed|permission|NotAllowed/i.test(m)
       ? 'Microphone access was blocked. Allow it for this site, then try again.'
-      : 'Recording could not start on this page. Reload the page and try again.');
+      : (m||'Recording could not start on this page. Reload the page and try again.'));
     return false;
   }
   // Grounding capture — silent, fire-and-forget so it can never delay recording.
@@ -313,7 +364,7 @@ async function beginRecording(){
   renderShots([],0);
   startWave();stt();
   st('Recording');
-  chrome.storage.local.set({'persado:recording':true,'persado:transcript':'','persado:recordingStart':Date.now()});
+  chrome.storage.local.set({[KEYS.RECORDING]:true,[KEYS.TRANSCRIPT]:'',[KEYS.RECORDING_START]:Date.now()});
   return true;
 }
 
@@ -325,7 +376,8 @@ function recFailed(m){
   recRetryMsg.textContent=m;
   btnRecord.textContent='Try again';
   btnPause.disabled=false;btnStopRec.disabled=false;
-  st('Error');
+  // RECORDING_STARTED may already have flipped the toolbar to recording.
+  st('Error');setActionState('ready');
 }
 
 /** Tear down the live UI once recording is over (transcribing/generating next). */
@@ -344,7 +396,7 @@ btnPause.addEventListener('click',async()=>{
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id)throw new Error('No active tab');
-    r=await chrome.tabs.sendMessage(tab.id,{type:next?'PAUSE_RECORDING':'RESUME_RECORDING'});
+    r=await chrome.tabs.sendMessage(tab.id,{type:next?MSG.PAUSE_RECORDING:MSG.RESUME_RECORDING});
   }catch{r=null;}
   if(!r?.ok){tm(r?.error||('Could not '+(next?'pause':'resume')),'err');return;}
   recPaused=next;
@@ -366,7 +418,7 @@ btnStopRec.addEventListener('click',async()=>{
   briefSec=recSec;                       // real duration, kept for the 1c subtitle
   lastAudio=null;
   btnPause.disabled=true;btnStopRec.disabled=true;
-  chrome.storage.local.remove('persado:recording');
+  chrome.storage.local.remove(KEYS.RECORDING);
   // 1c owns everything from here, so step 1 is visible as Active while the audio
   // is still being pulled out of the page.
   endRecordingUi();
@@ -376,7 +428,7 @@ btnStopRec.addEventListener('click',async()=>{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id)throw new Error('No tab');
     capturePageContext('stop');
-    chrome.tabs.sendMessage(tab.id,{type:'STOP_RECORDING'},(r)=>{
+    chrome.tabs.sendMessage(tab.id,{type:MSG.STOP_RECORDING},(r)=>{
       if(chrome.runtime.lastError||!r?.ok){
         procFail('stepTranscribe',(r?.error||'No audio captured')+'. Record the brief again.',null);
         return;
@@ -389,7 +441,7 @@ btnStopRec.addEventListener('click',async()=>{
 
 // The worker owns the toolbar icon/badge; the panel just reports transitions it
 // alone knows about (results ready, brief reset).
-function setActionState(state,count){chrome.runtime.sendMessage({type:'SET_ACTION_STATE',state,count}).catch(()=>{});}
+function setActionState(state,count){chrome.runtime.sendMessage({type:MSG.SET_ACTION_STATE,state,count}).catch(()=>{});}
 
 // ─── Page grounding ──────────────────────────────────────────────
 //
@@ -401,7 +453,7 @@ async function capturePageContext(phase){
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id)return;
-    await chrome.runtime.sendMessage({type:'CAPTURE_PAGE_CONTEXT',phase,tabId:tab.id,windowId:tab.windowId});
+    await chrome.runtime.sendMessage({type:MSG.CAPTURE_PAGE_CONTEXT,phase,tabId:tab.id,windowId:tab.windowId});
   }catch(e){console.warn('[persado] page context capture failed',e);}
 }
 
@@ -452,10 +504,10 @@ async function generateRecommendations(narration){
   // ── Step 2: read the captured screens
   setStep('stepScreens','active');stage(STAGE.screens);
   let ctx={};
-  try{ctx=await chrome.runtime.sendMessage({type:'GET_PAGE_CONTEXT'})||{};}
+  try{ctx=await chrome.runtime.sendMessage({type:MSG.GET_PAGE_CONTEXT})||{};}
   catch(e){console.warn('[persado] no page context',e);}
-  const frames=Array.isArray(ctx.frames)?ctx.frames:[];
-  const elements=Array.isArray(ctx.elements)?ctx.elements:[];
+  const frames=Array.isArray(ctx[CTX.FRAMES])?ctx[CTX.FRAMES]:[];
+  const elements=Array.isArray(ctx[CTX.ELEMENTS])?ctx[CTX.ELEMENTS]:[];
   shotTotal=frames.length;
   procSub.textContent=procSubtitle();
 
@@ -465,7 +517,7 @@ async function generateRecommendations(narration){
   // exact class of bug (a renamed context field) silently disabled vision before.
   if(frames.length&&!images.length){
     console.error(`[persado] REGRESSION: ${frames.length} frame(s) captured but the payload has no images.`
-      +' Check the ctx.frames shape in background.js — expected [{full,thumb}].');
+      +' Check the stored frames shape in background.js — expected [{full,thumb}].');
   }
   if(frames.length)setStep('stepScreens','done');
   else setStep('stepScreens','skipped','No screens captured — generating from the narration alone.');
@@ -530,6 +582,10 @@ btnExport.addEventListener('click',()=>{
 // ─── New ─────────────────────────────────────────────────────────
 
 function resetAll(){
+  // Best-effort: never abandon a live recorder in the page.
+  chrome.tabs.query({active:true,currentWindow:true})
+    .then(([t])=>t?.id&&chrome.tabs.sendMessage(t.id,{type:MSG.STOP_RECORDING}).catch(()=>{}))
+    .catch(()=>{});
   narrationTranscript='';recommendations=null;transcriptText.textContent='';transcriptBlock.style.display='none';
   resultsContainer.innerHTML='';
   recRetry.style.display='none';recLive.classList.remove('on');procErr.style.display='none';
@@ -537,8 +593,8 @@ function resetAll(){
   ut(0);spt();stopWave();stopCreep();disarmTimeout();setProgress(0);
   STEPS.forEach(id=>setStep(id,'pending'));
   btnPause.disabled=false;btnStopRec.disabled=false;
-  chrome.storage.local.remove(['persado:recording','persado:transcript','persado:recordingStart']);
-  chrome.runtime.sendMessage({type:'CLEAR_PAGE_CONTEXT'}).catch(()=>{});setActionState('ready');
+  chrome.storage.local.remove([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
+  chrome.runtime.sendMessage({type:MSG.CLEAR_PAGE_CONTEXT}).catch(()=>{});setActionState('ready');
   sh(pnlConfig);st('Ready');
 }
 btnNew.addEventListener('click',resetAll);
@@ -548,26 +604,26 @@ async function init(){
   // The version strip is gone from the header (design target); keep the version
   // discoverable on hover instead of adding a visible element back.
   try{$('brandLockup').title='Persado Demo v'+chrome.runtime.getManifest().version;}catch{}
-  try{const s=await chrome.storage.local.get(['persado:recording','persado:transcript','persado:recordingStart']);
-    if(s['persado:recording']){
+  try{const s=await chrome.storage.local.get([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
+    if(s[KEYS.RECORDING]){
       // Reopened mid-session: content.js is still recording and still posting
       // levels/transcript, so reattach the live UI and pick the clock back up.
-      recSec=Math.max(0,Math.round((Date.now()-(s['persado:recordingStart']||Date.now()))/1000));
+      recSec=Math.max(0,Math.round((Date.now()-(s[KEYS.RECORDING_START]||Date.now()))/1000));
       recLive.classList.add('on');recStatus.textContent=LISTENING;
       renderTranscript();renderShots([],0);
       startWave();ut(recSec);runTimer();
       sh(pnlRecord);st('Recording');
-      try{const c=await chrome.runtime.sendMessage({type:'GET_PAGE_CONTEXT'});
-        if(c?.frames?.length)renderShots(c.frames.map(f=>f.thumb),c.frames.length);}catch{}
+      try{const c=await chrome.runtime.sendMessage({type:MSG.GET_PAGE_CONTEXT});
+        const cf=c?.[CTX.FRAMES];if(cf?.length)renderShots(cf.map(f=>f.thumb),cf.length);}catch{}
       return;
     }
-    if(s['persado:transcript']){
-      narrationTranscript=s['persado:transcript'];
-      await chrome.storage.local.remove('persado:transcript');
+    if(s[KEYS.TRANSCRIPT]){
+      narrationTranscript=s[KEYS.TRANSCRIPT];
+      await chrome.storage.local.remove(KEYS.TRANSCRIPT);
       procShow();setStep('stepTranscribe','done');
       await generateRecommendations(narrationTranscript);return;
     }
   }catch{}
   st('Ready');
 }
-init();
+init().catch(fatal);

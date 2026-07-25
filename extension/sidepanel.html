@@ -90,6 +90,13 @@
 
     .toast{display:none;padding:10px 16px;border-radius:var(--rctl);margin:0 20px 12px;font-size:12px;text-align:center;font-weight:600;}
     .toast.ok{display:block;background:var(--gt);color:#065F46;}.toast.err{display:block;background:var(--rt);color:var(--red);}
+    /* Fatal banner — see src/boot.js. Red because this is a broken state, not a
+       compliance flag; it is the one place red is used as a fill. */
+    .fatal{margin:0 20px 12px;padding:14px 16px;border-radius:var(--rctl);background:#FEF2F2;border:1px solid var(--red);}
+    .fatal-t{font-size:13px;font-weight:700;color:var(--red);}
+    .fatal-m{margin:6px 0 10px;font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--text-2);max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-word;}
+    #fatalReload{background:var(--red);color:#fff;height:32px;}
+
     .empty-state{text-align:center;padding:32px 12px;color:var(--tm);font-size:13px;line-height:1.5;}
 
     /* ─── Start screen (1a) — claude-design.md §5 ─── */
@@ -250,6 +257,11 @@
   <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
 </div>
 <div class="toast" id="toast"></div>
+<div class="fatal" id="fatalBanner" style="display:none;">
+  <div class="fatal-t">Persado hit an error and stopped</div>
+  <div class="fatal-m" id="fatalMsg"></div>
+  <button class="btn btn-sm" id="fatalReload">Reload panel</button>
+</div>
 
 <!-- ═══ START (1a) ═══ -->
 <div class="panel active view" id="panelConfigure">
@@ -395,6 +407,8 @@
   </div>
 </div>
 
+<script src="src/messages.js"></script>
+<script src="src/boot.js"></script>
 <script src="sidepanel.js" type="module"></script>
 </body>
 </html>
