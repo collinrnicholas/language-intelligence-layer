@@ -1,476 +1,358 @@
 // ─── Persado Demo — Popup Logic ──────────────────────────────────
 //
-// Flow: Configure → Start Capture → Point at element + narrate →
-// Stop & Process → Review transcript → Generate → Results
-//
-// Audio recording happens in an offscreen document (MediaRecorder).
-// Element picking injects into the page. Both survive popup close.
+// States: Configure → Recording → Processing → Review → Results
+// Recording survives popup close (offscreen doc + storage).
 
 const GATEWAY = 'http://localhost:8787';
 
-// ─── DOM refs ────────────────────────────────────────────────────
-
 const $ = (id) => document.getElementById(id);
 
-const headerStatus = $('headerStatus');
-const headerStatusText = $('headerStatusText');
-const toast = $('toast');
+// ─── Panels ──────────────────────────────────────────────────────
+const panelConfigure   = $('panelConfigure');
+const panelRecording   = $('panelRecording');
+const panelProcessing  = $('panelProcessing');
+const panelReview      = $('panelReview');
+const panelResults     = $('panelResults');
 
-const panelConfigure = $('panelConfigure');
-const panelRecording = $('panelRecording');
-const panelReview = $('panelReview');
-const panelResults = $('panelResults');
-
-const pageUrl = $('pageUrl');
+// ─── Configure ───────────────────────────────────────────────────
+const pageUrl       = $('pageUrl');
 const audienceSelect = $('audience');
-const goalSelect = $('goal');
-const btnStartCapture = $('btnStartCapture');
+const goalSelect    = $('goal');
+const btnStart      = $('btnStartCapture');
 
-// Recording panel
-const recTimer = $('recTimer');
-const recElType = $('recElType');
-const recElText = $('recElText');
-const recElementCard = $('recElementCard');
-const recHint = $('recHint');
-const btnStopCapture = $('btnStopCapture');
+// ─── Recording ───────────────────────────────────────────────────
+const recTimer      = $('recTimer');
+const recElCard     = $('recElementCard');
+const recElType     = $('recElType');
+const recElText     = $('recElText');
+const recHint       = $('recHint');
+const btnStop       = $('btnStopCapture');
 
-// Review panel
-const elType = $('elType');
-const elText = $('elText');
-const elContext = $('elContext');
+// ─── Processing ──────────────────────────────────────────────────
+const procStatus    = $('procStatus');
+const procDetail    = $('procDetail');
+
+// ─── Review ──────────────────────────────────────────────────────
+const elType        = $('elType');
+const elText        = $('elText');
+const elContext     = $('elContext');
 const narrationBlock = $('narrationBlock');
-const narrationText = $('narrationText');
-const transcribingStatus = $('transcribingStatus');
+const narrationText  = $('narrationText');
 const narrationFallback = $('narrationFallback');
 const narrationInput = $('narrationInput');
-const btnGenerate = $('btnGenerate');
-const loadingGenerate = $('loadingGenerate');
+const btnGenerate   = $('btnGenerate');
+const loadingGen    = $('loadingGenerate');
 
-// Results panel
+// ─── Results ─────────────────────────────────────────────────────
 const resultsContainer = $('resultsContainer');
-const btnExportBrief = $('btnExportBrief');
-const btnNewBrief = $('btnNewBrief');
+const btnExport     = $('btnExportBrief');
+const btnNew        = $('btnNewBrief');
+
+// ─── Chrome ──────────────────────────────────────────────────────
+const headerStatus  = $('headerStatus');
+const headerText    = $('headerStatusText');
+const toast         = $('toast');
 
 // ─── State ───────────────────────────────────────────────────────
-
 let capturedElement = null;
 let narrationTranscript = '';
 let recommendations = null;
 let currentUrl = '';
-let recordingActive = false;
-let recSeconds = 0;
-let recInterval = null;
+let recording = false;
+let recSec = 0;
+let recTimerId = null;
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-function showToast(msg, kind = 'ok') {
-  toast.textContent = msg;
-  toast.className = 'toast ' + kind;
-  setTimeout(() => { toast.className = 'toast'; }, 3000);
-}
+function toastMsg(m, k='ok') { toast.textContent=m; toast.className='toast '+k; setTimeout(()=>toast.className='toast',3000); }
+function status(t, r=false) { headerText.textContent=t; headerStatus.className=r?'header-status rec':'header-status'; }
+function show(p) { [panelConfigure,panelRecording,panelProcessing,panelReview,panelResults].forEach(x=>x.classList.remove('active')); p.classList.add('active'); }
 
-function setStatus(text, rec = false) {
-  headerStatusText.textContent = text;
-  headerStatus.className = rec ? 'header-status rec' : 'header-status';
-}
-
-function showPanel(panel) {
-  [panelConfigure, panelRecording, panelReview, panelResults].forEach(p => p.classList.remove('active'));
-  panel.classList.add('active');
-}
-
-// ─── Page detection ──────────────────────────────────────────────
+// ─── Page ────────────────────────────────────────────────────────
 
 async function detectPage() {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.url) {
-      currentUrl = tab.url;
-      try { const u = new URL(tab.url); pageUrl.textContent = u.hostname + u.pathname; }
-      catch { pageUrl.textContent = tab.url.slice(0, 60); }
-    }
-  } catch { pageUrl.textContent = '(unknown)'; }
+    const [t] = await chrome.tabs.query({active:true,currentWindow:true});
+    if (t?.url) { currentUrl=t.url; try{const u=new URL(t.url);pageUrl.textContent=u.hostname+u.pathname}catch{pageUrl.textContent=t.url.slice(0,60)} }
+  } catch { pageUrl.textContent='(unknown)'; }
 }
 
-// ─── Element picker (injected) ───────────────────────────────────
+// ─── Element capture (storage-based, survives popup close) ───────
 
-function injectElementPicker() {
-  document.querySelectorAll('#persado-picker-overlay, #persado-highlight').forEach(el => el.remove());
-
-  let hovered = null;
-
-  const overlay = document.createElement('div');
-  overlay.id = 'persado-picker-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483646;cursor:crosshair;';
-  document.body.appendChild(overlay);
-
-  const highlight = document.createElement('div');
-  highlight.id = 'persado-highlight';
-  highlight.style.cssText = 'position:fixed;z-index:2147483647;border:2px solid #E8388C;background:rgba(92,45,145,0.08);pointer-events:none;transition:all 0.1s;border-radius:4px;';
-  document.body.appendChild(highlight);
-
-  function classify(el) {
-    const tag = el.tagName.toLowerCase();
-    const text = (el.textContent || '').trim().toLowerCase();
-    if (tag === 'a' || tag === 'button' || el.getAttribute('role') === 'button') {
-      if (/(apply|open|start|get started|sign up|learn more|see |try |compare)/i.test(text)) return 'CTA';
-    }
-    if (/^h[1-4]$/.test(tag)) return 'Headline';
-    if (/^h[5-6]$/.test(tag) || /subhead/i.test(el.className || '')) return 'Subhead';
-    if (/(guarantee|secure|trust|fdic|insured|protection|safe|backed)/i.test(text)) return 'Trust Line';
-    if (/(offer|rate|bonus|cash|reward|save|earn|fee|apr|apy)/i.test(text)) return 'Promo';
-    return 'Body Copy';
-  }
-
-  function context(el) {
-    const p = el.closest('section, article, [class*="hero"], [class*="banner"], [class*="card"], [class*="feature"]');
-    if (!p) return '';
-    const ft = (p.textContent || '').trim().slice(0, 250);
-    const et = (el.textContent || '').trim();
-    return ft.replace(et, '⟦' + et + '⟧');
-  }
-
-  function sel(el) {
-    if (el.id) return '#' + el.id;
-    if (el.className && typeof el.className === 'string') {
-      const cls = el.className.trim().split(/\s+/).slice(0, 2).join('.');
-      if (cls) return el.tagName.toLowerCase() + '.' + cls;
-    }
-    return el.tagName.toLowerCase();
-  }
-
-  function pick(el) {
-    const type = classify(el);
-    const text = (el.textContent || '').trim().slice(0, 300);
-    overlay.remove(); highlight.remove();
-    chrome.runtime.sendMessage({
-      type: 'PERSADO_ELEMENT_CAPTURED',
-      element: { type, text, context: context(el), selector: sel(el) },
-    });
-  }
-
-  overlay.addEventListener('mousemove', (e) => {
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || el === overlay || el === highlight) return;
-    hovered = el;
-    const r = el.getBoundingClientRect();
-    Object.assign(highlight.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
-  });
-
-  overlay.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (hovered) pick(hovered); });
-  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { overlay.remove(); highlight.remove(); document.removeEventListener('keydown', esc); } });
+function renderEl() {
+  if (!capturedElement) return;
+  elType.textContent = capturedElement.type;
+  elText.textContent = capturedElement.text||'(empty)';
+  elContext.textContent = capturedElement.context||'';
+  elContext.style.display = capturedElement.context?'block':'none';
 }
+
+function showRecEl() {
+  if (!capturedElement) return;
+  recElType.textContent=capturedElement.type;
+  recElText.textContent=capturedElement.text||'(empty)';
+  recElCard.style.display='block';
+  recHint.textContent='Element captured! Keep narrating, or click another. 🎤';
+}
+
+async function loadPendingEl() {
+  try {
+    const s = await chrome.storage.local.get('persado:pendingCapture');
+    if (s['persado:pendingCapture']) {
+      capturedElement = s['persado:pendingCapture'];
+      await chrome.storage.local.remove('persado:pendingCapture');
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+// ─── Timer ───────────────────────────────────────────────────────
+
+function startTimer() { recSec=0; recTimer.textContent='00:00'; recTimerId=setInterval(()=>{recSec++;const m=String(Math.floor(recSec/60)).padStart(2,'0');const s=String(recSec%60).padStart(2,'0');recTimer.textContent=m+':'+s;},1000); }
+function stopTimer() { if(recTimerId){clearInterval(recTimerId);recTimerId=null;} }
 
 // ─── Messages from background ────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'PERSADO_ELEMENT_CAPTURED' && msg.element) {
     capturedElement = msg.element;
-    if (recordingActive) {
-      recElType.textContent = msg.element.type;
-      recElText.textContent = msg.element.text || '(empty)';
-      recElementCard.style.display = 'block';
-      recHint.textContent = 'Element captured! Keep narrating, or click another element. 🎤';
-    } else {
-      renderCapturedElement();
-      showPanel(panelReview);
-      setStatus('Ready');
-    }
+    if (recording) showRecEl();
+    else { renderEl(); show(panelReview); status('Ready'); }
   }
-
   if (msg.type === 'RECORDING_STARTED') {
-    recordingActive = true;
-    startRecTimer();
+    recording=true; startTimer();
   }
-
   if (msg.type === 'TRANSCRIPT_READY') {
     narrationTranscript = msg.transcript;
-    transcribingStatus.style.display = 'none';
-    narrationBlock.style.display = 'block';
     narrationText.textContent = msg.transcript;
-    narrationFallback.style.display = 'none';
-    btnGenerate.disabled = false;
-    btnGenerate.textContent = '⚡ Generate Recommendations';
-    setStatus('Ready');
+    narrationBlock.style.display='block';
+    narrationFallback.style.display='none';
+    show(panelReview);
+    status('Ready');
   }
-
   if (msg.type === 'TRANSCRIPT_ERROR') {
-    transcribingStatus.style.display = 'none';
-    narrationFallback.style.display = '';
-    btnGenerate.disabled = false;
-    btnGenerate.textContent = '⚡ Generate Recommendations';
-    showToast('Voice transcription failed — type narration instead', 'err');
-    setStatus('Ready');
+    narrationFallback.style.display='';
+    show(panelReview);
+    status('Ready');
+    // Don't show error toast — the processing panel already showed the failure
   }
 });
-
-// ─── Pending capture check ───────────────────────────────────────
-
-async function checkPendingCapture() {
-  try {
-    const stored = await chrome.storage.local.get('persado:pendingCapture');
-    if (stored['persado:pendingCapture']) {
-      capturedElement = stored['persado:pendingCapture'];
-      await chrome.storage.local.remove('persado:pendingCapture');
-      renderCapturedElement();
-    }
-  } catch {}
-}
-
-function renderCapturedElement() {
-  if (!capturedElement) return;
-  elType.textContent = capturedElement.type;
-  elText.textContent = capturedElement.text || '(empty)';
-  elContext.textContent = capturedElement.context || '';
-  elContext.style.display = capturedElement.context ? 'block' : 'none';
-}
-
-// ─── Recording timer ─────────────────────────────────────────────
-
-function startRecTimer() {
-  recSeconds = 0;
-  recTimer.textContent = '00:00';
-  recInterval = setInterval(() => {
-    recSeconds++;
-    const m = Math.floor(recSeconds / 60).toString().padStart(2, '0');
-    const s = (recSeconds % 60).toString().padStart(2, '0');
-    recTimer.textContent = m + ':' + s;
-  }, 1000);
-}
-
-function stopRecTimer() {
-  if (recInterval) { clearInterval(recInterval); recInterval = null; }
-}
 
 // ─── Start Capture ───────────────────────────────────────────────
 
-btnStartCapture.addEventListener('click', async () => {
+btnStart.addEventListener('click', async () => {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) { showToast('No active tab found', 'err'); return; }
+    const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
+    if (!tab?.id) { toastMsg('No active tab','err'); return; }
 
     // Inject element picker
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: injectElementPicker,
+    await chrome.scripting.executeScript({target:{tabId:tab.id},func:injectPicker});
+
+    // Start audio via offscreen
+    chrome.runtime.sendMessage({type:'POPUP_START_RECORDING'}, (r) => {
+      if (chrome.runtime.lastError) toastMsg('Mic failed: '+chrome.runtime.lastError.message,'err');
     });
 
-    // Start audio recording via offscreen
-    chrome.runtime.sendMessage({ type: 'POPUP_START_RECORDING' }, (resp) => {
-      // Response comes after STOP — not used here
-      if (chrome.runtime.lastError) {
-        showToast('Mic access failed. ' + chrome.runtime.lastError.message, 'err');
-      }
-    });
-
-    // Show recording panel
-    showPanel(panelRecording);
-    setStatus('Recording', true);
-    startRecTimer();
-    recordingActive = true;
-
-    // Store recording state for re-open after popup close
-    chrome.storage.local.set({ 'persado:recording': true });
-
-    showToast('Point at an element + narrate 🎤');
-  } catch (err) {
-    showToast('Failed: ' + err.message, 'err');
-  }
+    recording = true;
+    chrome.storage.local.set({'persado:recording':true});
+    show(panelRecording);
+    status('Recording', true);
+    startTimer();
+    toastMsg('Point at an element, narrate out loud 🎤');
+  } catch(e) { toastMsg('Failed: '+e.message,'err'); }
 });
 
-// ─── Stop Capture ────────────────────────────────────────────────
+// ─── Stop & Process ──────────────────────────────────────────────
 
-btnStopCapture.addEventListener('click', () => {
-  stopRecTimer();
-  recordingActive = false;
-  setStatus('Processing…');
+btnStop.addEventListener('click', async () => {
+  stopTimer();
+  recording = false;
   chrome.storage.local.remove('persado:recording');
 
-  // Stop recording and get transcript
-  chrome.runtime.sendMessage({ type: 'POPUP_STOP_RECORDING' }, (resp) => {
-    if (chrome.runtime.lastError) {
-      showToast('Error stopping recording', 'err');
-      showPanel(panelReview);
+  // Load element from storage (captured while popup was closed)
+  await loadPendingEl();
+
+  show(panelProcessing);
+  procStatus.textContent = 'Transcribing narration…';
+  procDetail.textContent = 'Sending audio to speech recognition';
+  status('Processing');
+
+  // Cycle through meaningful status updates
+  const statusCycle = [
+    ['Analyzing narration…',         'Identifying key concerns and emotional signals'],
+    ['Evaluating element context…',  'Mapping element type to marketing frameworks'],
+    ['Building variants…',           'Applying language psychology and compliance rules'],
+    ['Reasoning over lift models…',  'Generating predicted performance ranges'],
+  ];
+  let cycleIdx = 0;
+  const cycleTimer = setInterval(() => {
+    if (cycleIdx < statusCycle.length) {
+      procStatus.textContent = statusCycle[cycleIdx][0];
+      procDetail.textContent = statusCycle[cycleIdx][1];
+      cycleIdx++;
+    }
+  }, 1500);
+
+  chrome.runtime.sendMessage({type:'POPUP_STOP_RECORDING'}, (r) => {
+    clearInterval(cycleTimer);
+
+    if (chrome.runtime.lastError || !r?.ok) {
+      // Transcription failed — show fallback immediately
+      procStatus.textContent = 'Voice transcription unavailable';
+      procDetail.textContent = r?.error || 'Speech service is not accessible. Type your narration below.';
       narrationFallback.style.display = '';
+      setTimeout(() => {
+        renderEl();
+        show(panelReview);
+        status('Ready');
+      }, 1000);
       return;
     }
-    if (resp?.ok && resp.transcript) {
-      narrationTranscript = resp.transcript;
-      narrationText.textContent = resp.transcript;
-      narrationBlock.style.display = 'block';
-    } else {
-      narrationFallback.style.display = '';
-      if (resp?.error) showToast(resp.error, 'err');
-    }
-    // Check for element
-    if (capturedElement) renderCapturedElement();
-    showPanel(panelReview);
-    setStatus('Ready');
-    btnGenerate.disabled = false;
-    btnGenerate.textContent = '⚡ Generate Recommendations';
-  });
 
-  // Show transcribing state immediately
-  showPanel(panelReview);
-  transcribingStatus.style.display = 'block';
-  btnGenerate.disabled = true;
-  btnGenerate.textContent = 'Transcribing…';
-  setStatus('Transcribing…');
+    if (r.transcript) {
+      narrationTranscript = r.transcript;
+      procStatus.textContent = 'Transcription complete';
+      procDetail.textContent = 'Narration captured. Review below.';
+    }
+
+    setTimeout(() => {
+      renderEl();
+      narrationText.textContent = r.transcript || '';
+      narrationBlock.style.display = r.transcript ? 'block' : 'none';
+      narrationFallback.style.display = r.transcript ? 'none' : '';
+      show(panelReview);
+      status('Ready');
+    }, 800);
+  });
 });
 
 // ─── Generate ────────────────────────────────────────────────────
 
 btnGenerate.addEventListener('click', async () => {
-  if (!capturedElement) { showToast('No element captured', 'err'); return; }
-
+  if (!capturedElement) { toastMsg('No element captured','err'); return; }
   const narration = narrationTranscript || narrationInput.value.trim();
-  if (!narration) { showToast('No narration provided', 'err'); return; }
+  if (!narration) { toastMsg('No narration provided','err'); return; }
 
-  // If typed, show it
-  if (!narrationTranscript && narration) {
-    narrationText.textContent = narration;
-    narrationBlock.style.display = 'block';
-    narrationFallback.style.display = 'none';
-  }
-
-  const brief = {
-    element: capturedElement,
-    narration,
-    audience: audienceSelect.value,
-    goal: goalSelect.value,
-    pageUrl: currentUrl,
-  };
-
-  btnGenerate.style.display = 'none';
-  loadingGenerate.classList.add('active');
-  setStatus('Generating…');
+  btnGenerate.style.display='none';
+  loadingGen.classList.add('active');
+  status('Generating…');
 
   try {
-    const resp = await fetch(GATEWAY + '/v1/ai/recommend', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(brief),
+    const resp = await fetch(GATEWAY+'/v1/ai/recommend',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({element:capturedElement,narration,audience:audienceSelect.value,goal:goalSelect.value,pageUrl:currentUrl}),
     });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: 'Gateway error' }));
-      throw new Error(err.error || 'Gateway returned ' + resp.status);
-    }
+    if (!resp.ok) throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
     const data = await resp.json();
-    recommendations = data.variants || [];
+    recommendations = data.variants||[];
     renderResults();
-    showPanel(panelResults);
-    setStatus('Done');
-  } catch (err) {
-    showToast(err.message || 'Generation failed', 'err');
-    setStatus('Error');
+    show(panelResults);
+    status('Done');
+  } catch(e) {
+    toastMsg(e.message||'Generation failed','err');
+    status('Error');
   } finally {
-    loadingGenerate.classList.remove('active');
-    btnGenerate.style.display = '';
+    loadingGen.classList.remove('active');
+    btnGenerate.style.display='';
   }
 });
 
 // ─── Results ─────────────────────────────────────────────────────
 
 function renderResults() {
-  if (!recommendations?.length) {
-    resultsContainer.innerHTML = '<div class="empty-state">No variants generated.</div>';
-    return;
-  }
-  resultsContainer.innerHTML = recommendations.map((v, i) => `
+  if (!recommendations?.length) { resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>'; return; }
+  resultsContainer.innerHTML = recommendations.map((v,i)=>`
     <div class="rec-card">
       <div class="rc-header">
-        <div class="rc-number">Variant ${i + 1}</div>
+        <div class="rc-number">Variant ${i+1}</div>
         <div class="rc-variant">${esc(v.copy)}</div>
       </div>
       <div class="rc-body">
-        <div class="rc-rationale">${esc(v.rationale || '')}</div>
+        <div class="rc-rationale">${esc(v.rationale||'')}</div>
         <div class="rc-row" style="margin-top:8px;justify-content:space-between;">
-          <span class="badge ${v.compliance === 'clear' ? 'clear' : 'flag'}">
-            ${v.compliance === 'clear' ? '✓ Compliance Clear' : '⚠ ' + esc(v.complianceNote || 'Flag')}
-          </span>
-          <span class="badge lift">📈 ${esc(v.predictedLift || '+5–12%')} (illustrative)</span>
+          <span class="badge ${v.compliance==='clear'?'clear':'flag'}">${v.compliance==='clear'?'✓ Compliance Clear':'⚠ '+esc(v.complianceNote||'Flag')}</span>
+          <span class="badge lift">📈 ${esc(v.predictedLift||'+5–12%')} (illustrative)</span>
         </div>
       </div>
     </div>
   `).join('');
 }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 // ─── Export ──────────────────────────────────────────────────────
 
-btnExportBrief.addEventListener('click', () => {
-  if (!capturedElement || !recommendations) { showToast('Nothing to export', 'err'); return; }
-  const aud = { new: 'New Customers', existing: 'Existing Customers', lapsed: 'Lapsed / Dormant' };
-  const gl = { conversions: 'Conversions', clicks: 'Clicks / CTR', trust: 'Trust / Credibility' };
-  const md = [
-    '# Persado Marketing Brief', '',
-    `**Page:** ${currentUrl}`,
-    `**Audience:** ${aud[audienceSelect.value]}`,
-    `**Goal:** ${gl[goalSelect.value]}`, '',
-    '## Captured Element',
-    `- **Type:** ${capturedElement.type}`,
+btnExport.addEventListener('click',()=>{
+  if (!capturedElement||!recommendations) { toastMsg('Nothing to export','err'); return; }
+  const aud={new:'New Customers',existing:'Existing Customers',lapsed:'Lapsed/Dormant'};
+  const gl={conversions:'Conversions',clicks:'Clicks/CTR',trust:'Trust/Credibility'};
+  const md=[
+    '# Persado Marketing Brief','',
+    `**Page:** ${currentUrl}`,`**Audience:** ${aud[audienceSelect.value]}`,
+    `**Goal:** ${gl[goalSelect.value]}`,'',
+    '## Captured Element',`- **Type:** ${capturedElement.type}`,
     `- **Current Copy:** "${capturedElement.text}"`,
-    capturedElement.context ? `- **Surrounding Context:** ${capturedElement.context}` : '',
-    `- **Selector:** \`${capturedElement.selector}\``, '',
-    '## Narration',
-    `> ${narrationText.textContent || '(none)'}`, '',
-    '## Recommendations', '',
-    '> ⚠️ **Demo only.** Generated by a general-purpose LLM standing in for Persado Motivation AI.', '',
-    ...recommendations.flatMap((v, i) => [
-      `### Variant ${i + 1}`,
-      `- **Copy:** ${v.copy}`,
-      `- **Rationale:** ${v.rationale || '—'}`,
-      `- **Compliance:** ${v.compliance === 'clear' ? '✓ Clear' : '⚠ ' + (v.complianceNote || 'Flag')}`,
-      `- **Predicted Lift:** ${v.predictedLift || '+5–12%'} *(illustrative)*`, '',
-    ]),
+    capturedElement.context?`- **Context:** ${capturedElement.context}`:'',
+    `- **Selector:** \`${capturedElement.selector}\``,'',
+    '## Narration',`> ${narrationText.textContent||'(none)'}`,'',
+    '## Recommendations','',
+    '> ⚠️ **Demo only.** Generated by a general-purpose LLM standing in for Persado Motivation AI.','',
+    ...recommendations.flatMap((v,i)=>[`### Variant ${i+1}`,`- **Copy:** ${v.copy}`,`- **Rationale:** ${v.rationale||'—'}`,`- **Compliance:** ${v.compliance==='clear'?'✓ Clear':'⚠ '+(v.complianceNote||'Flag')}`,`- **Predicted Lift:** ${v.predictedLift||'+5–12%'} *(illustrative)*`,'']),
   ].filter(Boolean).join('\n');
-
-  navigator.clipboard.writeText(md).then(() => showToast('Brief copied ✓'))
-    .catch(() => { const ta = document.createElement('textarea'); ta.value = md; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('Brief copied ✓'); });
+  navigator.clipboard.writeText(md).then(()=>toastMsg('Brief copied ✓')).catch(()=>{const t=document.createElement('textarea');t.value=md;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toastMsg('Brief copied ✓');});
 });
 
-// ─── New Brief ───────────────────────────────────────────────────
+// ─── New ─────────────────────────────────────────────────────────
 
-btnNewBrief.addEventListener('click', () => {
-  capturedElement = null; recommendations = null; narrationTranscript = '';
-  narrationText.textContent = ''; narrationBlock.style.display = 'none';
-  narrationFallback.style.display = 'none'; narrationInput.value = '';
-  resultsContainer.innerHTML = ''; transcribingStatus.style.display = 'none';
-  btnGenerate.disabled = false; btnGenerate.textContent = '⚡ Generate Recommendations';
-  showPanel(panelConfigure); setStatus('Ready');
+btnNew.addEventListener('click',()=>{
+  capturedElement=null;recommendations=null;narrationTranscript='';
+  narrationText.textContent='';narrationBlock.style.display='none';
+  narrationFallback.style.display='none';narrationInput.value='';
+  resultsContainer.innerHTML='';
+  btnGenerate.style.display='';loadingGen.classList.remove('active');
+  show(panelConfigure);status('Ready');
 });
+
+// ─── Element Picker (injected) ───────────────────────────────────
+
+function injectPicker() {
+  document.querySelectorAll('#persado-picker-overlay,#persado-highlight').forEach(e=>e.remove());
+  let hovered=null;
+  const ov=document.createElement('div');ov.id='persado-picker-overlay';ov.style.cssText='position:fixed;inset:0;z-index:2147483646;cursor:crosshair;';document.body.appendChild(ov);
+  const hl=document.createElement('div');hl.id='persado-highlight';hl.style.cssText='position:fixed;z-index:2147483647;border:2px solid #E8388C;background:rgba(92,45,145,0.08);pointer-events:none;transition:all 0.1s;border-radius:4px;';document.body.appendChild(hl);
+
+  function cl(el){const t=(el.textContent||'').trim().toLowerCase();const g=el.tagName.toLowerCase();if(g==='a'||g==='button'||el.getAttribute('role')==='button'){if(/(apply|open|start|get started|sign up|learn more|see |try |compare)/i.test(t))return'CTA'}if(/^h[1-4]$/.test(g))return'Headline';if(/^h[5-6]$/.test(g)||/subhead/i.test(el.className||''))return'Subhead';if(/(guarantee|secure|trust|fdic|insured|protection|safe|backed)/i.test(t))return'Trust Line';if(/(offer|rate|bonus|cash|reward|save|earn|fee|apr|apy)/i.test(t))return'Promo';return'Body Copy';}
+  function ctx(el){const p=el.closest('section,article,[class*="hero"],[class*="banner"],[class*="card"],[class*="feature"]');if(!p)return'';const f=(p.textContent||'').trim().slice(0,250);return f.replace((el.textContent||'').trim(),'⟦'+(el.textContent||'').trim()+'⟧');}
+  function sel(el){if(el.id)return'#'+el.id;if(el.className&&typeof el.className==='string'){const c=el.className.trim().split(/\s+/).slice(0,2).join('.');if(c)return el.tagName.toLowerCase()+'.'+c;}return el.tagName.toLowerCase();}
+  function pick(el){ov.remove();hl.remove();chrome.runtime.sendMessage({type:'PERSADO_ELEMENT_CAPTURED',element:{type:cl(el),text:(el.textContent||'').trim().slice(0,300),context:ctx(el),selector:sel(el)}});}
+
+  ov.addEventListener('mousemove',e=>{const el=document.elementFromPoint(e.clientX,e.clientY);if(!el||el===ov||el===hl)return;hovered=el;const r=el.getBoundingClientRect();hl.style.left=r.left+'px';hl.style.top=r.top+'px';hl.style.width=r.width+'px';hl.style.height=r.height+'px';});
+  ov.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(hovered)pick(hovered);});
+  document.addEventListener('keydown',function esc(e){if(e.key==='Escape'){ov.remove();hl.remove();document.removeEventListener('keydown',esc);}});
+}
 
 // ─── Init ────────────────────────────────────────────────────────
 
 async function init() {
   await detectPage();
-  await checkPendingCapture();
+  const hasEl = await loadPendingEl();
 
-  // Check if we were recording when popup reopened
+  // Check recording state (survives popup close)
   try {
-    const stored = await chrome.storage.local.get('persado:recording');
-    if (stored['persado:recording']) {
-      recordingActive = true;
-      showPanel(panelRecording);
-      setStatus('Recording', true);
-      startRecTimer();
-      if (capturedElement) {
-        recElType.textContent = capturedElement.type;
-        recElText.textContent = capturedElement.text || '(empty)';
-        recElementCard.style.display = 'block';
-        recHint.textContent = 'Element captured! Keep narrating, or click another. 🎤';
-      }
+    const s = await chrome.storage.local.get('persado:recording');
+    if (s['persado:recording']) {
+      recording = true;
+      show(panelRecording);
+      status('Recording', true);
+      startTimer();
+      if (capturedElement) showRecEl();
+      return;
     }
   } catch {}
 
-  if (capturedElement && !recordingActive) {
-    renderCapturedElement();
-    showPanel(panelReview);
-  }
-
-  setStatus('Ready');
-  // Recording picks up later via message
-  if (recordingActive) setStatus('Recording', true);
+  if (capturedElement) { renderEl(); show(panelReview); }
+  status('Ready');
 }
 
 init();
