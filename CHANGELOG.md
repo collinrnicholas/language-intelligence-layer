@@ -8,6 +8,26 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.39
+
+Results variant-card restyle (items 2–6 of the results update).
+
+- All three cards now share one structure. Top row: emotion chip left (uppercase
+  11px mono, #B22222 on #FDF1F1, 4px radius); right side reads "SCORE 87" (mono
+  #8B8880 label + 16px #141310 figure).
+- Every card has a collapsed "Why this works" disclosure (chevron) that expands a
+  one-sentence rationale, replacing the inline rationale that only card 1 showed.
+- TOP PICK chip (11px mono, white on #141310) sits beside the score on the
+  highest-scoring card; that card keeps the neutral #DDDBD6 border — no red border.
+- "Use this" is always #141310; when chosen it turns #1F9D55 with the label
+  "In use" and the card border becomes 1.5px #1F9D55. Red is reserved for
+  recording states — no red buttons/borders on this screen. The confirm check is
+  a CSS shape, not a glyph.
+- "Copy" swaps to "Copied" (with a CSS check) for 2s on click.
+- Meta line drops "· 0 email threads".
+
+Not touched: header, View brief, original-copy block, footer, card spacing.
+
 ## 0.6.38
 
 Results footer restyle (results-screen section 7). The handoff button (kept as

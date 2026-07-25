@@ -91,24 +91,33 @@
     .res-orig{margin:16px 0;padding:14px 16px;border:1px dashed var(--border);border-radius:12px;background:var(--surface);}
     .res-orig-t{margin-top:6px;font-size:13px;line-height:1.5;color:var(--text-2);}
 
-    /* Variant card — single white surface, hairline, red border when selected. */
-    .vcard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;}
-    .vcard.sel{border-color:var(--red);}
+    /* Variant card — single white surface. Border is a neutral hairline for every
+       card (top pick included); the ONLY special border is the green in-use state.
+       Both use 1.5px so selecting a card causes no layout shift. */
+    .vcard{background:var(--surface);border:1.5px solid #DDDBD6;border-radius:12px;padding:16px;margin-bottom:12px;}
+    .vcard.sel{border-color:#1F9D55;}
     .vc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:22px;}
+    .vc-right{display:inline-flex;align-items:center;gap:8px;}
     /* Emotion tag — the rhetorical approach the model took. Not a performance claim. */
-    .emotion{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--red);background:rgba(220,40,40,.08);border:none;border-radius:999px;padding:3px 9px;}
-    /* Mock Motivation AI score — top-right, balances the emotion pill opposite:
-       a prominent figure with a small muted qualifier, on the same baseline. */
+    .emotion{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#B22222;background:#FDF1F1;border:none;border-radius:4px;padding:3px 7px;}
+    /* TOP PICK chip — sits beside the score on the highest-scoring card. */
+    .toppick{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:#141310;border-radius:4px;padding:3px 7px;line-height:1;}
+    /* Mock Motivation AI score — "SCORE 87": mono label + prominent figure. */
     .vc-score{display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap;}
-    .vc-score b{font-size:15px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1;}
-    .vc-score .mark{color:var(--text-3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+    .vc-score .mark{font-family:var(--mono);font-size:11px;font-weight:600;color:#8B8880;letter-spacing:.04em;}
+    .vc-score b{font-size:16px;font-weight:700;color:#141310;font-variant-numeric:tabular-nums;line-height:1;}
     .vc-score.lift{color:var(--green-text);font-weight:700;}
     /* One muted footnote beneath the list — not per card. */
     .res-note{margin:2px 2px 4px;font-size:11px;color:var(--text-3);line-height:1.4;}
     .vc-copy{font-size:15px;font-weight:700;color:var(--ink);line-height:1.35;margin:11px 0;}
-    /* Rationale — the "why", shown only on the selected card. */
-    .vc-why{display:none;font-size:13px;color:var(--text-2);line-height:1.55;margin:-2px 0 11px;}
-    .vcard.sel .vc-why{display:block;}
+    /* Rationale — a per-card "Why this works" disclosure, collapsed by default, with
+       a chevron that rotates open. Same on every card. */
+    .vc-why{margin:0 0 11px;}
+    .vc-why summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-2);}
+    .vc-why summary::-webkit-details-marker{display:none;}
+    .vc-why summary::before{content:'';flex:none;width:6px;height:6px;border-right:2px solid var(--text-3);border-bottom:2px solid var(--text-3);transform:rotate(-45deg);transition:transform .15s;}
+    .vc-why[open] summary::before{transform:rotate(45deg);}
+    .vc-why-p{margin-top:7px;font-size:13px;color:var(--text-2);line-height:1.55;}
     .vc-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;}
     /* Compliance pill — bordered, tinted, one line, never wraps. The CLEAR pill is
        compact and content-width: it never stretches and never truncates. The FLAG
@@ -116,16 +125,20 @@
     .comp{font-size:11px;font-weight:600;white-space:nowrap;border:1px solid;border-radius:999px;padding:4px 10px;}
     .comp.clear{display:inline-flex;align-items:center;flex:none;color:var(--green-text);background:var(--green-bg);border-color:rgba(16,185,129,.35);}
     .comp.flag{display:block;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--amber-text);background:var(--amber-bg);border-color:rgba(245,158,11,.4);}
-    /* Two buttons of equal height/radius: Copy is outlined, Use this is ink-filled
-       (red-filled on the selected card). Both carry a 1px border so their box
-       heights match exactly. */
+    /* Two buttons of equal height/radius. Copy is outlined; Use this is always
+       ink-filled (#141310) and turns green (#1F9D55, "In use") once chosen. Both
+       carry a 1px border so their box heights match. Red is reserved for recording
+       states — no red on this screen. The confirm check is a CSS shape, not a glyph
+       (claude-design.md §4 / CLAUDE.md invariant 4). */
     .vc-act{display:flex;align-items:center;gap:8px;flex:none;}
-    .vc-copybtn,.vc-use{border-radius:8px;font-family:var(--sans);font-size:11px;font-weight:600;padding:6px 11px;cursor:pointer;line-height:1;}
+    .vc-copybtn,.vc-use{display:inline-flex;align-items:center;gap:6px;border-radius:8px;font-family:var(--sans);font-size:11px;font-weight:600;padding:6px 11px;cursor:pointer;line-height:1;}
     .vc-copybtn{background:transparent;color:var(--text-1);border:1px solid var(--border);}
     .vc-copybtn:hover{background:var(--surface-2);}
-    .vc-use{background:var(--ink);color:#fff;border:1px solid var(--ink);}
+    .vc-use{background:#141310;color:#fff;border:1px solid #141310;}
     .vc-use:hover{opacity:.9;}
-    .vcard.sel .vc-use{background:var(--red);border-color:var(--red);}
+    .vcard.sel .vc-use{background:#1F9D55;border-color:#1F9D55;}
+    /* Check shape drawn in the button's own text color, shown on "In use"/"Copied". */
+    .vcard.sel .vc-use::after,.vc-copybtn.done::after{content:'';flex:none;width:5px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin-bottom:2px;}
 
     /* Pinned footer + Portal handoff stub. */
     /* Two items, one row, vertically centred, equal height, neither wrapping. No

@@ -1019,25 +1019,27 @@ function renderResults(){
   resCtx.textContent=[b.goal||goalValue,PRODUCT_LABELS[b.audience||audienceSelect.value]||b.audience,ASSET_LABELS[b.assetType]]
     .filter(Boolean).join(' · ').toUpperCase();
   // Demoted time-saved line — real duration, structural counts, not a boxed callout.
-  capLine.textContent=`Brief captured in ${mmss(briefSec)} · 1 click · 0 email threads`;
+  capLine.textContent=`Brief captured in ${mmss(briefSec)} · 1 click`;
   // ONE original block from the page — no strikethrough. Omitted when nothing extracted.
   const current=b.element?.text||'';
   resOrigText.textContent=current;
   resOrig.style.display=current?'':'none';
 
   if(!n){resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>';return;}
-  // First variant selected by default, so the selected state (red border, red
-  // "Use this", visible rationale) is present on arrival rather than empty.
-  selectedVariant=0;
+  // No card is "in use" on arrival — that green state now reflects an explicit
+  // choice (clicking Use this), not a default.
+  selectedVariant=-1;
   const reg=REG_BY_AUDIENCE[b.audience||audienceSelect.value]||'Reg DD';
-  resultsContainer.innerHTML=recommendations.map((v,i)=>vcard(v,i,reg)).join('');
+  // Highest mock score gets the TOP PICK chip (deterministic; MOCK_SCORES).
+  let topIdx=0; for(let i=1;i<n;i++){ if(MOCK_SCORES[i%MOCK_SCORES.length]>MOCK_SCORES[topIdx%MOCK_SCORES.length]) topIdx=i; }
+  resultsContainer.innerHTML=recommendations.map((v,i)=>vcard(v,i,reg,topIdx)).join('');
   // ONE combined disclaimer above the footer, covering both caveats so neither is
   // repeated per card (scores) nor truncated on every pill (compliance).
   resNote.textContent='Scores are sample data. Compliance flags are illustrative.';
   resNote.style.display='';
 }
 
-function vcard(v,i,reg){
+function vcard(v,i,reg,topIdx){
   const emo=(v.emotion||'').trim();
   const emoOk=EMOTIONS_SET.has(emo.toLowerCase());
   // Surface a missing/invalid tag rather than swallowing it — a blank slot on the
@@ -1052,14 +1054,20 @@ function vcard(v,i,reg){
   const comp=clear
     ? `<span class="comp clear">UDAAP · ${esc(reg)}</span>`
     : `<span class="comp flag" title="${esc(v.complianceNote||'')}">Review: ${esc(v.complianceNote||'flagged')}</span>`;
-  return `<div class="vcard${i===selectedVariant?' sel':''}" data-i="${i}">`
-    +`<div class="vc-top">${emoPill}${scoreSlot(i)}</div>`
+  // TOP PICK chip sits next to the score on the highest-scoring card; the card
+  // itself gets no special border (that is reserved for the green in-use state).
+  const top=i===topIdx?'<span class="toppick">TOP PICK</span>':'';
+  const sel=i===selectedVariant;
+  // Every card carries the same collapsible rationale, closed by default.
+  const why=v.rationale?`<details class="vc-why"><summary>Why this works</summary><p class="vc-why-p">${esc(v.rationale)}</p></details>`:'';
+  return `<div class="vcard${sel?' sel':''}" data-i="${i}">`
+    +`<div class="vc-top">${emoPill}<span class="vc-right">${top}${scoreSlot(i)}</span></div>`
     +`<div class="vc-copy">${esc(v.copy)}</div>`
-    +`<div class="vc-why">${esc(v.rationale||'')}</div>`
+    +why
     +`<div class="vc-foot">${comp}`
       +`<span class="vc-act">`
         +`<button class="vc-copybtn" data-i="${i}">Copy</button>`
-        +`<button class="vc-use" data-i="${i}">Use this</button>`
+        +`<button class="vc-use" data-i="${i}">${sel?'In use':'Use this'}</button>`
       +`</span></div>`
   +`</div>`;
 }
@@ -1074,9 +1082,9 @@ function scoreSlot(i){
     return `<span class="vc-score lift">+${pct}% CTR</span>`;
   }
   const val=MOCK_SCORES[i%MOCK_SCORES.length];
-  // Just the figure plus a small muted qualifier — the "Motivation AI" label made
-  // this consume the whole row and unbalanced the card against the emotion pill.
-  return `<span class="vc-score"><b>${val}</b> <span class="mark">sample</span></span>`;
+  // "SCORE 87": a small mono label with a prominent figure, balancing the emotion
+  // chip opposite. The sample-data caveat is stated once in the footnote below.
+  return `<span class="vc-score"><span class="mark">SCORE</span> <b>${val}</b></span>`;
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
@@ -1085,14 +1093,25 @@ resultsContainer.addEventListener('click',(e)=>{
   const use=e.target.closest('.vc-use');
   if(use){
     selectedVariant=+use.dataset.i;
-    resultsContainer.querySelectorAll('.vcard').forEach(c=>c.classList.toggle('sel',+c.dataset.i===selectedVariant));
+    // One card in use at a time: the chosen card turns green ("In use"), the rest
+    // revert to the ink "Use this". Card border follows via the .sel class.
+    resultsContainer.querySelectorAll('.vcard').forEach(c=>{
+      const on=+c.dataset.i===selectedVariant;
+      c.classList.toggle('sel',on);
+      const b=c.querySelector('.vc-use');if(b)b.textContent=on?'In use':'Use this';
+    });
     return;
   }
   const cp=e.target.closest('.vc-copybtn');
   if(cp){
     const v=recommendations?.[+cp.dataset.i];
     if(!v)return;
-    navigator.clipboard.writeText(v.copy).then(()=>tm('Copied')).catch(()=>tm('Could not copy','err'));
+    navigator.clipboard.writeText(v.copy).then(()=>{
+      // Inline confirmation on the button itself for 2s, then revert.
+      cp.textContent='Copied';cp.classList.add('done');
+      clearTimeout(cp._copiedTimer);
+      cp._copiedTimer=setTimeout(()=>{cp.textContent='Copy';cp.classList.remove('done');},2000);
+    }).catch(()=>tm('Could not copy','err'));
   }
 });
 
