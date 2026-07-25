@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 const viewMain=$('viewMain'),viewResults=$('viewResults');
 const stateIdle=$('stateIdle'),stateRecording=$('stateRecording'),stateProcessing=$('stateProcessing');
 const pageUrlEl=$('pageUrl'),audienceSelect=$('audience'),goalSelect=$('goal');
-const btnRecord=$('btnRecord'),btnStopRec=$('btnStopRec'),recTimer=$('recTimer'),recError=$('recError');
+const btnRecord=$('btnRecord'),btnStopRec=$('btnStopRec'),recTimer=$('recTimer'),recStatus=$('recStatus'),liveTranscript=$('liveTranscript');
 const procText=$('procText'),briefQuote=$('briefQuote');
 const resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief');
 const statusChip=$('statusChip'),toast=$('toast');
@@ -68,12 +68,18 @@ chrome.runtime.onMessage.addListener((msg)=>{
   if(msg.type==='TRANSCRIPT_READY'){
     narrationTranscript=msg.transcript;
     chrome.storage.local.remove('persado:transcript');
-    briefQuote.textContent='“'+msg.transcript+'”';
+    briefQuote.textContent='"'+msg.transcript+'"';
     briefQuote.style.display='block';
+    liveTranscript.style.display='none';
     generateRecommendations(msg.transcript);
   }
   if(msg.type==='TRANSCRIPT_ERROR'){
+    liveTranscript.style.display='none';
     backToIdle('Transcription failed: '+(msg.error||'unknown')+' — try recording again.');
+  }
+  if(msg.type==='LIVE_TRANSCRIPT'){
+    liveTranscript.style.display='block';
+    liveTranscript.textContent=msg.text||'';
   }
 });
 

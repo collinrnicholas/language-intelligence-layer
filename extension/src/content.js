@@ -8,6 +8,7 @@ let mediaRecorder = null;
 let mediaStream = null;
 let audioChunks = [];
 let floatingBtn = null;
+let speechRecognition = null;  // Web Speech API for live transcript
 
 // ─── Inject floating record button ───────────────────────────────
 
@@ -45,6 +46,9 @@ function injectRecordButton() {
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
 
     mediaRecorder.start(100);
+
+    // Start live transcript via Web Speech API (free, local)
+    startLiveTranscript();
 
     // Update button to recording state
     floatingBtn.textContent = '⏹ Stop Recording';
@@ -84,7 +88,45 @@ async function stopRecording() {
       reader.readAsDataURL(blob);
     };
     mediaRecorder.stop();
+    stopLiveTranscript();
   });
+}
+
+// ─── Live transcript (Web Speech API) ────────────────────────────
+
+function startLiveTranscript() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return; // not supported in this browser
+
+  speechRecognition = new SpeechRecognition();
+  speechRecognition.continuous = true;
+  speechRecognition.interimResults = true;
+  speechRecognition.lang = 'en-US';
+
+  speechRecognition.onresult = (event) => {
+    let interim = '';
+    let final = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) final += transcript + ' ';
+      else interim += transcript;
+    }
+    chrome.runtime.sendMessage({
+      type: 'LIVE_TRANSCRIPT',
+      text: final + interim,
+      isFinal: !!final,
+    }).catch(() => {});
+  };
+
+  speechRecognition.onerror = () => {}; // silent — Whisper handles final transcript
+  speechRecognition.start();
+}
+
+function stopLiveTranscript() {
+  if (speechRecognition) {
+    try { speechRecognition.stop(); } catch {}
+    speechRecognition = null;
+  }
 }
 
 // ─── Message handling ────────────────────────────────────────────

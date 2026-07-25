@@ -28,6 +28,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Relay content script events to sidepanel
   if (msg.type === 'RECORDING_STARTED') { relay(msg); return false; }
   if (msg.type === 'RECORDING_ERROR') { relay(msg); return false; }
+  if (msg.type === 'LIVE_TRANSCRIPT') { relay(msg); return false; }
 
   // Transcribe audio from sidepanel (or content script)
   if (msg.type === 'TRANSCRIBE_AUDIO' && msg.audioData) {
