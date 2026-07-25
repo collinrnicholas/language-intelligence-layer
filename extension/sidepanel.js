@@ -529,6 +529,22 @@ function awaitRecordingStarted(ms){
   });
 }
 
+function recordingStartMessage(err){
+  const name=err?.name||err?.errorName||'';
+  const m=err?.message||String(err||'');
+  const both=(name+' '+m);
+  if(/NotFoundError|Requested device not found|device not found|no.*device/i.test(both)){
+    return 'Chrome could not find a microphone. Connect or select an input, then try again. If a mic is connected, allow Chrome in macOS System Settings → Privacy & Security → Microphone.';
+  }
+  if(/denied|not allowed|permission|NotAllowed/i.test(both)){
+    return 'Microphone access was blocked. Allow it for this site, then try again.';
+  }
+  if(/NotReadableError|TrackStartError|in use|hardware/i.test(both)){
+    return 'Chrome found a microphone but could not start it. Close any app using the mic, then try again.';
+  }
+  return m||'Recording could not start on this page. Reload the page and try again.';
+}
+
 async function beginRecording(){
   setUiState('starting');
   recStatus.textContent='Starting…';
@@ -544,13 +560,14 @@ async function beginRecording(){
     const started=await chrome.tabs.sendMessage(tab.id,{type:MSG.START_RECORDING});
     // sendMessage RESOLVES with {ok:false} on a mic failure — it does not throw.
     // Not checking this is what let the UI show a live session over a dead recorder.
-    if(!started?.ok)throw new Error(started?.error||'The page did not start recording.');
+    if(!started?.ok){
+      const e=new Error(started?.error||'The page did not start recording.');
+      e.name=started?.errorName||'';
+      throw e;
+    }
     if(!await confirmed)throw new Error('No confirmation from the page that recording began.');
   }catch(err){
-    const m=err?.message||'';
-    recFailed(/denied|not allowed|permission|NotAllowed/i.test(m)
-      ? 'Microphone access was blocked. Allow it for this site, then try again.'
-      : (m||'Recording could not start on this page. Reload the page and try again.'));
+    recFailed(recordingStartMessage(err));
     return false;
   }
   // Grounding capture — silent, fire-and-forget so it can never delay recording.

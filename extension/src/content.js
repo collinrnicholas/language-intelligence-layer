@@ -53,6 +53,11 @@
   const report = (error) => {
     try { chrome.runtime.sendMessage({ type: MSG.CONTENT_ERROR, error: String(error && error.stack || error) }).catch(() => {}); } catch {}
   };
+  const commandError = (error) => ({
+    ok: false,
+    error: error && error.message || String(error),
+    errorName: error && error.name || '',
+  });
 
   // ── Audio levels ───────────────────────────────────────────────
 
@@ -107,17 +112,24 @@
    */
   async function startRecording() {
     if (S.mediaRecorder) return { ok: false, error: 'Recorder already active' };
-    S.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    S.audioChunks = [];
-    S.finalText = '';
-    S.paused = false;
-    S.mediaRecorder = new MediaRecorder(S.mediaStream, { mimeType: 'audio/webm' });
-    S.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) S.audioChunks.push(e.data); };
-    S.mediaRecorder.start(100);
-    startLevels(S.mediaStream);
-    startLiveTranscript();
-    chrome.runtime.sendMessage({ type: MSG.RECORDING_STARTED }).catch(() => {});
-    return { ok: true, state: S.mediaRecorder.state };
+    try {
+      S.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      S.audioChunks = [];
+      S.finalText = '';
+      S.paused = false;
+      const opts = MediaRecorder.isTypeSupported?.('audio/webm') ? { mimeType: 'audio/webm' } : undefined;
+      S.mediaRecorder = new MediaRecorder(S.mediaStream, opts);
+      S.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) S.audioChunks.push(e.data); };
+      S.mediaRecorder.start(100);
+      startLevels(S.mediaStream);
+      startLiveTranscript();
+      chrome.runtime.sendMessage({ type: MSG.RECORDING_STARTED }).catch(() => {});
+      return { ok: true, state: S.mediaRecorder.state };
+    } catch (e) {
+      try { S.mediaStream?.getTracks().forEach(t => t.stop()); } catch {}
+      S.mediaRecorder = null; S.mediaStream = null; S.audioChunks = [];
+      throw e;
+    }
   }
 
   /** Pause keeps the SAME recorder and the SAME accumulated audio/transcript. */
@@ -227,8 +239,11 @@
     const run = { [MSG.START_RECORDING]: startRecording, [MSG.STOP_RECORDING]: stopRecording,
                   [MSG.PAUSE_RECORDING]: pauseRecording, [MSG.RESUME_RECORDING]: resumeRecording }[msg.type];
     if (!run) return false;
+    // Command failures (mic missing/blocked, recorder unsupported, etc.) are
+    // expected user-recoverable states. Return them to the panel's retry UI; keep
+    // CONTENT_ERROR for async/unhandled content-script crashes only.
     run().then(r => sendResponse(r || { ok: true }))
-         .catch(e => { report(e); sendResponse({ ok: false, error: e && e.message || String(e) }); });
+         .catch(e => sendResponse(commandError(e)));
     return true;
   };
   chrome.runtime.onMessage.addListener(listener);

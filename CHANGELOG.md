@@ -8,6 +8,22 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.13
+
+Fix: microphone startup failures no longer crash the panel.
+
+- `START_RECORDING` failures such as `NotFoundError` now return through the normal
+  retry path instead of also emitting `CONTENT_ERROR`, so the user sees the
+  Microphone needed card without the fatal "Persado hit an error and stopped"
+  banner.
+- The panel preserves the DOMException name from the content script and maps
+  `NotFoundError` to a plain-language no-microphone/no-input message. This is the
+  path where Chrome cannot see an input device, so it may not show a permission
+  prompt at all.
+- `content.js` now cleans up any partial stream state if recorder startup fails.
+- `CONTENT_VERSION` 3 → 4 so open tabs replace the old injected recorder after the
+  extension reloads.
+
 ## 0.6.12
 
 Part 4 — stale session state no longer resurrects a ghost recording.

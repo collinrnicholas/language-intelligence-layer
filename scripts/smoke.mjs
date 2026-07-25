@@ -12,6 +12,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { parse } from 'node-html-parser';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const EXT = join(ROOT, 'extension');
@@ -57,7 +58,22 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   if (dupes.length) fail('duplicate ids', dupes.join(', '));
 }
 
-// ── 3. message contract: declared / sent / handled ────────────────
+// ── 3. primary panels are top-level siblings ───────────────────────
+{
+  const root = parse(HTML);
+  const body = root.querySelector('body');
+  const panels = ['panelConfigure', 'panelRecord', 'panelProcess', 'panelBrief', 'panelResults'];
+  for (const id of panels) {
+    const el = root.querySelector(`#${id}`);
+    if (!el) continue;
+    if (el.parentNode !== body) {
+      fail('panel nesting', `#${id} must be a direct child of <body>, otherwise an inactive parent panel can hide it`);
+    }
+  }
+  notes.push(`${panels.length} primary panels checked as body-level siblings`);
+}
+
+// ── 4. message contract: declared / sent / handled ────────────────
 {
   const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'/gm, MESSAGES));
   const files = { 'sidepanel.js': PANEL_C, 'src/background.js': BG_C, 'src/content.js': CONTENT_C };
@@ -94,7 +110,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`${declared.length} message types declared, ${sent.size} sent, ${handled.size} handled`);
 }
 
-// ── 4. page-context field contract (the ctx.frames regression) ────
+// ── 5. page-context field contract (the ctx.frames regression) ────
 {
   const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'/gm, MESSAGES.slice(MESSAGES.indexOf('const CTX'))));
   const written = uniq(all(/\[CTX\.([A-Z_]+)\]\s*:/g, BG_C));
@@ -129,7 +145,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`context fields written=${written.join(',')} readByPanel=${readPanel.join(',')}`);
 }
 
-// ── 5. storage keys go through the contract ───────────────────────
+// ── 6. storage keys go through the contract ───────────────────────
 {
   const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'persado:/gm, MESSAGES));
   for (const [name, src] of [['sidepanel.js', PANEL_C], ['src/background.js', BG_C], ['src/content.js', CONTENT_C]]) {
@@ -142,7 +158,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`${declared.length} storage keys declared`);
 }
 
-// ── 6. chrome.* namespaces are covered by manifest permissions ────
+// ── 7. chrome.* namespaces are covered by manifest permissions ────
 {
   const perms = new Set([...(MANIFEST.permissions || [])]);
   const hostPerms = MANIFEST.host_permissions || [];
@@ -162,7 +178,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`chrome namespaces used: ${used.join(', ')}`);
 }
 
-// ── 7. manifest asset paths exist, and scripts the HTML loads exist ──
+// ── 8. manifest asset paths exist, and scripts the HTML loads exist ──
 {
   const paths = [];
   const walk = (v) => {
@@ -185,7 +201,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`${uniq(paths).length} manifest assets checked`);
 }
 
-// ── 8. boot guard is loaded before the module ─────────────────────
+// ── 9. boot guard is loaded before the module ─────────────────────
 {
   const iBoot = HTML.indexOf('src/boot.js'), iMsg = HTML.indexOf('src/messages.js'), iMod = HTML.indexOf('sidepanel.js" type="module"');
   if (iMsg < 0 || iBoot < 0) fail('boot guard', 'sidepanel.html must load src/messages.js and src/boot.js');
@@ -195,13 +211,16 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   }
 }
 
-// ── 9. content script is idempotent and version-stamped ──────────
+// ── 10. content script is idempotent and version-stamped ─────────
 {
   if (/^(let|var)\s/m.test(CONTENT_C)) {
     fail('content script', 'has top-level let/var — re-injection will throw "already been declared"');
   }
   if (!/self\.__persadoContent/.test(CONTENT_C)) fail('content script', 'missing the __persadoContent re-injection guard');
   if (!/MSG\.PING/.test(CONTENT_C)) fail('content script', 'does not answer PING — the panel cannot verify its version');
+  if (/catch\s*\(\s*e\s*=>\s*\{\s*report\(e\);\s*sendResponse/.test(CONTENT_C)) {
+    fail('content script', 'command failures must return to the retry UI, not emit CONTENT_ERROR/fatal');
+  }
 
   // Changing content.js without bumping CONTENT_VERSION leaves stale copies live.
   const hash = createHash('sha256').update(CONTENT).digest('hex').slice(0, 12);
@@ -214,7 +233,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   }
 }
 
-// ── 10. no deprecated purple survives on rebuilt surfaces ─────────
+// ── 11. no deprecated purple survives on rebuilt surfaces ─────────
 {
   const banned = ['#5C2D91', '#E8388C', '--prp', '--grad'];
   // The results screen (1d) is NOT rebuilt yet, so its rules and markup may still
@@ -240,7 +259,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   if (HTML.indexOf('</style>') < 0) fail('sidepanel.html', 'no </style> found');
 }
 
-// ── 11. gateway URL lives in exactly one place ────────────────────
+// ── 12. gateway URL lives in exactly one place ────────────────────
 {
   // Two hardcoded copies of the base URL is how a port change becomes an
   // unexplainable "Failed to fetch". manifest host_permissions are allowed to
@@ -267,7 +286,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`gateway url declared once in src/config.js (port ${port})`);
 }
 
-// ── 12. every endpoint the extension calls has a gateway route ────
+// ── 13. every endpoint the extension calls has a gateway route ────
 {
   const declared = [...CONFIG.matchAll(/^\s{4}[A-Z_]+:\s*'(\/[^']+)'/gm)].map(m => m[1]);
   if (!declared.length) fail('endpoints', 'no ENDPOINTS found in src/config.js');
@@ -285,7 +304,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`${declared.length} endpoints checked against gateway routes`);
 }
 
-// ── 13. manifest version is documented in the changelog ───────────
+// ── 14. manifest version is documented in the changelog ───────────
 {
   const version = MANIFEST.version;
   if (!/^\d+\.\d+\.\d+$/.test(version)) fail('version', `manifest version "${version}" is not x.y.z`);
@@ -297,7 +316,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`manifest version ${version}`);
 }
 
-// ── 14. no emoji in the panel UI ──────────────────────────────────
+// ── 15. no emoji in the panel UI ──────────────────────────────────
 {
   const start = HTML.indexOf('id="panelResults"');
   const rebuilt = HTML.slice(0, start < 0 ? HTML.length : start);
@@ -307,7 +326,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   if (bad.length) fail('emoji', `found ${bad.map(c => JSON.stringify(c)).join(', ')} on a rebuilt surface`);
 }
 
-// ── 15. panel/header/.on move ONLY through setUiState ─────────────
+// ── 16. panel/header/.on move ONLY through setUiState ─────────────
 {
   // The recording screen went blank because the active panel (sh), the header
   // (st), and the .rec-live.on toggle were set by separate call sites that could
@@ -327,7 +346,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push(`ui state: ${onRegion.length} .on toggle(s), all inside setUiState; no sh(pnl…)/st('…') bypass`);
 }
 
-// ── 16. content-script version handshake forces re-injection ──────
+// ── 17. content-script version handshake forces re-injection ──────
 {
   // The blank/ghost failure traces to a stale content script surviving an
   // extension reload. ensureContentScript must PING, compare CONTENT_VERSION, and
