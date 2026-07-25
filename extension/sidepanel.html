@@ -139,7 +139,16 @@
     </div>
   </div>
 
-  <button class="btn btn-primary btn-block" id="btnStart">Record Marketing Brief</button>
+  <!-- Mic permission gate -->
+  <div id="micGate" style="text-align:center;padding:16px;background:var(--smut);border:1px solid var(--bdr);border-radius:var(--rc);margin-top:8px;">
+    <div style="font-size:32px;margin-bottom:8px;">🎙️</div>
+    <div style="font-size:15px;font-weight:700;color:var(--prp);margin-bottom:4px;">Microphone Access</div>
+    <div style="font-size:12px;color:var(--tm);margin-bottom:14px;line-height:1.5;">Persado records your voice to generate compliant copy variants. Audio is processed locally and never stored.</div>
+    <button class="btn btn-primary" id="btnAllowMic" style="width:auto;padding:10px 32px;">Allow Microphone</button>
+    <div id="micStatus" style="font-size:11px;color:var(--grn);margin-top:8px;display:none;">✓ Microphone ready</div>
+  </div>
+
+  <button class="btn btn-primary btn-block" id="btnStart" style="display:none;">Record Marketing Brief</button>
 </div>
 
 <!-- ═══ RECORD ═══ -->
