@@ -354,6 +354,46 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   notes.push('handshake: ensureContentScript PINGs + version-gates + re-injects');
 }
 
+// ── 18. captureVisibleTab is never reached without the flag check ─
+{
+  // Screen capture is opt-in (CAPTURE_SCREENSHOTS, default off). No path may call
+  // captureVisibleTab without first checking the flag. Deleting the guard in
+  // capturePageContext must fail this check.
+  const shots = (BG_C.match(/captureVisibleTab/g) || []).length;
+  if (shots === 0) {
+    notes.push('capture: captureVisibleTab not used');
+  } else {
+    if (shots > 1) fail('capture', `captureVisibleTab appears ${shots}× — keep it in one gated place`);
+    if (!/CAPTURE_SCREENSHOTS/.test(BG_C)) fail('capture', 'background.js calls captureVisibleTab but never checks CAPTURE_SCREENSHOTS');
+    // The guard must sit inside capturePageContext, before the ON-path capture call.
+    const fn = BG_C.slice(BG_C.indexOf('async function capturePageContext'));
+    const body = fn.slice(0, fn.indexOf('\n}\n') + 1);
+    const guardAt = body.search(/if\s*\(\s*!\s*CAPTURE_SCREENSHOTS\s*\)/);
+    const captureAt = body.search(/\baddFrame\s*\(/);
+    if (guardAt < 0) fail('capture', 'capturePageContext has no `if (!CAPTURE_SCREENSHOTS)` guard — captureVisibleTab is reachable unconditionally');
+    else if (captureAt >= 0 && guardAt > captureAt) fail('capture', 'the CAPTURE_SCREENSHOTS guard comes AFTER the capture call in capturePageContext');
+    notes.push('capture: captureVisibleTab is behind a CAPTURE_SCREENSHOTS guard');
+  }
+}
+
+// ── 19. asset types used in the panel are all in config ASSET_TYPES ─
+{
+  const cfgBlock = (CONFIG.match(/const ASSET_TYPES\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/) || [, ''])[1];
+  const allowed = new Set(all(/'([a-z-]+)'/g, cfgBlock));
+  if (!allowed.size) fail('asset types', 'ASSET_TYPES not found / empty in config.js');
+  // Values the panel maps element types TO, and the labelled keys it renders.
+  const mapVals = all(/:\s*'([a-z-]+)'/g, (PANEL_C.match(/const ELEMENT_TO_ASSET=\{[^}]*\}/) || [''])[0]);
+  const labelKeys = all(/'([a-z-]+)'\s*:/g, (PANEL_C.match(/const ASSET_LABELS=\{[^}]*\}/) || [''])[0]);
+  const dflt = all(/\|\|\s*'([a-z-]+)'/g, (PANEL_C.match(/function inferAssetType[^}]*\}/) || [''])[0]);
+  const used = uniq([...mapVals, ...labelKeys, ...dflt]);
+  const bad = used.filter(v => !allowed.has(v));
+  if (bad.length) fail('asset types', `panel uses ${bad.join(', ')} not in config ASSET_TYPES (${[...allowed].join(', ')})`);
+  // Every allowed type should be labelled, or the override select shows a blank.
+  const unlabelled = [...allowed].filter(a => !labelKeys.includes(a));
+  if (unlabelled.length) fail('asset types', `no ASSET_LABELS entry for ${unlabelled.join(', ')}`);
+  notes.push(`asset types: ${used.length} panel values ⊆ ${allowed.size} allowed`);
+}
+
 // ── report ───────────────────────────────────────────────────────
 console.log('persado smoke\n');
 for (const n of notes) console.log(`  · ${n}`);
