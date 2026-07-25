@@ -52,6 +52,18 @@
   // before.
   const CAPTURE_SCREENSHOTS = false;
 
+  // ── Asset type ─────────────────────────────────────────────────
+  //
+  // Persado's output is asset-specific, so the brief names WHICH asset the copy is
+  // for. These are the allowed values, aligned to Persado's published asset
+  // taxonomy. The panel infers a default from the extracted element type (no extra
+  // control on the one-click start screen) and allows override in the Brief view.
+  // gateway/server.mjs uses it to shape the output; an absent value behaves as
+  // before. smoke.mjs checks the panel only uses values from this list.
+  const ASSET_TYPES = Object.freeze([
+    'web-headline', 'web-cta', 'email-subject', 'push', 'sms', 'banner', 'social',
+  ]);
+
   // ── Demo mode ──────────────────────────────────────────────────
   //
   // OFF BY DEFAULT. When true, ONLY the two network calls (transcribe, recommend)
@@ -87,7 +99,7 @@
   ]);
 
   root.PERSADO_CONFIG = Object.freeze({
-    GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS,
+    GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, ASSET_TYPES,
     DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT, DEMO_VARIANTS,
   });
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -51,6 +51,17 @@ const MAX_IMAGES = 4;
 // citation in its compliance step (see REG_BY_AUDIENCE in extension/sidepanel.js),
 // so the UI can never cite a regulation the model was not asked to check.
 const REG_BY_AUDIENCE = { retail: 'DD', business: 'DD', wealth: 'DD', cards: 'Z', mortgage: 'Z' };
+// Per-asset output guidance (see extension/src/config.js ASSET_TYPES). Phrased as
+// guidance so the model self-regulates length/shape rather than being hard-clipped.
+const ASSET_GUIDANCE = {
+  'web-headline':  'This copy is a WEB HEADLINE — short and punchy, a few words to a short line.',
+  'web-cta':       'This copy is a WEB CTA (button or link) — action-oriented, concise, a couple of words.',
+  'email-subject': 'This copy is an EMAIL SUBJECT LINE — front-load the value in the first few words; aim for roughly 30–50 characters so it is not truncated in the inbox.',
+  'push':          'This copy is a PUSH NOTIFICATION — around 90 characters, one punchy sentence with a clear reason to tap.',
+  'sms':           'This copy is an SMS — keep the whole message within 160 characters, plain and direct, no links unless essential.',
+  'banner':        'This copy is a WEB BANNER — very short, benefit-forward, a few words that read at a glance.',
+  'social':        'This copy is a SOCIAL AD — short and scroll-stopping, with a hook in the first few words.',
+};
 // Fixed vocabulary for the additive `emotion` field, so the rhetorical-approach
 // tag stays consistent across runs. The panel renders no pill for anything outside
 // this set. This is the model's own description of its approach — NOT a performance
@@ -318,6 +329,10 @@ async function handleRecommend(req, res) {
   const productLine = productLabels[body.audience] || body.audience || 'Retail Banking';
   const objective = objectiveLabels[body.goal] || body.goal || 'Acquisition';
   const reg = REG_BY_AUDIENCE[body.audience] || 'DD';
+  // Asset-specific output shaping. Additive: an absent/unknown assetType leaves the
+  // prompt exactly as before. Guidance, not hard limits — the char counts steer the
+  // model rather than clip its output.
+  const assetType = ASSET_GUIDANCE[body.assetType] ? body.assetType : null;
 
   const systemPrompt = [
     'You are a marketing language AI trained on millions of high-performing marketing messages across',
@@ -392,6 +407,7 @@ async function handleRecommend(req, res) {
     '  urgency, authority, curiosity, loss aversion, etc.).',
     '- Copy should match the element TYPE: headlines are short and punchy, CTAs are action-oriented,',
     '  trust lines are reassuring and specific, promos are benefit-forward.',
+    ...(assetType ? [`- ASSET FORMAT — ${ASSET_GUIDANCE[assetType]} Every variant must fit this format.`] : []),
     '- Never invent specific numbers (rates, APYs, dollar amounts) unless the original had them.',
     '- Keep copy concise. A variant should not be longer than 2x the original.',
   ].join('\n');
@@ -402,6 +418,7 @@ async function handleRecommend(req, res) {
     `Page: ${body.pageUrl || 'Unknown page'}`,
     `Product Line: ${productLine}`,
     `Objective: ${objective}`,
+    ...(assetType ? [`Asset Type: ${assetType}`] : []),
     '',
     ...(element.text ? [
       'ELEMENT TO OPTIMIZE',

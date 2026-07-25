@@ -8,6 +8,27 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.18
+
+Asset type in the brief (Part 2). Persado's output is asset-specific, so the brief
+names which asset the copy is for.
+
+- `ASSET_TYPES` in config: `web-headline | web-cta | email-subject | push | sms |
+  banner | social`.
+- Inferred from the extracted element type (headline→web-headline, cta→web-cta,
+  promo→banner, default web-headline) so the one-click flow gains no control. Sent
+  as `assetType` on the `/v1/ai/recommend` payload.
+- Shown in the results context line (e.g. `CROSS-SELL · RETAIL BANKING · WEB
+  HEADLINE`) and the Brief view, where a compact select allows OVERRIDE — changing
+  it re-runs generation against the same brief, no re-record. Override clears on a
+  new recording.
+- Gateway: `assetType` shapes the output (email subjects front-loaded ~30–50 chars,
+  SMS within 160, push ~90, banners very short, web headline/CTA per existing
+  guidance) as model guidance, not hard clipping. Additive — an absent or unknown
+  value behaves exactly as before.
+
+---
+
 ## 0.6.17
 
 Screen capture is now opt-in and OFF by default (Part 1). The deployable posture

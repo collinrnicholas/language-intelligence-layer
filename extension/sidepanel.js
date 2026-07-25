@@ -5,7 +5,7 @@
 // this module's evaluation paints the fatal banner instead of dying silently.
 
 const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, ASSET_TYPES, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
 const fatal = (e) => self.__persadoFatal?.(e);
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -53,6 +53,15 @@ const PRODUCT_LABELS={retail:'Retail Banking',cards:'Credit Cards',mortgage:'Mor
 // Mirrors REG_BY_AUDIENCE in gateway/server.mjs. The UI must never cite a
 // regulation the model was not asked to check (claude-design.md §6).
 const REG_BY_AUDIENCE={retail:'Reg DD',business:'Reg DD',wealth:'Reg DD',cards:'Reg Z',mortgage:'Reg Z'};
+// Human labels for the asset types (config ASSET_TYPES). Used in the context line
+// and the Brief override select.
+const ASSET_LABELS={'web-headline':'Web headline','web-cta':'Web CTA','email-subject':'Email subject','push':'Push','sms':'SMS','banner':'Banner','social':'Social'};
+// Inferred from the extracted element type so the one-click flow needs no extra
+// control; overridable in the Brief view. Values MUST be in ASSET_TYPES (smoke).
+const ELEMENT_TO_ASSET={headline:'web-headline',cta:'web-cta',promo:'banner',trust:'web-headline'};
+function inferAssetType(elType){return ELEMENT_TO_ASSET[elType]||'web-headline';}
+// null unless the user overrides in the Brief view; cleared on a new recording.
+let assetTypeOverride=null;
 
 function tm(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(()=>toast.className='toast',4000);}
 // PRIMITIVES — only setUiState may call these. sh() switches the active panel; st()
@@ -465,6 +474,7 @@ chrome.runtime.onMessage.addListener((msg)=>{
   if(msg.type===MSG.CONTENT_ERROR){fatal('Recorder error in the page: '+msg.error);return;}
   if(msg.type===MSG.SHOTS_UPDATED){renderShots(msg.thumbs,msg.count);return;}
   if(msg.type===MSG.TRANSCRIPT_READY){
+    assetTypeOverride=null;   // a new brief re-infers its asset type
     narrationTranscript=msg.transcript;endRecordingUi('working');
     setStep('stepTranscribe','done');
     generateRecommendations(msg.transcript);
@@ -725,6 +735,7 @@ function renderBrief(){
     el?['Element',`${esc(el.type||'element')} · <span class="mono">${esc(el.selector||'')}</span><span class="sub">“${esc(el.text||'')}”</span>`]:null,
     ['Product line',esc(PRODUCT_LABELS[b.audience]||b.audience||'—')],
     ['Objective',esc(b.goal||'—')],
+    ['Asset type',`<select class="asset-sel" id="assetSelect" aria-label="Asset type">${ASSET_TYPES.map(t=>`<option value="${t}"${t===(b.assetType||'web-headline')?' selected':''}>${esc(ASSET_LABELS[t])}</option>`).join('')}</select>`],
     (b.elements||[]).length?['Also on page',`${(b.elements||[]).length} other element${b.elements.length===1?'':'s'} extracted`]:null,
   ].filter(Boolean);
   briefFields.innerHTML=rows.map(([k,v])=>`<div class="bf"><div class="bf-k">${esc(k)}</div><div class="bf-v">${v}</div></div>`).join('');
@@ -739,6 +750,14 @@ function renderBrief(){
     briefShots.innerHTML='<div class="ph-tile">none</div>';
   }
 }
+
+// Override the inferred asset type — re-runs generation against the SAME brief
+// (no re-record), so the copy's length and shape change to fit the new format.
+briefFields.addEventListener('change',(e)=>{
+  const sel=e.target.closest('.asset-sel');if(!sel)return;
+  assetTypeOverride=sel.value;
+  generateRecommendations(narrationTranscript);
+});
 
 // One-tap gap filler: type the missing piece, or re-record just that piece.
 briefCoverage.addEventListener('click',(e)=>{
@@ -866,8 +885,9 @@ async function generateRecommendations(narration){
   // Built once and RETAINED: the variant cards show `element.text` as the current
   // copy, and the Brief view copies this exact object as JSON. What the audience
   // sees is what the gateway received, not a reconstruction.
+  const assetType=assetTypeOverride||inferAssetType(element?.type);
   briefPayload={
-    narration,audience:audienceSelect.value,goal:goalValue,pageUrl:currentUrl,
+    narration,audience:audienceSelect.value,goal:goalValue,pageUrl:currentUrl,assetType,
     ...(element?{element}:{}),
     ...(elements.length>1?{elements:elements.filter(e=>e!==element)}:{}),
     ...(images.length?{images}:{}),
@@ -927,7 +947,7 @@ function renderResults(){
   // Dynamic heading, singular at 1.
   resHeading.textContent=`${n} variant${n===1?'':'s'} ready`;
   // Context line: OBJECTIVE · PRODUCT LINE · ELEMENT TYPE (type omitted if unknown).
-  resCtx.textContent=[b.goal||goalValue,PRODUCT_LABELS[b.audience||audienceSelect.value]||b.audience,b.element?.type]
+  resCtx.textContent=[b.goal||goalValue,PRODUCT_LABELS[b.audience||audienceSelect.value]||b.audience,ASSET_LABELS[b.assetType]]
     .filter(Boolean).join(' · ').toUpperCase();
   // Demoted time-saved line — real duration, structural counts, not a boxed callout.
   capLine.textContent=`Brief captured in ${mmss(briefSec)} · 1 click · 0 email threads`;
@@ -1025,7 +1045,7 @@ function resetAll(){
   narrationTranscript='';recommendations=null;briefPayload=null;briefCov=null;lastThumbs=[];transcriptText.textContent='';transcriptBlock.style.display='none';
   resultsContainer.innerHTML='';selectedVariant=-1;portalResult.style.display='none';
   procErr.style.display='none';
-  recStatus.textContent='';trFinal='';trInterim='';recSec=0;briefSec=0;shotTotal=0;lastAudio=null;retryFn=null;
+  recStatus.textContent='';trFinal='';trInterim='';recSec=0;briefSec=0;shotTotal=0;lastAudio=null;retryFn=null;assetTypeOverride=null;
   ut(0);spt();stopWave();stopCreep();disarmTimeout();setProgress(0);
   STEPS.forEach(id=>setStep(id,'pending'));
   btnPause.disabled=false;btnStopRec.disabled=false;
