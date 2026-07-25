@@ -1,0 +1,17 @@
+{
+  "$schema": "https://loupe.dev/eval-result-schema-v1.json",
+  "version": 1,
+  "evaluator": "",
+  "date": "",
+  "fixture": "",
+  "loupeVersion": "",
+  "scores": {
+    "explain": { "total": 0, "max": 25, "criteria": {} },
+    "redesign": { "total": 0, "max": 25, "criteria": {} },
+    "buildThis": { "total": 0, "max": 25, "criteria": {} },
+    "overall": { "total": 0, "max": 25, "criteria": {} }
+  },
+  "total": 0,
+  "maxTotal": 100,
+  "notes": ""
+}

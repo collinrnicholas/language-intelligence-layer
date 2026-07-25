@@ -1,0 +1,10 @@
+{ "_config": "B — GPT-5.5 for all critical reasoning stages",
+  "stages": {
+    "session-understanding": "gpt-5.5",
+    "persona-review": "gpt-5.5",
+    "narration-judge": "gpt-5.5",
+    "finding-relationships": "gpt-5.5",
+    "target-generation": "gpt-5.5",
+    "product-reasoning": "gpt-5.5",
+    "prompt-critic": "gpt-5.5"
+  } }

@@ -1,0 +1,5 @@
+{ "_config": "C — Sonnet for UX synthesis + prompt critic only",
+  "stages": {
+    "product-reasoning": "claude-sonnet-4-6",
+    "prompt-critic": "claude-sonnet-4-6"
+  } }

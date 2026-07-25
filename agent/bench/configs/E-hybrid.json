@@ -1,0 +1,11 @@
+{ "_config": "E — GPT-5.5 for gating/vision, Sonnet for Claude Code-facing prose",
+  "stages": {
+    "persona-review": "gpt-5.5",
+    "content-enumeration": "gpt-5.5",
+    "narration-judge": "gpt-5.5",
+    "finding-relationships": "gpt-5.5",
+    "target-generation": "gpt-5.5",
+    "session-understanding": "gpt-5.5",
+    "product-reasoning": "claude-sonnet-4-6",
+    "prompt-critic": "claude-sonnet-4-6"
+  } }

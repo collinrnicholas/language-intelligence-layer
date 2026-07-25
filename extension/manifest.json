@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Loupe",
+  "version": "2.0.0",
+  "version_name": "2.0.0-alpha",
+  "description": "Loupe — A second set of eyes for your product. The designer's precision magnifier.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "scripting",
+    "unlimitedStorage",
+    "downloads",
+    "offscreen",
+    "desktopCapture",
+    "alarms"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.ts"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "Loupe",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon.png"
+  }
+}

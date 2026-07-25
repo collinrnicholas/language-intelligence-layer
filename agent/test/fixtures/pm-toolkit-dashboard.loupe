@@ -1,0 +1,45 @@
+{
+  "project": "PM Toolkit",
+  "flow": "Dashboard Redesign",
+  "startedAt": "2026-06-27T15:00:00.000Z",
+  "endedAt": "2026-06-27T15:01:00.000Z",
+  "urlTimeline": [
+    { "url": "https://app.pmtoolkit.dev/", "timestamp": 0, "navigationType": "initial" },
+    { "url": "https://app.pmtoolkit.dev/dashboard", "timestamp": 9000, "navigationType": "pushstate" }
+  ],
+  "events": [
+    {
+      "type": "dom_snapshot",
+      "timestamp": 500,
+      "url": "https://app.pmtoolkit.dev/",
+      "html": "<main><button class=\"primary\">Add widget</button><a id=\"cta\">Upgrade</a></main>",
+      "computedStyles": {
+        "button.primary": { "height": "36px", "color": "rgb(20, 20, 20)", "backgroundColor": "rgb(18, 201, 126)", "fontFamily": "Space Grotesk", "borderRadius": "8px", "padding": "8px" },
+        "#cta": { "height": "48px", "color": "rgb(18, 201, 126)", "backgroundColor": "rgba(0, 0, 0, 0)", "fontFamily": "Space Grotesk", "borderRadius": "8px", "padding": "12px" }
+      }
+    },
+    { "type": "click", "timestamp": 1200, "selector": "button.primary", "x": 140, "y": 320, "tagName": "BUTTON", "textContent": "Add widget" },
+    { "type": "network", "timestamp": 3000, "url": "https://api.pmtoolkit.dev/v1/widgets", "duration": 1500, "initiatorType": "fetch" },
+    { "type": "console_error", "timestamp": 3200, "message": "TypeError: Cannot read properties of undefined (reading 'id')", "source": "dashboard.js:124" },
+    { "type": "scroll", "timestamp": 8000, "scrollX": 0, "scrollY": 600, "maxScrollX": 0, "maxScrollY": 1800 },
+    {
+      "type": "dom_snapshot",
+      "timestamp": 12000,
+      "url": "https://app.pmtoolkit.dev/dashboard",
+      "html": "<section class=\"widgets\"><button class=\"icon-btn\">×</button></section>",
+      "computedStyles": {
+        "button.icon-btn": { "height": "28px", "color": "rgb(110, 110, 110)", "backgroundColor": "rgba(0, 0, 0, 0)", "fontFamily": "Space Grotesk", "borderRadius": "6px", "padding": "4px" }
+      }
+    }
+  ],
+  "screenshots": [
+    { "timestamp": 600, "dataUrl": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP/2Q==" },
+    { "timestamp": 12000, "dataUrl": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP/2Q==" }
+  ],
+  "viewport": { "width": 1440, "height": 900 },
+  "browser": { "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/126.0 Safari/537.36" },
+  "notes": [
+    { "type": "transcript", "timestamp": 1000, "endTimestamp": 4000, "text": "I'm adding a widget here but the button feels tiny and there's a lag after I click.", "source": "audio", "confidence": 0.91 },
+    { "type": "transcript", "timestamp": 8500, "endTimestamp": 12000, "text": "Now the dashboard loads but I saw an error flash in the console.", "source": "audio", "confidence": 0.88 }
+  ]
+}

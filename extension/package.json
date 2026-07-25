@@ -1,0 +1,24 @@
+{
+  "name": "spotter-extension",
+  "version": "2.0.0",
+  "description": "Spotter browser extension — UX session recorder",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@crxjs/vite-plugin": "^2.6.1",
+    "vite": "^8.0.16"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.43",
+    "typescript": "^6.0.3"
+  }
+}

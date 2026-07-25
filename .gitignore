@@ -1,0 +1,41 @@
+# ─── Dependencies / build output ─────────────────────────────────
+node_modules/
+dist/
+build/
+agent/dist/
+extension/dist/
+
+# ─── Secrets / local config ──────────────────────────────────────
+.env
+gateway.env
+*.local
+
+# ─── Generated Loupe runtime artifacts ───────────────────────────
+# These live in ~/.loupe (never in the repo). Anything matching below inside
+# the repo is artifact sprawl — `npm run repo:check` flags it.
+# See docs/REPO_HYGIENE.md for the boundaries.
+/sessions/
+runs/
+implementation-packages/
+implementation-*/
+screenshots/
+debug/
+traces/
+*.loupe
+*.pre-transcribe.loupe
+report.html
+opportunities.json
+memory-digest.md
+
+# Target-design GENERATED stores (the source module agent/src/target-design is
+# tracked; persisted artifact stores are not).
+/target-design/
+**/target-design-artifacts/
+
+# Approved fixture locations are re-included explicitly:
+!benchmarks/**
+!evals/fixtures/**
+!agent/test/**
+
+# ─── OS noise ────────────────────────────────────────────────────
+.DS_Store

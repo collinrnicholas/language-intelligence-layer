@@ -1,0 +1,6 @@
+{ "_config": "D — Sonnet for target generation + UX synthesis + prompt critic",
+  "stages": {
+    "target-generation": "claude-sonnet-4-6",
+    "product-reasoning": "claude-sonnet-4-6",
+    "prompt-critic": "claude-sonnet-4-6"
+  } }

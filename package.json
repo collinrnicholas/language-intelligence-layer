@@ -1,0 +1,23 @@
+{
+  "name": "loupe",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A second set of eyes for your product. The designer's precision magnifier — inspect the details no one else catches.",
+  "type": "module",
+  "scripts": {
+    "dev": "npm --workspace extension run dev",
+    "build": "npm --workspace agent run build && npm --workspace extension run build",
+    "typecheck": "npm --workspace agent run typecheck && npm --workspace extension run typecheck",
+    "test": "npm --workspace agent test && npm --workspace extension test",
+    "lint": "npm run typecheck",
+    "repo:check": "node scripts/repo-check.mjs",
+    "doctor": "node agent/dist/cli.js doctor",
+    "gateway": "node gateway/server.mjs"
+  },
+  "workspaces": [
+    "extension",
+    "agent",
+    "analyzer",
+    "app"
+  ]
+}

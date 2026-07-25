@@ -1,0 +1,18 @@
+{ "_config": "Recommended: frontier vision/gating + Sonnet Claude-facing prose + cheap mechanical",
+  "stages": {
+    "transcript-stitch": "standard",
+    "session-understanding": "gpt-5.5",
+    "persona-review": "gpt-5.5",
+    "content-enumeration": "gpt-5.5",
+    "narration-judge": "gpt-5.5",
+    "finding-relationships": "premium",
+    "target-generation": "gpt-5.5",
+    "product-reasoning": "claude-sonnet-4-6",
+    "prompt-critic": "claude-sonnet-4-6"
+  },
+  "rates": {
+    "gpt-5.5": {"in": 5, "out": 15},
+    "claude-sonnet-4-6": {"in": 3, "out": 15},
+    "premium": {"in": 2.5, "out": 10},
+    "standard": {"in": 0.15, "out": 0.6}
+  } }
