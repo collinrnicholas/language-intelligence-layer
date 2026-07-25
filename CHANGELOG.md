@@ -8,6 +8,15 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.37
+
+One combined disclaimer above the results footer (results-screen section 6).
+The score footnote is replaced by a single muted line covering both caveats —
+"Scores are sample data. Compliance flags are illustrative." — so the
+illustrative-compliance caveat (removed from every pill in section 2) and the
+sample-scores caveat are each stated exactly once. The capture line stays where
+it is.
+
 ## 0.6.36
 
 Original block uses a dashed hairline on white (results-screen section 5),

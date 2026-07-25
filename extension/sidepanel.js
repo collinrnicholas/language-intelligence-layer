@@ -1031,8 +1031,9 @@ function renderResults(){
   selectedVariant=0;
   const reg=REG_BY_AUDIENCE[b.audience||audienceSelect.value]||'Reg DD';
   resultsContainer.innerHTML=recommendations.map((v,i)=>vcard(v,i,reg)).join('');
-  // Single footnote — the scores above are sample data, not model output.
-  resNote.textContent='Scores are sample data, not Motivation AI output.';
+  // ONE combined disclaimer above the footer, covering both caveats so neither is
+  // repeated per card (scores) nor truncated on every pill (compliance).
+  resNote.textContent='Scores are sample data. Compliance flags are illustrative.';
   resNote.style.display='';
 }
 
