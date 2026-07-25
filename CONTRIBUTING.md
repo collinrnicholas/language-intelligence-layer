@@ -1,4 +1,4 @@
-# Contributing to Loupe
+# Contributing to the Persado Demo
 
 Conventions that keep this repo reviewable. They apply to humans and — with
 extra emphasis — to AI coding agents (Claude Code, Codex, etc.) working here.
@@ -19,15 +19,16 @@ or analysis runs unless explicitly asked. Investigation spikes may create
 **one** `docs/*_SPIKE.md` — only when a spike was requested.
 
 Generated output goes to `~/.loupe`, never the repo. Full boundary map:
-`docs/REPO_HYGIENE.md`.
+`docs/REPO_HYGIENE.md`. (The runtime directory keeps its inherited name — see the
+Provenance section of `README.md`.)
 
 ## For AI agents specifically
 
 - Bias to editing existing files over creating new ones.
 - A feature does not need a planning doc, a summary doc, AND a report doc —
   behavior changes go into the existing doc that covers that area.
-- Running `loupe analyze` / `build-this` during development writes to
-  `~/.loupe` by design; never point `--output` into the repo.
+- Running the inherited `loupe analyze` / `build-this` CLI during development
+  writes to `~/.loupe` by design; never point `--output` into the repo.
 - Before finishing: `npm run repo:check` must pass (the pre-existing
   `sessions/` sprawl at repo root is known; do not add to it).
 - Repo conventions that remain in force: wire-or-delete (no dead code paths),
@@ -37,6 +38,7 @@ Generated output goes to `~/.loupe`, never the repo. Full boundary map:
 ## Checks before a PR
 
 ```
+npm run smoke       # static contract checks for extension/ + gateway/
 npm run typecheck
 npm test            # agent workspace
 npm run repo:check

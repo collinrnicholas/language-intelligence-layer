@@ -1,5 +1,10 @@
 # Loupe Principles
 
+> **Inherited document.** This is the product vision/principles of **Loupe**, the
+> author's prior project that this repository was forked from. It is kept for
+> reference and attribution — it describes Loupe, *not* the Persado Demo
+> extension in `extension/`. See the Provenance section of the root `README.md`.
+
 These are the north stars. Every feature, every decision, every line of code should ladder up to these.
 
 ---

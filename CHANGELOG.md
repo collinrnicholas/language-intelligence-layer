@@ -62,7 +62,8 @@ Gateway connectivity: one URL, explicit bind, and visible requests.
   popup), which is how a host or port change becomes an unexplainable
   "Failed to fetch".
 - The extension targets `http://127.0.0.1:8787` rather than `localhost`, and the
-  gateway binds `127.0.0.1` explicitly (`LOUPE_GATEWAY_HOST` overrides). Previously
+  gateway binds `127.0.0.1` explicitly (`PERSADO_GATEWAY_HOST`, formerly
+  `LOUPE_GATEWAY_HOST`, overrides). Previously
   `server.listen(PORT)` bound every interface while the client used `localhost`,
   so an IPv6/IPv4 mismatch would look identical to the service being down.
 - `host_permissions` lists `http://127.0.0.1:8787/*` and `http://localhost:8787/*`

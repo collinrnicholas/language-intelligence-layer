@@ -10,9 +10,18 @@ Read this before touching anything. It exists because this codebase has a specif
 
 Branch: `persado-demo`. Extension version lives in `extension/manifest.json`.
 
-**This repo was cloned from a sibling product called Loupe.** Inherited Loupe naming is everywhere — `CONTRIBUTING.md` and `PRINCIPLES.md` are still titled "Loupe", the gateway reads `LOUPE_MODEL_*` env vars, and `agent/` contains Loupe's vision/analysis code. **Do not mass-rename these.** They work, and a sweeping rename is a large uncontrolled diff. Rename only what a task explicitly asks for.
+**This repo is a fork of Loupe, the author's prior project.** See the Provenance section of `README.md` — the fork is stated openly, not hidden.
 
-Not everything in the tree is live. The shipping demo is `extension/` + `gateway/`. `agent/`, `analyzer/`, `app/`, `benchmarks/`, `evals/`, `research/` are inherited Loupe surface area — read them for reference, do not modify them unless asked.
+**The rebrand is already done, and deliberately partial. Do not extend it.** What was rebranded: `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, this file, and the gateway's env vars (now `PERSADO_*` with `LOUPE_*` retained as a fallback). Loupe's own product docs moved to `docs/loupe/` with an inherited-document banner.
+
+What was deliberately left alone, and why — **do not "finish the job" here**:
+
+- `agent/`, `analyzer/`, `app/`, `benchmarks/`, `evals/`, `research/`, `specs/`, `prompts/`, `changelog/` — this is Loupe's code and Loupe's docs. Renaming it would be a huge diff over working code and would misrepresent whose code it is.
+- **`~/.loupe`** — a real directory on this machine holding live project data. The CLI and its tests read it. Renaming the path breaks both.
+- **The root `package.json` name is still `"loupe"`.** `agent/src/runtime/paths.ts` finds the repo root by matching `pkg.name === 'loupe'` exactly, so renaming it silently breaks `findRepoRoot()` and everything built on it. Fixing that would mean editing `agent/`, which is out of scope.
+- `gateway/install-launchd.sh` keeps the `dev.loupe.gateway` launchd label and its `~/.loupe` paths. The label identifies an agent that may already be installed on the user's machine; changing it orphans the old plist and can leave two gateways contending for port 8787.
+
+Not everything in the tree is live. The shipping demo is `extension/` + `gateway/`. `extension/` contains zero Loupe references and must stay that way (`npm run smoke` does not check this; `grep -ril loupe extension/` does).
 
 ## 2. Read these first
 
@@ -35,7 +44,7 @@ Everything painful in this codebase comes from state being split across four JS 
 
 **`extension/src/background.js`** — service worker. Owns `chrome.tabs.captureVisibleTab` screenshots, the session context in `chrome.storage.session` (`persado:pageContext` → `{ frames: [{full, thumb}], elements }`), gateway relay, and the toolbar `chrome.action` icon/badge state.
 
-**`gateway/server.mjs`** — the ONLY place model-provider API keys live. Endpoints: `POST /v1/ai/transcribe` (Whisper) and `POST /v1/ai/recommend` (variants). Model tiers resolve via `LOUPE_MODEL_PREMIUM` (default `gpt-4o`, vision-capable) and `LOUPE_MODEL_STANDARD` (default `gpt-4o-mini`). An attached image routes the call to the premium/vision tier. Must be running (`npm run gateway`) or transcription and generation fail — a down gateway is NOT a microphone bug, do not conflate them.
+**`gateway/server.mjs`** — the ONLY place model-provider API keys live. Endpoints: `POST /v1/ai/transcribe` (Whisper) and `POST /v1/ai/recommend` (variants). Model tiers resolve via `PERSADO_MODEL_PREMIUM` (default `gpt-4o`, vision-capable) and `PERSADO_MODEL_STANDARD` (default `gpt-4o-mini`); the legacy `LOUPE_*` names still work as a fallback. An attached image routes the call to the premium/vision tier. Must be running (`npm run gateway`) or transcription and generation fail — a down gateway is NOT a microphone bug, do not conflate them.
 
 ## 4. Hard invariants — do not violate these
 
