@@ -409,7 +409,7 @@
 
   <div class="start-foot">
     <button class="btn btn-primary btn-block" id="btnStart"><span class="rec-dot"></span>Record marketing brief</button>
-    <div class="privacy">Audio and screens stay on this device until you review the results.</div>
+    <div class="privacy" id="privacyNote">Audio and screens stay on this device until you review the results.</div>
   </div>
 </div>
 </div>
@@ -425,11 +425,13 @@
     <div class="sec-label">Live transcript</div>
     <div class="tr-box" id="liveTranscript"></div>
 
-    <div class="shots-head">
-      <span class="sec-label">Screens captured</span>
-      <span class="shots-n" id="shotCount">0</span>
+    <div id="recScreens">
+      <div class="shots-head">
+        <span class="sec-label">Screens captured</span>
+        <span class="shots-n" id="shotCount">0</span>
+      </div>
+      <div class="shots" id="shotStrip"></div>
     </div>
-    <div class="shots" id="shotStrip"></div>
 
     <div class="rec-actions">
       <button class="btn btn-outline" id="btnPause">Pause</button>
@@ -466,7 +468,7 @@
       </div>
       <div class="step" id="stepScreens">
         <span class="ind"></span>
-        <div><div class="step-l">Read the captured screens</div><div class="step-r"></div></div>
+        <div><div class="step-l" id="stepScreensLabel">Read the captured screens</div><div class="step-r"></div></div>
       </div>
       <div class="step" id="stepGenerate">
         <span class="ind"></span>
@@ -509,8 +511,10 @@
     <div class="sec-label" style="margin-top:20px;">In your words</div>
     <div class="bnarr" id="briefNarration"></div>
 
-    <div class="shots-head"><span class="sec-label">Screens captured</span><span class="shots-n" id="briefShotCount">0</span></div>
-    <div class="shots" id="briefShots"></div>
+    <div id="briefScreens">
+      <div class="shots-head"><span class="sec-label">Screens captured</span><span class="shots-n" id="briefShotCount">0</span></div>
+      <div class="shots" id="briefShots"></div>
+    </div>
   </div>
 
   <div class="brief-foot">

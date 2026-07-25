@@ -11,7 +11,7 @@
 // be a classic script and this is the only way all three contexts share one copy.
 importScripts('messages.js', 'config.js');
 const { MSG, KEYS, CTX } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT } = self.PERSADO_CONFIG;
 
 // Log the resolved target once, so "which URL is it even calling" is answerable
 // from the service-worker console without reading code.
@@ -308,13 +308,39 @@ function startShotTimer() {
   }, SHOT_INTERVAL_MS);
 }
 
+/** Inject the extractor and store the result. The PRIMARY grounding path — runs
+ *  in both capture modes. Returns the number of elements extracted. */
+async function extractElements(tabId) {
+  if (!tabId) return 0;
+  try {
+    const r = await chrome.scripting.executeScript({ target: { tabId }, func: extractPageElements });
+    const els = r?.[0]?.result;
+    if (Array.isArray(els) && els.length) { await writeCtx({ [CTX.ELEMENTS]: els }); return els.length; }
+  } catch (e) { console.warn('[persado] element extraction failed', e); }
+  return 0;
+}
+
 /**
- * phase 'start'  → reset, extract page copy, capture frame 0, begin the interval
- * phase 'stop'   → capture the final frame, end the interval
- * phase 'pause'  → suspend the interval (no frames while paused)
- * phase 'resume' → resume the interval
+ * phase 'start'  → reset, extract page copy, (capture frame 0, begin interval*)
+ * phase 'stop'   → (capture the final frame, end interval*)
+ * phase 'pause'  → (suspend the interval*)
+ * phase 'resume' → (resume the interval*)
+ *
+ * *Screenshots are gated on CAPTURE_SCREENSHOTS (default OFF, see config.js). When
+ * OFF, captureVisibleTab is never called, no timer runs, and no frames are written
+ * — only the DOM extraction runs. When ON, behaviour is exactly as before.
  */
 async function capturePageContext({ phase, tabId, windowId }) {
+  if (!CAPTURE_SCREENSHOTS) {
+    // Screenshots opt-in and off: no pixels captured, no timer. Extraction only.
+    if (phase === 'start') {
+      await writeCtx({ [CTX.FRAMES]: [], [CTX.ELEMENTS]: null, [CTX.CAPTURED_AT]: Date.now() });
+      const elements = await extractElements(tabId);
+      return { ok: true, capture: false, frames: 0, elements };
+    }
+    return { ok: true, capture: false };   // pause/resume/stop are no-ops
+  }
+
   if (phase === 'pause') { stopShotTimer(); return { ok: true, paused: true }; }
   if (phase === 'resume') { shotTarget = { tabId, windowId }; startShotTimer(); return { ok: true }; }
 
@@ -325,22 +351,13 @@ async function capturePageContext({ phase, tabId, windowId }) {
 
   const results = await Promise.allSettled([
     addFrame(windowId),
-    phase === 'start' && tabId
-      ? chrome.scripting.executeScript({ target: { tabId }, func: extractPageElements })
-      : Promise.resolve(null),
+    phase === 'start' ? extractElements(tabId) : Promise.resolve(0),
   ]);
-
   if (results[0].status === 'rejected') console.warn('[persado] screenshot capture failed', results[0].reason);
-  if (results[1].status === 'fulfilled' && results[1].value) {
-    const els = results[1].value?.[0]?.result;
-    if (Array.isArray(els) && els.length) await writeCtx({ [CTX.ELEMENTS]: els });
-  } else if (results[1].status === 'rejected') {
-    console.warn('[persado] element extraction failed', results[1].reason);
-  }
 
   if (phase === 'start') startShotTimer(); else stopShotTimer();
   const ctx = await readCtx();
-  return { ok: true, frames: ctx[CTX.FRAMES]?.length || 0, elements: ctx[CTX.ELEMENTS]?.length || 0 };
+  return { ok: true, capture: true, frames: ctx[CTX.FRAMES]?.length || 0, elements: ctx[CTX.ELEMENTS]?.length || 0 };
 }
 
 // ─── Toolbar state (claude-design.md §4) ─────────────────────────

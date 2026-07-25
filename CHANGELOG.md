@@ -8,6 +8,28 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.17
+
+Screen capture is now opt-in and OFF by default (Part 1). The deployable posture
+is no pixels leaving the device; DOM extraction is the primary grounding path.
+
+- `CAPTURE_SCREENSHOTS = false` in `extension/src/config.js`. When off,
+  `captureVisibleTab` is never called, the periodic timer never starts, and no
+  `frames` are written — "captured but not sent" cannot occur. DOM element
+  extraction runs in BOTH modes. When on, behaviour (multi-frame `images[]`,
+  vision-tier routing) is exactly as before.
+- The gateway already routes a no-image request to the standard tier and omits the
+  screenshot instruction block; confirmed, unchanged.
+- UI follows the flag when off: the recording and Brief "Screens captured"
+  sections are hidden entirely (no empty section, no zero count); the processing
+  step is relabelled "Read the page copy" and is Done only if extraction returned
+  something, else Skipped (never claims work that did not run, §7); the processing
+  subtitle and Brief subtitle drop all screen wording; the start-screen privacy
+  note reads "Only your narration and the page's text are sent — no screenshots
+  are taken." The results screen and PDF export never referenced screenshots.
+
+---
+
 ## 0.6.16
 
 Purge the deprecated purple/magenta palette (results screen, part 3).

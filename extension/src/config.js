@@ -35,6 +35,23 @@
     GATEWAY: 'gateway_error',
   });
 
+  // ── Screen capture ─────────────────────────────────────────────
+  //
+  // OFF BY DEFAULT — this is the deployable posture. When false, NO pixels ever
+  // leave the device: the periodic capture timer never starts, captureVisibleTab
+  // is never called, and no `frames` are written to session context. "Captured
+  // but not sent" is not a state that can exist.
+  //
+  // The real grounding is the DOM extraction — the actual on-page copy, element
+  // type, and surrounding context — which runs in BOTH modes. Persado optimizes
+  // language only, so a screenshot is not load-bearing; it is also the single
+  // largest security objection to running capture inside a regulated environment.
+  //
+  // Flip to true only for a demo where the vision-tier grounding is wanted; the
+  // full multi-frame images[] payload and vision routing then return exactly as
+  // before.
+  const CAPTURE_SCREENSHOTS = false;
+
   // ── Demo mode ──────────────────────────────────────────────────
   //
   // OFF BY DEFAULT. When true, ONLY the two network calls (transcribe, recommend)
@@ -70,7 +87,7 @@
   ]);
 
   root.PERSADO_CONFIG = Object.freeze({
-    GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR,
+    GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS,
     DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT, DEMO_VARIANTS,
   });
 })(typeof self !== 'undefined' ? self : globalThis);

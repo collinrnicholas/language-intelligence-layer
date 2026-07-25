@@ -5,7 +5,7 @@
 // this module's evaluation paints the fatal banner instead of dying silently.
 
 const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
 const fatal = (e) => self.__persadoFatal?.(e);
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -20,7 +20,8 @@ const btnRecord=$('btnRecord'),btnStopRec=$('btnStopRec'),btnPause=$('btnPause')
 const recLive=$('recLive'),recRetry=$('recRetry'),recRetryMsg=$('recRetryMsg');
 const recTimer=$('recTimer'),recStatus=$('recStatus'),liveTranscript=$('liveTranscript');
 const wave=$('wave'),waveStatic=$('waveStatic'),waveStaticFill=$('waveStaticFill');
-const shotCount=$('shotCount'),shotStrip=$('shotStrip');
+const shotCount=$('shotCount'),shotStrip=$('shotStrip'),recScreens=$('recScreens'),briefScreens=$('briefScreens'),privacyNote=$('privacyNote');
+const stepScreensLabel=$('stepScreensLabel');
 const transcriptBlock=$('transcriptBlock'),transcriptText=$('transcriptText');
 const pnlProcess=$('panelProcess');
 const procSub=$('procSub'),pbarFill=$('pbarFill'),briefLine=$('briefLine'),procErr=$('procErr');
@@ -258,6 +259,8 @@ function disarmTimeout(){clearTimeout(procTimer);procTimer=null;}
 
 function procSubtitle(){
   const head=briefSec>0?`Your ${mmss(briefSec)} brief`:'Your brief';
+  // With capture off there are no screens to mention — ground on the page's copy.
+  if(!CAPTURE_SCREENSHOTS)return `${head} and the copy on your page are being turned into scored, compliance-checked copy.`;
   const subj=shotTotal>0?`${head} and ${shotTotal} captured screen${shotTotal===1?'':'s'} are`:`${head} is`;
   return `${subj} being turned into scored, compliance-checked copy.`;
 }
@@ -288,6 +291,7 @@ function procShow(){
   procPct=0;setProgress(0);
   procSub.textContent=procSubtitle();
   briefLine.textContent=briefSummary();
+  stepScreensLabel.textContent=CAPTURE_SCREENSHOTS?'Read the captured screens':'Read the page copy';
   stepGenerateLabel.textContent=`Generating ${goalValue} variants`;
   stepComplianceLabel.textContent=`Compliance check — UDAAP, ${REG_BY_AUDIENCE[audienceSelect.value]||'Reg DD'}`;
   setUiState('working');
@@ -709,7 +713,9 @@ function renderBrief(){
   handoffResult.style.display='none';   // a fresh brief has not been handed off
   const b=briefPayload||{};
   const el=b.element;
-  briefSub.textContent=`Captured in ${mmss(briefSec)}${shotTotal?` · ${shotTotal} screen${shotTotal===1?'':'s'}`:''} · ${(b.images||[]).length} sent to the model`;
+  briefSub.textContent=CAPTURE_SCREENSHOTS
+    ?`Captured in ${mmss(briefSec)}${shotTotal?` · ${shotTotal} screen${shotTotal===1?'':'s'}`:''} · ${(b.images||[]).length} sent to the model`
+    :`Captured in ${mmss(briefSec)} · page text read · no screenshots`;
 
   briefCov=evaluateBrief(narrationTranscript,{element:el,goal:b.goal});
   renderCoverage(briefCoverage,briefCov);
@@ -841,8 +847,15 @@ async function generateRecommendations(narration){
     console.error(`[persado] REGRESSION: ${frames.length} frame(s) captured but the payload has no images.`
       +' Check the stored frames shape in background.js — expected [{full,thumb}].');
   }
-  if(frames.length)setStep('stepScreens','done');
-  else setStep('stepScreens','skipped','No screens captured — generating from the narration alone.');
+  if(CAPTURE_SCREENSHOTS){
+    if(frames.length)setStep('stepScreens','done');
+    else setStep('stepScreens','skipped','No screens captured — generating from the narration alone.');
+  }else{
+    // Capture off: the step reads the PAGE COPY. Done only if the DOM extraction
+    // actually returned something; never claim work that did not run (§7).
+    if(elements.length)setStep('stepScreens','done');
+    else setStep('stepScreens','skipped','No on-page copy could be read — generating from the narration alone.');
+  }
 
   // ── Step 3: generate
   const element=pickElement(narration,elements);
@@ -1037,6 +1050,12 @@ async function offerResume(){
 
 async function init(){
   syncCtxSummary();
+  // Screen capture is opt-in (config.js). When off, no screens section exists on
+  // any screen, and the privacy note tells the truth about what leaves the device.
+  if(!CAPTURE_SCREENSHOTS){
+    recScreens.style.display='none';briefScreens.style.display='none';
+    privacyNote.textContent='Only your narration and the page’s text are sent — no screenshots are taken.';
+  }
   // Impossible to mistake a canned run for a live one.
   if(DEMO_MODE)$('demoFlag').style.display='';
   await dp();
