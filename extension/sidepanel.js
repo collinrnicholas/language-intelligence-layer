@@ -610,9 +610,11 @@ async function generateRecommendations(narration){
     // Steps 4 and 5 are fields of the response just parsed — tick them only if
     // the fields are actually there, and never before this point.
     const hasCompliance=variants.every(v=>typeof v.compliance==='string'&&v.compliance);
-    const hasLift=variants.every(v=>typeof v.predictedLift==='string'&&v.predictedLift);
     setStep('stepCompliance',hasCompliance?'done':'skipped',hasCompliance?'':'The response carried no compliance fields.');
-    setStep('stepScore',hasLift?'done':'skipped',hasLift?'':'The response carried no lift estimates.');
+    // Always SKIPPED: no Motivation AI is wired in, so nothing scored these. The
+    // gateway still returns predictedLift (contract unchanged) — we just refuse to
+    // present a general-purpose model's guess as a score (claude-design.md §7).
+    setStep('stepScore','skipped','Motivation AI is not connected in this prototype.');
     stopCreep();disarmTimeout();setProgress(100);
 
     // Brief hold so the finished checklist and the full bar actually render before

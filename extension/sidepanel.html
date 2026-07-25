@@ -124,12 +124,6 @@
     .start-foot{flex:none;padding-top:24px;}
     .rec-dot{width:10px;height:10px;border-radius:50%;background:var(--red);flex:none;}
     .privacy{margin-top:12px;text-align:center;font-size:11.5px;color:var(--text-3);line-height:1.5;}
-    /* Approved for this one location only (§7). */
-    .stat{display:flex;align-items:flex-start;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
-    .stat-fig{flex:none;display:flex;flex-direction:column;align-items:center;line-height:1;color:var(--red);}
-    .stat-arrow{font-size:13px;font-weight:700;}
-    .stat-num{font-size:17px;font-weight:700;margin-top:3px;}
-    .stat-txt{font-size:11.5px;color:var(--text-2);line-height:1.5;}
 
     /* ─── Recording screen (1b) — claude-design.md §5 ─── */
     /* Column fills the panel; the transcript is the only flexing row, so the
@@ -325,10 +319,6 @@
   <div class="start-foot">
     <button class="btn btn-primary btn-block" id="btnStart"><span class="rec-dot"></span>Record marketing brief</button>
     <div class="privacy">Audio and screens stay on this device until you review the results.</div>
-    <div class="stat">
-      <div class="stat-fig"><span class="stat-arrow">↑</span><span class="stat-num">40%</span></div>
-      <div class="stat-txt">average engagement lift — Persado Motivation AI outperforms human copy 96% of the time.</div>
-    </div>
   </div>
 </div>
 
@@ -396,7 +386,7 @@
       </div>
       <div class="step" id="stepScore">
         <span class="ind"></span>
-        <div><div class="step-l">Scoring against 1M+ financial A/B tests</div><div class="step-r"></div></div>
+        <div><div class="step-l" id="stepScoreLabel">Scoring — Motivation AI (not connected)</div><div class="step-r"></div></div>
       </div>
     </div>
 
@@ -418,11 +408,10 @@
 <div class="panel view" id="panelResults">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
     <div style="font-size:12px;font-weight:600;color:var(--prp);text-transform:uppercase;letter-spacing:.06em;">Recommendations</div>
-    <span class="badge lift" style="font-size:10px;">📈 Predicted Lift</span>
   </div>
   <div id="resultsContainer"></div>
   <div style="display:flex;gap:10px;margin-top:14px;">
-    <button class="btn btn-outline btn-sm" style="flex:1;" id="btnExportBrief">📄 Export PDF</button>
+    <button class="btn btn-outline btn-sm" style="flex:1;" id="btnExportBrief">Export PDF</button>
     <button class="btn btn-outline btn-sm" style="flex:1;" id="btnNewBrief">New Brief</button>
   </div>
 </div>

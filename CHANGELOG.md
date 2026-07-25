@@ -8,6 +8,21 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.4
+
+Demo build for the CPO/CEO presentation. The audience is Persado, so the UI stops
+selling Persado to a bank.
+
+- Removed the start-screen footer stat ("40% average engagement lift — Persado
+  Motivation AI outperforms human copy 96% of the time") and its CSS.
+- The scoring step is now "Scoring — Motivation AI (not connected)" and renders
+  SKIPPED unconditionally. Nothing scored the variants, so the step can never
+  report Done.
+- Removed the remaining emoji from the UI: the Export PDF button and the results
+  "Predicted Lift" header pill.
+
+---
+
 ## 0.6.3
 
 Gateway environment variables rebranded to `PERSADO_*`, with the inherited
