@@ -5,6 +5,14 @@ narrate the marketing problem out loud while the extension quietly captures the
 screen, and get back compliant, scored copy variants for the page you were
 looking at.
 
+## Provenance
+
+This project is built on [Loupe](docs/loupe/VISION.md), the author's own prior
+project, and reuses Loupe's capture, vision and gateway infrastructure. The
+Persado Demo extension in `extension/` is the new work; `agent/`, `analyzer/` and
+the surrounding research and spec directories are inherited Loupe code, kept
+under their original names. Loupe's product docs live in `docs/loupe/`.
+
 ## How it works
 
 1. **Record** — the side panel captures your narration. `getUserMedia` runs in

@@ -10,7 +10,7 @@ Read this before touching anything. It exists because this codebase has a specif
 
 Branch: `persado-demo`. Extension version lives in `extension/manifest.json`.
 
-**This repo is a fork of Loupe, the author's prior project.** See the Provenance section of `README.md` — the fork is stated openly, not hidden.
+**This repo is a fork of Loupe, the author's prior project.** See [Provenance](README.md#provenance) in the README — the fork is stated openly, and that section is why Loupe naming legitimately persists in the excluded directories below. Do not "clean it up".
 
 **The rebrand is already done, and deliberately partial. Do not extend it.** What was rebranded: `README.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, this file, and the gateway's env vars (now `PERSADO_*` with `LOUPE_*` retained as a fallback). Loupe's own product docs moved to `docs/loupe/` with an inherited-document banner.
 
