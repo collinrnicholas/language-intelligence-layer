@@ -8,6 +8,23 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.19
+
+Results 1d — emotion pills render again, and the tag is styled to target.
+
+- Gateway: the OUTPUT FORMAT example value for `emotion` was the placeholder
+  string `"one of: Exclusivity, …"`, which weaker models (the standard tier, now
+  the default since screenshots are off) echoed verbatim — failing the panel's
+  allowed-set check, so no pill rendered. It is now a concrete example
+  (`"Curiosity"`); the fixed-set constraint stays in the rules.
+- The emotion pill is restyled to the target: `--red` text on a very light red
+  tint, no border, uppercase 10px/600, pill radius.
+- A console warning now fires when a variant arrives without a valid emotion, so a
+  blank slot is diagnosable instead of silent. Still renders nothing (never a
+  fallback tag) when absent or out of set.
+
+---
+
 ## 0.6.18
 
 Asset type in the brief (Part 2). Persado's output is asset-specific, so the brief

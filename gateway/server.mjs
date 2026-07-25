@@ -390,7 +390,9 @@ async function handleRecommend(req, res) {
     '  "variants": [',
     '    {',
     '      "copy": "The rewritten element text",',
-    `      "emotion": "one of: ${EMOTIONS.join(', ')}",`,
+    // A CONCRETE example value — a placeholder like "one of: …" gets echoed
+    // verbatim by weaker models, which then fails the panel's allowed-set check.
+    '      "emotion": "Curiosity",',
     '      "rationale": "One-line explanation of why this motivates (e.g., anchors savings to a concrete number, uses social proof framing, invokes loss aversion)",',
     '      "compliance": "clear",',
     '      "complianceNote": "",',

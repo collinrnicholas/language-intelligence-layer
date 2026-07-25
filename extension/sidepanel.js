@@ -963,7 +963,11 @@ function renderResults(){
 
 function vcard(v,i,reg){
   const emo=(v.emotion||'').trim();
-  const emoPill=EMOTIONS_SET.has(emo.toLowerCase())?`<span class="emotion">${esc(emo)}</span>`:'<span></span>';
+  const emoOk=EMOTIONS_SET.has(emo.toLowerCase());
+  // Surface a missing/invalid tag rather than swallowing it — a blank slot on the
+  // card is a symptom, and this is where to see the cause.
+  if(!emoOk)console.warn(`[persado] variant ${i+1} has no valid emotion (got ${JSON.stringify(v.emotion)}) — no pill rendered`);
+  const emoPill=emoOk?`<span class="emotion">${esc(emo)}</span>`:'<span></span>';
   // Compliance is a model OPINION, not a pass: no checkmark, one line, "illustrative".
   const clear=v.compliance==='clear';
   const comp=clear
