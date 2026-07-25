@@ -141,16 +141,20 @@
 <!-- ═══ RECORD ═══ -->
 <div class="panel view" id="panelRecord">
   <div class="rec-area">
-    <button class="btn btn-rec btn-block" id="btnRecord">🎤 Start Recording</button>
-    <button class="btn btn-outline btn-block" id="btnStopRec" style="display:none;">⏹ Stop Recording</button>
+    <button class="btn btn-rec" id="btnRecord" style="width:auto;padding:10px 28px;height:44px;font-size:14px;">🎤 Start Recording</button>
+    <button class="btn btn-outline" id="btnStopRec" style="display:none;width:auto;padding:10px 28px;">⏹ Stop Recording</button>
     <div class="rec-time" id="recTimer" style="display:none;">00:00</div>
     <div class="rec-status" id="recStatus"></div>
   </div>
 
   <div class="instructions">
-    <strong>Describe what you're trying to accomplish.</strong> For example:<br><br>
-    "Our checking account headline says 'Banking that actually rewards you' but it doesn't say what the reward is. New customers scanning this page have no idea what they're getting. We need something specific and concrete that speaks to first-time banking customers who are nervous about hidden fees."<br><br>
-    "This CTA says 'Open Your Account' but that's too aggressive for our mortgage page. People browsing mortgage rates aren't ready to commit — we need softer language that invites them to explore rates without pressure."
+    <strong>Describe what you're trying to accomplish:</strong>
+    <ul style="margin:8px 0 0 16px;padding:0;">
+      <li>What page or element you're looking at</li>
+      <li>What's not working and why</li>
+      <li>Who the audience is</li>
+      <li>What outcome you want</li>
+    </ul>
   </div>
 
   <div class="narr-block" id="transcriptBlock" style="display:none;">
