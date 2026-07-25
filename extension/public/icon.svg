@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="512" height="512" shape-rendering="crispEdges">
+  <title>Persado — bracketed P</title>
+  <rect width="16" height="16" rx="1" fill="#FFFFFF"/>
+  <!-- brackets: 2-wide stem with 3-long returns, Persado red -->
+  <rect x="1" y="1" width="3" height="2" fill="#DC2828"/>
+  <rect x="1" y="3" width="2" height="10" fill="#DC2828"/>
+  <rect x="1" y="13" width="3" height="2" fill="#DC2828"/>
+  <rect x="12" y="1" width="3" height="2" fill="#DC2828"/>
+  <rect x="13" y="3" width="2" height="10" fill="#DC2828"/>
+  <rect x="12" y="13" width="3" height="2" fill="#DC2828"/>
+  <!-- uppercase P in ink; the counter is the gap at x7-9 y5-7 -->
+  <rect x="5" y="3" width="2" height="10" fill="#1A1128"/>
+  <rect x="5" y="3" width="6" height="2" fill="#1A1128"/>
+  <rect x="9" y="3" width="2" height="7" fill="#1A1128"/>
+  <rect x="5" y="8" width="6" height="2" fill="#1A1128"/>
+</svg>

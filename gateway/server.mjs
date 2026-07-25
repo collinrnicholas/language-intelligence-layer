@@ -33,6 +33,14 @@ const ENABLE_FFMPEG = process.env.LOUPE_GATEWAY_FFMPEG === '1';
 // everything else → OpenAI. A client may request any real provider id (gpt-*,
 // o1/o3*, claude-*) or a tier hint (premium/standard); other explicit ids are
 // honored only when listed in LOUPE_MODEL_ALLOWED (cost control, ADR-010).
+// Cap on images per recommend call — vision tokens are the dominant cost here.
+const MAX_IMAGES = 4;
+// Which disclosure regime applies, by product line. The side panel shows the SAME
+// citation in its compliance step (see REG_BY_AUDIENCE in extension/sidepanel.js),
+// so the UI can never cite a regulation the model was not asked to check.
+const REG_BY_AUDIENCE = { retail: 'DD', business: 'DD', wealth: 'DD', cards: 'Z', mortgage: 'Z' };
+const REG_LABEL = { DD: 'Truth in Savings (Reg DD)', Z: 'TILA (Reg Z)' };
+
 const MODEL_PREMIUM = process.env.LOUPE_MODEL_PREMIUM || 'gpt-4o';
 const MODEL_STANDARD = process.env.LOUPE_MODEL_STANDARD || 'gpt-4o-mini';
 const MODEL_ALLOWED = new Set(
@@ -265,12 +273,26 @@ async function handleRecommend(req, res) {
   const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
 
   const productLabels = { retail: 'Retail Banking', cards: 'Credit Cards', mortgage: 'Mortgage & Lending', wealth: 'Wealth Management', business: 'Small Business Banking' };
-  const objectiveLabels = { acquisition: 'Acquisition', 'cross-sell': 'Cross-Sell', engagement: 'Engagement', retention: 'Retention', trust: 'Trust & Compliance' };
+  // Tracks the objective chip set in the side panel (claude-design.md §5).
+  const objectiveLabels = { 'cross-sell': 'Cross-Sell', acquisition: 'Acquisition', engagement: 'Engagement', conversion: 'Conversion', retention: 'Retention' };
 
   const element = body.element || {};
+  // Other on-page candidates the client extracted, so the model can ground a
+  // reference the narration made to something other than the primary element.
+  const others = (Array.isArray(body.elements) ? body.elements : [])
+    .filter(e => e?.text && e.text !== element.text)
+    .slice(0, 6);
+  // Any image switches this call to the vision path (premium tier). `images` is the
+  // current field (chronological frames from the recording session); `screenshot`
+  // is the older single-image field, still accepted for backwards compatibility.
+  const images = [
+    ...(Array.isArray(body.images) ? body.images : []),
+    ...(body.screenshot ? [body.screenshot] : []),
+  ].filter(u => typeof u === 'string' && /^data:image\//.test(u)).slice(0, MAX_IMAGES);
   const narration = body.narration || '(none)';
   const productLine = productLabels[body.audience] || body.audience || 'Retail Banking';
   const objective = objectiveLabels[body.goal] || body.goal || 'Acquisition';
+  const reg = REG_BY_AUDIENCE[body.audience] || 'DD';
 
   const systemPrompt = [
     'You are a marketing language AI trained on millions of high-performing marketing messages across',
@@ -283,15 +305,37 @@ async function handleRecommend(req, res) {
     'be expected to outperform the original. Each variant is backed by a rationale grounded in marketing',
     'psychology and language-performance data.',
     '',
-    'FINANCE COMPLIANCE (illustrative — you are a stand-in, not a real compliance engine):',
+    `FINANCE COMPLIANCE (illustrative — you are a stand-in, not a real compliance engine). For this`,
+    `product line the applicable disclosure regime is ${REG_LABEL[reg]}:`,
     '- Flag any language that could raise UDAAP concerns: unsubstantiated claims ("guaranteed", "risk-free",',
     '  "100% safe"), misleading urgency ("limited time" without actual limits), hidden conditions.',
-    '- Flag missing TILA/Reg Z disclosures: APY without qualifiers, loan terms without APR, promotional',
-    '  rates without the go-to rate or duration.',
+    ...(reg === 'Z' ? [
+      '- Flag missing TILA/Reg Z disclosures: a credit offer without its APR, a promotional rate without the',
+      '  go-to rate or duration, financing terms that omit the cost of credit.',
+    ] : [
+      '- Flag missing Truth in Savings/Reg DD disclosures: an APY stated without the required qualifiers, a',
+      '  rate without its compounding or crediting basis, a bonus offer without its qualifying conditions.',
+    ]),
     '- Flag language that implies a promise the bank cannot keep ("you\'ll never pay a fee" vs "no monthly',
     '  maintenance fee on this account").',
     '- If no issues, mark compliance as "clear". If flagged, explain the specific concern briefly.',
     '',
+    ...(images.length ? [
+      'WHAT THE PAGE LOOKS LIKE:',
+      images.length === 1
+        ? '- A screenshot of the marketer\'s actual screen is attached. Use it to judge visual hierarchy,'
+        : `- ${images.length} screenshots of the marketer's actual screen are attached, in CHRONOLOGICAL order`,
+      images.length === 1
+        ? '  where the element sits on the page, how much room its copy has, and what surrounds it.'
+        : '  from the recording session (earliest first). Later frames may show scrolled or changed state —\n'
+          + '  read them together to understand the page, and use them to judge visual hierarchy, where the\n'
+          + '  element sits, how much room its copy has, and what surrounds it.',
+      '- Rewrite the ACTUAL copy you were given below. Do NOT invent page elements, sections, offers,',
+      '  or products that are not visible in the screenshots or listed in the brief.',
+      '- Where the screenshot and the extracted text disagree, trust the extracted text for exact',
+      '  wording and the screenshot for placement, prominence, and tone of the surrounding page.',
+      '',
+    ] : []),
     'PREDICTED LIFT:',
     '- Provide a stubbed predicted-lift range (e.g. "+8–14%") based on the type of change:',
     '  - Emotional language / narrative reframe: +10–20%',
@@ -339,25 +383,42 @@ async function handleRecommend(req, res) {
       `Selector: ${element.selector || 'unknown'}`,
       '',
     ] : []),
+    ...(others.length ? [
+      'OTHER COPY ON THIS PAGE (for context — optimize one of these only if the narration points at it)',
+      '─────────────────',
+      ...others.map(e => `- [${e.type || 'element'}] "${e.text}"`),
+      '',
+    ] : []),
     'MARKETER\'S BRIEF (spoken narration)',
     '─────────────────────────────────────',
     `"${narration}"`,
     '',
-    'Generate 2–3 optimized copy variants based on this brief. If a specific element was mentioned,',
-    'optimize that element. If not, propose copy for the most relevant element on the page. Return ONLY the JSON.',
+    element.text
+      ? 'Generate 2–3 optimized copy variants that REWRITE the "Current Copy" above — same element, same'
+        + ' intent, better language. If the narration clearly points at a different element listed on this'
+        + ' page, rewrite that one instead. Never invent copy for an element that is not listed. Return ONLY the JSON.'
+      : 'Generate 2–3 optimized copy variants based on this brief. If a specific element was mentioned,'
+        + ' optimize that element. If not, propose copy for the most relevant element on the page. Return ONLY the JSON.',
   ].join('\n');
 
-  // Resolve model through tier mapping (same logic as handleComplete)
-  const requested = body.model || 'standard';
+  // Resolve model through tier mapping (same logic as handleComplete). Any attached
+  // image forces the premium tier because only it is vision-capable.
+  const hasImages = images.length > 0;
+  const requested = body.model || (hasImages ? 'premium' : 'standard');
   const honorExplicit = MODEL_ALLOWED.has(requested) || KNOWN_PROVIDER_ID.test(requested);
-  const model = honorExplicit ? requested : MODEL_STANDARD;
+  const model = honorExplicit ? requested : hasImages ? MODEL_PREMIUM : MODEL_STANDARD;
+  console.log(`[gateway] recommend → ${model} ${hasImages ? `(vision, ${images.length} image${images.length === 1 ? '' : 's'})` : '(text-only)'}`
+    + ` reg=${reg} element=${element.text ? JSON.stringify(element.text.slice(0, 60)) : 'none'} others=${others.length}`);
 
   try {
+    // completeOpenAI/completeAnthropic already build a multimodal user message from
+    // body.images; text-only calls pass hasImages=false and are unchanged.
+    const llmBody = { prompt: userPrompt, systemPrompt, ...(hasImages ? { images } : {}) };
     let content;
     if (isAnthropicModel(model)) {
-      content = await completeAnthropic(model, { prompt: userPrompt, systemPrompt }, false);
+      content = await completeAnthropic(model, llmBody, hasImages);
     } else {
-      content = await completeOpenAI(model, { prompt: userPrompt, systemPrompt }, false);
+      content = await completeOpenAI(model, llmBody, hasImages);
     }
 
     // Parse the LLM response as JSON
