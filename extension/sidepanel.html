@@ -73,6 +73,10 @@
     .btn-block{width:100%;}
     .btn-primary{background:var(--ink);color:#fff;font-size:15px;font-weight:700;}
     .btn-primary:hover:not(:disabled){opacity:.9;}
+    /* The record button is the one place a red fill belongs — it starts a recording.
+       On hover the whole button goes red; the red dot flips white to stay visible. */
+    #btnStart:hover:not(:disabled){background:var(--red);opacity:1;}
+    #btnStart:hover:not(:disabled) .rec-dot{background:#fff;}
     .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text-1);}
     .btn-outline:hover:not(:disabled){background:var(--surface-2);}
     .btn-sm{height:34px;padding:7px 14px;font-size:12px;}

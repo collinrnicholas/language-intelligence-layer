@@ -8,6 +8,12 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.41
+
+The record button ("Record marketing brief", `#btnStart`) now turns fully red on
+hover — it is the action that starts a recording, the one place a red fill
+belongs. The red dot flips to white so it stays visible on the red fill.
+
 ## 0.6.40
 
 Header de-duplication (item 1 of the results update). Removed the in-panel
