@@ -14,7 +14,7 @@ const $ = (id) => {
   return el;
 };
 
-const pnlConfig=$('panelConfigure'),pnlRecord=$('panelRecord'),pnlResults=$('panelResults');
+const pnlConfig=$('panelConfigure'),pnlRecord=$('panelRecord'),pnlResults=$('panelResults'),pnlBrief=$('panelBrief');
 const pageUrlEl=$('pageUrl'),audienceSelect=$('audience'),goalChips=$('goalChips'),btnStart=$('btnStart');
 const btnRecord=$('btnRecord'),btnStopRec=$('btnStopRec'),btnPause=$('btnPause');
 const recLive=$('recLive'),recRetry=$('recRetry'),recRetryMsg=$('recRetryMsg');
@@ -28,7 +28,10 @@ const btnRetry=$('btnRetry'),btnStartOver=$('btnStartOver'),btnSaveAudio=$('btnS
 const retainNote=$('retainNote'),offlineHint=$('offlineHint');
 const resumeCard=$('resumeCard'),resumeMsg=$('resumeMsg'),btnResume=$('btnResume'),btnDiscard=$('btnDiscard'),btnSaveAudio2=$('btnSaveAudio2');
 const stepGenerateLabel=$('stepGenerateLabel'),stepComplianceLabel=$('stepComplianceLabel');
-const resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief');
+const briefSub=$('briefSub'),briefCoverage=$('briefCoverage'),briefFields=$('briefFields');
+const briefNarration=$('briefNarration'),briefShots=$('briefShots'),briefShotCount=$('briefShotCount');
+const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
+const resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief'),btnBackToBrief=$('btnBackToBrief');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 
 const LISTENING='Listening — describe the problem and the audience.';
@@ -48,7 +51,7 @@ const PRODUCT_LABELS={retail:'Retail Banking',cards:'Credit Cards',mortgage:'Mor
 const REG_BY_AUDIENCE={retail:'Reg DD',business:'Reg DD',wealth:'Reg DD',cards:'Reg Z',mortgage:'Reg Z'};
 
 function tm(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(()=>toast.className='toast',4000);}
-function sh(p){[pnlConfig,pnlRecord,pnlProcess,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
+function sh(p){[pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
 // Status chip colour follows real recorder state (§2): red RECORDING, amber
 // PAUSED/WORKING/needs-attention, green READY/complete.
 function st(t){headerText.textContent=t;headerStatus.className='hdr-st '+(/record/i.test(t)?'rec':/process|generat|error|pause|work/i.test(t)?'work':'');}
@@ -293,9 +296,64 @@ function retryTranscribe(){
   }).catch(()=>{});
 }
 
+// ─── Brief completeness ──────────────────────────────────────────
+//
+// A usable brief names four things. This is a DETERMINISTIC pass over the
+// transcript — no LLM call, so it cannot fail, cost anything, or disagree with
+// itself between runs. It returns null when it cannot evaluate, and the caller
+// hides the component rather than showing four green ticks it did not earn
+// (claude-design.md §7).
+
+const COVERAGE_SPEC=[
+  {key:'element', label:'Element to change',
+   // Covered if the narration names the extracted element, its type, or any
+   // on-page element word — i.e. it is talking about something real on the page.
+   test:(t,hints)=>{
+     const el=hints.element;
+     if(el?.text){
+       const words=(el.text.toLowerCase().match(/[a-z0-9%$]{4,}/g)||[]);
+       if(words.some(w=>t.includes(w)))return true;
+     }
+     return /\b(headline|header|hero|title|cta|button|link|copy|banner|promo|subject line|body copy|offer)\b/.test(t);
+   }},
+  {key:'audience', label:'Audience',
+   test:(t)=>/\b(customer|customers|member|members|audience|segment|user|users|prospect|holder|holders|existing|new|young|younger|older|professional|professionals|millennial|retiree|retirees|small business|shopper|saver|savers|borrower|cardholder|affluent|mass market)\b/.test(t)},
+  {key:'objective', label:'Objective',
+   // The chip is an explicit objective, so this is covered unless the user has
+   // left the default AND never said anything objective-shaped.
+   test:(t,hints)=>/\b(cross.?sell|upsell|acquire|acquisition|acquisitions|convert|conversion|conversions|engage|engagement|retain|retention|sign.?up|signups|open|apply|applications|adoption|activate|activation)\b/.test(t)
+     ||(!!hints.goal&&/\b(objective|goal|trying to|want to|need to|aiming)\b/.test(t))},
+  {key:'outcome', label:'Desired outcome',
+   test:(t)=>/\b(increase|improve|lift|raise|boost|drive|reduce|lower|more|higher|better|fewer|less|so that|because|target|below target|underperform|flat|drop|dropping|declin)\w*\b/.test(t)},
+];
+
+/** @returns {null|{items:{key,label,covered}[],covered:number}} */
+function evaluateBrief(narration,hints){
+  const t=(narration||'').toLowerCase();
+  // Too little to judge — say nothing rather than guess.
+  if(t.replace(/[^a-z]/g,'').length<25)return null;
+  try{
+    const items=COVERAGE_SPEC.map(c=>({key:c.key,label:c.label,covered:!!c.test(t,hints||{})}));
+    return {items,covered:items.filter(i=>i.covered).length};
+  }catch(e){console.warn('[persado] brief evaluation failed',e);return null;}
+}
+
+/** Renders into `host`; hides it when evaluation returned null. */
+function renderCoverage(host,cov){
+  if(!cov){host.style.display='none';host.innerHTML='';return;}
+  host.style.display='';
+  host.innerHTML=`<div class="sec-label">Brief coverage — ${cov.covered} of 4</div>`
+    +`<div class="cov-list">`+cov.items.map(i=>
+      `<div class="cov ${i.covered?'yes':'no'}"><span class="cov-i"></span>`
+      +`<span class="cov-l">${esc(i.label)}</span>`
+      +(i.covered?'':`<button class="cov-add" data-add="${i.key}">Add</button>`)
+      +`</div>`).join('')+`</div>`;
+}
+
 // ─── Screens captured ────────────────────────────────────────────
 function renderShots(thumbs,count){
   shotTotal=count||0;
+  if(thumbs?.length)lastThumbs=thumbs.slice();   // reused by the Brief view
   shotCount.textContent=shotTotal;
   if(!thumbs?.length){shotStrip.innerHTML='<div class="ph-tile">waiting</div>';return;}
   shotStrip.innerHTML='';
@@ -547,6 +605,96 @@ function pickElement(narration,elements){
   return bestScore>0?best:elements[0];
 }
 
+// ─── Brief view ──────────────────────────────────────────────────
+//
+// The captured artifact, shown as its own screen. Everything here comes from the
+// payload the gateway actually received, so the demo cannot show a brief that
+// differs from what was sent.
+
+let briefCov=null,lastThumbs=[];
+
+function renderBrief(){
+  const b=briefPayload||{};
+  const el=b.element;
+  briefSub.textContent=`Captured in ${mmss(briefSec)}${shotTotal?` · ${shotTotal} screen${shotTotal===1?'':'s'}`:''} · ${(b.images||[]).length} sent to the model`;
+
+  briefCov=evaluateBrief(narrationTranscript,{element:el,goal:b.goal});
+  renderCoverage(briefCoverage,briefCov);
+
+  const rows=[
+    ['Page',`<span class="mono">${esc(b.pageUrl||currentUrl||'—')}</span>`],
+    el?['Element',`${esc(el.type||'element')} · <span class="mono">${esc(el.selector||'')}</span><span class="sub">“${esc(el.text||'')}”</span>`]:null,
+    ['Product line',esc(PRODUCT_LABELS[b.audience]||b.audience||'—')],
+    ['Objective',esc(b.goal||'—')],
+    (b.elements||[]).length?['Also on page',`${(b.elements||[]).length} other element${b.elements.length===1?'':'s'} extracted`]:null,
+  ].filter(Boolean);
+  briefFields.innerHTML=rows.map(([k,v])=>`<div class="bf"><div class="bf-k">${esc(k)}</div><div class="bf-v">${v}</div></div>`).join('');
+
+  briefNarration.textContent=narrationTranscript||'(no narration captured)';
+  briefShotCount.textContent=shotTotal||0;
+  briefShots.innerHTML='';
+  if(lastThumbs.length){
+    lastThumbs.forEach((src,i)=>{const im=document.createElement('img');im.src=src;im.alt='';
+      if(i===lastThumbs.length-1)im.className='newest';briefShots.appendChild(im);});
+  }else{
+    briefShots.innerHTML='<div class="ph-tile">none</div>';
+  }
+}
+
+// One-tap gap filler: type the missing piece, or re-record just that piece.
+briefCoverage.addEventListener('click',(e)=>{
+  const btn=e.target.closest('.cov-add');if(!btn)return;
+  const key=btn.dataset.add;
+  const row=btn.closest('.cov');
+  if(row.querySelector('.covfill'))return;
+  const label=COVERAGE_SPEC.find(c=>c.key===key)?.label||'detail';
+  const box=document.createElement('div');
+  box.className='covfill';
+  box.innerHTML=`<textarea placeholder="Add the ${esc(label.toLowerCase())} in your own words…"></textarea>`
+    +`<div class="covfill-a"><button class="btn btn-outline btn-sm" data-save="1">Add to brief</button>`
+    +`<button class="btn-quiet" data-rerec="1">Record instead</button></div>`;
+  row.after(box);
+  box.querySelector('textarea').focus();
+});
+
+briefCoverage.addEventListener('click',(e)=>{
+  const box=e.target.closest('.covfill');if(!box)return;
+  if(e.target.dataset.save){
+    const text=box.querySelector('textarea').value.trim();
+    if(!text)return;
+    // Appended to the narration, so the brief stays a single record of what was
+    // said plus what was added — and re-evaluated against the real text.
+    narrationTranscript=(narrationTranscript+' '+text).trim();
+    if(briefPayload)briefPayload.narration=narrationTranscript;
+    box.remove();renderBrief();tm('Added to the brief');
+  }
+  if(e.target.dataset.rerec){
+    box.remove();
+    // Re-recording appends to this same brief rather than starting a new one.
+    tm('Recording again — this adds to the same brief');
+    sh(pnlRecord);beginRecording();
+  }
+});
+
+btnBriefContinue.addEventListener('click',()=>{
+  if(recommendations?.length){renderResults();sh(pnlResults);st('Done');}
+  else generateRecommendations(narrationTranscript);
+});
+
+btnBackToBrief.addEventListener('click',()=>{renderBrief();sh(pnlBrief);});
+
+btnCopyJson.addEventListener('click',async()=>{
+  if(!briefPayload){tm('No brief to copy','err');return;}
+  // Images are the real payload but unreadable as text; summarise them and keep
+  // everything else byte-identical to what the gateway received.
+  const shown={...briefPayload};
+  if(shown.images)shown.images=shown.images.map((u,i)=>`<image ${i+1}: ${u.length} chars, ${u.slice(0,23)}…>`);
+  try{
+    await navigator.clipboard.writeText(JSON.stringify(shown,null,2));
+    tm('Brief JSON copied');
+  }catch{tm('Could not copy','err');}
+});
+
 // ─── Generate ────────────────────────────────────────────────────
 
 /**
@@ -625,9 +773,12 @@ async function generateRecommendations(narration){
     stopCreep();disarmTimeout();setProgress(100);
 
     // Brief hold so the finished checklist and the full bar actually render before
-    // the results replace them. Nothing is computed during it.
+    // the next screen replaces them. Nothing is computed during it.
     await new Promise(r=>setTimeout(r,REDUCED?0:420));
-    renderResults();sh(pnlResults);st('Done');
+    renderResults();
+    // The captured brief is the point of the demo, so it is the screen we land on;
+    // results are one tap away and stay reachable.
+    renderBrief();sh(pnlBrief);st('Done');
     setActionState('results',recommendations.length);
   }catch(e){
     procFail('stepGenerate',gatewayMessage(e.kind,e.message,e.url),()=>generateRecommendations(narration));
@@ -684,7 +835,7 @@ function resetAll(){
   chrome.tabs.query({active:true,currentWindow:true})
     .then(([t])=>t?.id&&chrome.tabs.sendMessage(t.id,{type:MSG.STOP_RECORDING}).catch(()=>{}))
     .catch(()=>{});
-  narrationTranscript='';recommendations=null;briefPayload=null;transcriptText.textContent='';transcriptBlock.style.display='none';
+  narrationTranscript='';recommendations=null;briefPayload=null;briefCov=null;lastThumbs=[];transcriptText.textContent='';transcriptBlock.style.display='none';
   resultsContainer.innerHTML='';
   recRetry.style.display='none';recLive.classList.remove('on');procErr.style.display='none';
   recStatus.textContent='';trFinal='';trInterim='';recSec=0;briefSec=0;shotTotal=0;lastAudio=null;retryFn=null;

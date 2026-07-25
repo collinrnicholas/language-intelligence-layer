@@ -8,6 +8,31 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.6
+
+The captured brief becomes a first-class screen, with a coverage check.
+
+- **Brief view** (`#panelBrief`) is the screen the flow lands on after generation:
+  page URL, the extracted element (type, selector, current copy), product line,
+  objective, count of other extracted elements, the narration verbatim, screenshot
+  thumbnails, and capture duration. Every field is read from the payload the
+  gateway actually received, so the screen cannot disagree with what was sent.
+- **Copy brief as JSON** copies that payload. Images are summarised (length +
+  prefix) since base64 is not readable, everything else is byte-identical.
+- **Brief coverage** — a four-item check for the element, audience, objective and
+  desired outcome. Deterministic keyword/heuristic pass over the transcript,
+  matched against the extracted element text; no LLM call, no new endpoint, no
+  second provider. Returns null when the narration is too short to judge, and the
+  component hides itself rather than showing four unearned ticks
+  (claude-design.md §7). Never blocks generation.
+- Missing items carry a one-tap **Add**: type the missing piece (appended to the
+  narration and re-evaluated against the real text) or re-record into the same
+  brief.
+- Results remain reachable via **See variants**, and gain a **Brief** button back,
+  so neither screen is a dead end.
+
+---
+
 ## 0.6.5
 
 Variant cards: the fake score becomes the integration argument, and the grounding
