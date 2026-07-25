@@ -32,7 +32,9 @@ const briefSub=$('briefSub'),briefCoverage=$('briefCoverage'),briefFields=$('bri
 const briefNarration=$('briefNarration'),briefShots=$('briefShots'),briefShotCount=$('briefShotCount');
 const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
 const btnSendPersado=$('btnSendPersado'),handoffResult=$('handoffResult'),handoffPayload=$('handoffPayload');
-const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief'),btnBackToBrief=$('btnBackToBrief');
+const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnExport=$('btnExportBrief'),btnNew=$('btnNewBrief');
+const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrigText=$('resOrigText');
+const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 
 const LISTENING='Listening — describe the problem and the audience.';
@@ -772,8 +774,6 @@ btnBriefContinue.addEventListener('click',()=>{
   else generateRecommendations(narrationTranscript);
 });
 
-btnBackToBrief.addEventListener('click',()=>{renderBrief();setUiState('brief');});
-
 /** The payload as it would go over the wire, with images summarised for reading. */
 function readablePayload(){
   const p={...(briefPayload||{})};
@@ -901,33 +901,90 @@ async function generateRecommendations(narration){
 
 // ─── Results ─────────────────────────────────────────────────────
 
+// The model's rhetorical-approach tags. A pill renders ONLY for a value in this
+// set — no fallback label — so an absent/unknown emotion just shows nothing.
+const EMOTIONS_SET=new Set(['exclusivity','achievement','gratification','curiosity','safety','urgency','recognition','encouragement']);
+let selectedVariant=-1;
+function trunc(s,n){s=String(s);return s.length>n?s.slice(0,n-1).trimEnd()+'…':s;}
+
 function renderResults(){
-  // Real duration; the click and thread counts are structural facts about this
-  // flow, not invented benchmark figures.
-  capLine.innerHTML=`Brief captured in <b>${esc(mmss(briefSec))}</b> · <b>1</b> click · <b>0</b> email threads`;
-  if(!recommendations?.length){resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>';return;}
-  // `current` is the copy actually on the page, so the card reads current → proposed
-  // and the grounding is visible rather than implied. Omitted when nothing was
-  // extracted — a placeholder would imply we had it.
-  const current=briefPayload?.element?.text||'';
-  resultsContainer.innerHTML=recommendations.map((v,i)=>`<div class="rec-card">`
-    +`<div class="rh">`
-      +`<div class="rn">Variant ${i+1}</div>`
-      +(current?`<div class="rc"><span class="rc-l">Current</span><span class="rc-t">${esc(current)}</span></div>`:'')
-      +`<div class="rv">${esc(v.copy)}</div>`
-    +`</div>`
-    +`<div class="rb">`
-      +`<div class="rrationale">${esc(v.rationale||'')}</div>`
-      +`<div class="rr" style="margin-top:8px;justify-content:space-between;">`
-        +`<span class="badge ${v.compliance==='clear'?'clear':'flag'}">${v.compliance==='clear'?'Compliance: clear':'Compliance: '+esc(v.complianceNote||'review')}</span>`
-        // The integration seam, shown as an empty slot rather than GPT-4o's guess
-        // dressed up as a score. predictedLift still arrives; we just don't print it.
-        +`<span class="badge seam">Motivation AI score — not connected</span>`
-      +`</div>`
-    +`</div>`
-  +`</div>`).join('');
+  portalResult.style.display='none';selectedVariant=-1;
+  const n=recommendations?.length||0;
+  const b=briefPayload||{};
+  // Dynamic heading, singular at 1.
+  resHeading.textContent=`${n} variant${n===1?'':'s'} ready`;
+  // Context line: OBJECTIVE · PRODUCT LINE · ELEMENT TYPE (type omitted if unknown).
+  resCtx.textContent=[b.goal||goalValue,PRODUCT_LABELS[b.audience||audienceSelect.value]||b.audience,b.element?.type]
+    .filter(Boolean).join(' · ').toUpperCase();
+  // Demoted time-saved line — real duration, structural counts, not a boxed callout.
+  capLine.textContent=`Brief captured in ${mmss(briefSec)} · 1 click · 0 email threads`;
+  // ONE original block from the page — no strikethrough. Omitted when nothing extracted.
+  const current=b.element?.text||'';
+  resOrigText.textContent=current;
+  resOrig.style.display=current?'':'none';
+
+  if(!n){resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>';return;}
+  const reg=REG_BY_AUDIENCE[b.audience||audienceSelect.value]||'Reg DD';
+  resultsContainer.innerHTML=recommendations.map((v,i)=>vcard(v,i,reg)).join('');
+}
+
+function vcard(v,i,reg){
+  const emo=(v.emotion||'').trim();
+  const emoPill=EMOTIONS_SET.has(emo.toLowerCase())?`<span class="emotion">${esc(emo)}</span>`:'<span></span>';
+  // Compliance is a model OPINION, not a pass: no checkmark, one line, "illustrative".
+  const clear=v.compliance==='clear';
+  const comp=clear
+    ? `<span class="comp clear">UDAAP · ${esc(reg)} · illustrative</span>`
+    : `<span class="comp flag" title="${esc(v.complianceNote||'')}">Review: ${esc(trunc(v.complianceNote||'flagged',44))}</span>`;
+  return `<div class="vcard" data-i="${i}">`
+    +`<div class="vc-top">${emoPill}`
+      // predictedLift still arrives; it is deliberately NEVER shown as a number.
+      +`<span class="vc-seam">Motivation AI score — not connected</span></div>`
+    +`<div class="vc-copy">${esc(v.copy)}</div>`
+    +`<div class="vc-why">${esc(v.rationale||'')}</div>`
+    +`<div class="vc-foot">${comp}`
+      +`<span class="vc-act">`
+        +`<button class="btn-quiet vc-copybtn" data-i="${i}">Copy</button>`
+        +`<button class="vc-use" data-i="${i}">Use this</button>`
+      +`</span></div>`
+  +`</div>`;
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// Selection (one at a time) + Copy — delegated once, reads the live recommendations.
+resultsContainer.addEventListener('click',(e)=>{
+  const use=e.target.closest('.vc-use');
+  if(use){
+    selectedVariant=+use.dataset.i;
+    resultsContainer.querySelectorAll('.vcard').forEach(c=>c.classList.toggle('sel',+c.dataset.i===selectedVariant));
+    return;
+  }
+  const cp=e.target.closest('.vc-copybtn');
+  if(cp){
+    const v=recommendations?.[+cp.dataset.i];
+    if(!v)return;
+    navigator.clipboard.writeText(v.copy).then(()=>tm('Copied')).catch(()=>tm('Could not copy','err'));
+  }
+});
+
+/** The full delivery payload a Portal integration would receive: brief + variants. */
+function portalPayloadText(){
+  const brief={...(briefPayload||{})};
+  if(brief.images)brief.images=brief.images.map((u,i)=>`<image ${i+1}: ${u.length} chars, ${u.slice(0,23)}…>`);
+  // Redact the stand-in model's predictedLift: it is a fabricated number and this
+  // dump is shown on screen. The score is Motivation AI's job — render the same
+  // seam the cards do, so no invented figure is ever visible on the results screen.
+  const variants=(recommendations||[]).map(({predictedLift,...v})=>({...v,motivationAIScore:'not connected in this prototype'}));
+  return JSON.stringify({brief,variants},null,2);
+}
+// Stub: shows the exact object a real Portal integration would receive, labelled
+// not connected. Never claims to have sent anything.
+btnSendPortal.addEventListener('click',()=>{
+  if(!recommendations?.length){tm('Nothing to send','err');return;}
+  portalPayload.textContent=portalPayloadText();
+  portalResult.style.display='';
+  portalResult.scrollIntoView({block:'nearest'});
+});
 
 // ─── Export PDF ──────────────────────────────────────────────────
 
@@ -953,7 +1010,7 @@ function resetAll(){
     .then(([t])=>t?.id&&chrome.tabs.sendMessage(t.id,{type:MSG.STOP_RECORDING}).catch(()=>{}))
     .catch(()=>{});
   narrationTranscript='';recommendations=null;briefPayload=null;briefCov=null;lastThumbs=[];transcriptText.textContent='';transcriptBlock.style.display='none';
-  resultsContainer.innerHTML='';
+  resultsContainer.innerHTML='';selectedVariant=-1;portalResult.style.display='none';
   procErr.style.display='none';
   recStatus.textContent='';trFinal='';trInterim='';recSec=0;briefSec=0;shotTotal=0;lastAudio=null;retryFn=null;
   ut(0);spt();stopWave();stopCreep();disarmTimeout();setProgress(0);

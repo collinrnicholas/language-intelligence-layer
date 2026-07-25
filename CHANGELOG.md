@@ -8,6 +8,34 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.15
+
+Results screen (1d) rebuilt to the Claude Design layout (part 2).
+
+- Dynamic heading (`N variants ready`, singular at 1) and an uppercase context
+  line `OBJECTIVE · PRODUCT LINE · ELEMENT TYPE` (element type omitted if unknown).
+- The time-saved line is demoted to a quiet line under the context (no boxed
+  callout).
+- ONE `Original — from your page` block replaces the per-card current-copy row;
+  no strikethrough. The old `.rc/.rc-l/.rc-t` and the two-tone card header are gone.
+- Cards: single white surface, hairline, 12px radius. Top row is the emotion pill
+  (rendered only for a value in the fixed set — no fallback) and the Motivation AI
+  seam; then the hero copy; then compliance + Copy / Use this. Selected card gets a
+  red border and reveals its rationale; unselected cards stay compact. One
+  selection at a time.
+- **Two deliberate departures from the mockup:** the score slot is the empty
+  "Motivation AI score — not connected" seam (plain `--text-3`, no green, no
+  number — `predictedLift` still arrives, still never shown); compliance drops the
+  checkmark and reads `UDAAP · {REG} · illustrative` on one line (flagged →
+  `Review: <note…>` truncated, full note in `title`). No fabricated performance
+  figure appears anywhere — including the Portal payload, where `predictedLift` is
+  redacted to the same seam.
+- Pinned footer: quiet `Re-record brief` and `Export PDF` on the left, primary
+  `Send all to Portal →` on the right. The Portal action is a stub showing the
+  brief + variants payload it would deliver, labelled not connected.
+
+---
+
 ## 0.6.14
 
 Additive `emotion` field on `/v1/ai/recommend` (results screen rebuild, part 1).

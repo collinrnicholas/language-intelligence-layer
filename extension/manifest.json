@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Persado Capture",
-  "version": "0.6.14",
+  "version": "0.6.15",
   "description": "Capture a structured, grounded marketing brief by narrating at the live page — the element, its current copy, the audience, the objective and your intent.",
   "permissions": [
     "storage",
