@@ -1,4 +1,4 @@
-// ─── Persado Demo — version gate ─────────────────────────────────
+// ─── Persado Capture — version gate ──────────────────────────────
 //
 //   node scripts/check-version.mjs [--staged]
 //

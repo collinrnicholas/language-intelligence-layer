@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Persado Demo",
-  "version": "0.6.8",
-  "description": "Persado Marketing Brief Demo — record your marketing problem, get AI-optimized compliant copy variants.",
+  "name": "Persado Capture",
+  "version": "0.6.9",
+  "description": "Capture a structured, grounded marketing brief by narrating at the live page — the element, its current copy, the audience, the objective and your intent.",
   "permissions": [
     "storage",
     "activeTab",
@@ -22,7 +22,7 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Persado Demo — Open Side Panel",
+    "default_title": "Persado Capture — Open Side Panel",
     "default_icon": {
       "16": "public/icon16.png",
       "32": "public/icon32.png",

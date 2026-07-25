@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install the Persado Demo gateway as a per-user launchd agent so it starts at
+# Install the Persado Capture gateway as a per-user launchd agent so it starts at
 # login and stays alive (auto-restarts if it crashes). macOS only, no hosting.
 #
 # The provider key is read from ~/.loupe/gateway.env (chmod 600, never committed
@@ -27,7 +27,7 @@ mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR" "$HOME/.loupe"
 
 if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<'EOF'
-# Persado Demo gateway environment — gateway-side ONLY, never read by the client.
+# Persado Capture gateway environment — gateway-side ONLY, never read by the client.
 # Fill in a provider key, then re-run install-launchd.sh:
 # OPENAI_API_KEY=sk-...
 #

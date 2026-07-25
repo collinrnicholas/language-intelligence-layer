@@ -1,4 +1,4 @@
-// ─── Persado Demo — Background Worker ────────────────────────────
+// ─── Persado Capture — Background Worker ─────────────────────────
 //
 // Relays messages between content script and sidepanel.
 // Transcribes audio via gateway Whisper.

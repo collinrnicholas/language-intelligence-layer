@@ -1,15 +1,19 @@
-# Persado Demo
+# Persado Capture
 
-A Chrome extension (MV3) for marketers at banks. Open the side panel on any page,
-narrate the marketing problem out loud while the extension quietly captures the
-screen, and get back compliant, scored copy variants for the page you were
-looking at.
+**A front door for Motivation AI.** A marketer stands on the page they're worried
+about, talks for a minute, and Persado receives a structured, grounded brief — the
+page, the actual on-page copy, the audience, the objective, and the intent in their
+own words.
+
+The capture shell is a Chrome extension (MV3) and is disposable. The structured
+brief is the durable asset; variants are downstream. `VISION.md` states the
+hypothesis, what would prove it wrong, and how to test it cheaply.
 
 ## Provenance
 
 This project is built on [Loupe](docs/loupe/VISION.md), the author's own prior
 project, and reuses Loupe's capture, vision and gateway infrastructure. The
-Persado Demo extension in `extension/` is the new work; `agent/`, `analyzer/` and
+Persado Capture extension in `extension/` is the new work; `agent/`, `analyzer/` and
 the surrounding research and spec directories are inherited Loupe code, kept
 under their original names. Loupe's product docs live in `docs/loupe/`.
 
@@ -76,7 +80,7 @@ profile keeps working. See the header of `gateway/server.mjs`.
 
 | Path | What it is |
 |---|---|
-| `extension/` | **The Persado Demo extension** — the new work in this repo. |
+| `extension/` | **The Persado Capture extension** — the new work in this repo. |
 | `gateway/` | Local AI gateway; the only place provider keys live. |
 | `scripts/` | `smoke.mjs` static contract checks, version and hygiene tooling. |
 | `docs/` | `REGRESSION.md` is the manual test checklist; `docs/loupe/` holds inherited Loupe docs. |
@@ -101,7 +105,8 @@ and the waveform responding to real audio.
 
 ## Contributing
 
-`CONTRIBUTING.md` for file discipline — in particular the anti-sprawl rule:
+`VISION.md` for what this is and what would disprove it. `CONTRIBUTING.md` for
+file discipline — in particular the anti-sprawl rule:
 implementation work produces source and tests, and generated output goes to
 `~/.loupe`, never the repo. `CLAUDE.md` is the operating manual agents read
 first; `claude-design.md` is the design source of truth.

@@ -8,6 +8,32 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.9
+
+Renamed "Persado Demo" to **Persado Capture**. The name refers to the project and
+its artifact — the structured brief — not to the extension shell, which `VISION.md`
+treats as disposable.
+
+- `manifest.json`: name, toolbar tooltip, and a description that leads with
+  capturing a structured brief rather than promising copy variants. The variants
+  are downstream and, in this prototype, come from a stand-in model.
+- Side panel title, file headers across `extension/src/`, `gateway/server.mjs`
+  (including its startup log line), `scripts/smoke.mjs` and
+  `scripts/check-version.mjs`.
+- PDF export now reads "Persado Capture Brief" rather than "Persado Marketing
+  Brief".
+- `CLAUDE.md` §1 reframed around the brief as the durable artifact; `README.md`
+  leads with the VISION.md one-liner and links it; `CONTRIBUTING.md` retitled.
+- The user-visible lockup stays `[ Persado ]` per claude-design.md — the product
+  name lives in the manifest, tooltip and document title, not as a new wordmark.
+- `CONTENT_VERSION` 2 → 3. The `content.js` change was comment-only, but the
+  version guard exists so nobody has to adjudicate that; bumping just re-injects.
+- Deliberately unchanged: the `dev.loupe.gateway` launchd label, the `~/.loupe`
+  paths, the root `package.json` name, and everything under `agent/` and the other
+  inherited trees (CLAUDE.md §1).
+
+---
+
 ## 0.6.8
 
 Friction removed from the start, and the integration shown as plumbing.

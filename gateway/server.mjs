@@ -1,4 +1,4 @@
-// ─── Persado Demo — Dev Gateway ──────────────────────────────────
+// ─── Persado Capture — Dev Gateway ───────────────────────────────
 //
 // The ONLY place model-provider keys live. The extension and CLI are clients
 // that never see OPENAI_API_KEY. Run locally for development:
@@ -111,7 +111,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Persado Demo gateway → http://${HOST}:${PORT}`);
+  console.log(`Persado Capture gateway → http://${HOST}:${PORT}`);
   console.log(`  OPENAI_API_KEY: ${OPENAI_API_KEY ? 'loaded' : 'MISSING'}`);
   console.log(`  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY ? 'loaded' : 'MISSING'}`);
 });
@@ -282,7 +282,7 @@ function normalizeToWav(buf) {
   return null;
 }
 
-// ─── Recommendation (Persado Demo) ────────────────────────────────
+// ─── Recommendation (Persado Capture) ─────────────────────────────
 //
 // Accepts a marketing brief (element + narration + audience + goal)
 // and returns Persado-style copy variants with compliance flags and

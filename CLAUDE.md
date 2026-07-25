@@ -6,7 +6,7 @@ Read this before touching anything. It exists because this codebase has a specif
 
 ## 1. What this is
 
-**Persado Demo** — a Chrome extension (MV3) for marketers at banks. The user opens a side panel, narrates a marketing problem out loud while the extension captures their screen, and gets back compliant, scored copy variants for the page they were looking at.
+**Persado Capture** — intake for Motivation AI. A marketer stands on the page they are worried about, narrates for a minute, and out comes a structured, grounded brief: the page, the on-page element and its current copy, the audience, the objective, and their intent verbatim. The Chrome extension (MV3) is the capture shell and is treated as disposable; **the brief is the durable artifact**. Variants are downstream and, in this prototype, come from a general-purpose model standing in for Motivation AI. See `VISION.md`.
 
 Branch: `persado-demo`. Extension version lives in `extension/manifest.json`.
 

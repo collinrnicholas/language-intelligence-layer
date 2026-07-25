@@ -1,4 +1,4 @@
-// ─── Persado Demo — shared runtime config ────────────────────────
+// ─── Persado Capture — shared runtime config ─────────────────────
 //
 // THE single place the gateway URL is written. It used to be hardcoded in three
 // files (sidepanel.js, background.js and the dead popup), which is exactly how a

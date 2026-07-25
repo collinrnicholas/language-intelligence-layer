@@ -1,4 +1,4 @@
-// ─── Persado Demo — static smoke test ────────────────────────────
+// ─── Persado Capture — static smoke test ─────────────────────────
 //
 //   npm run smoke
 //
