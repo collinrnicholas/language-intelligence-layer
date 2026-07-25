@@ -24,7 +24,7 @@ const btnRecord=$('btnRecord'),btnStopRec=$('btnStopRec'),btnPause=$('btnPause')
 const recLive=$('recLive'),recRetry=$('recRetry'),recRetryMsg=$('recRetryMsg');
 const recTimer=$('recTimer'),recStatus=$('recStatus'),liveTranscript=$('liveTranscript');
 const wave=$('wave'),waveStatic=$('waveStatic'),waveStaticFill=$('waveStaticFill');
-const shotCount=$('shotCount'),shotStrip=$('shotStrip'),recScreens=$('recScreens'),briefScreens=$('briefScreens'),privacyNote=$('privacyNote'),captureFlag=$('captureFlag');
+const shotCount=$('shotCount'),shotStrip=$('shotStrip'),recScreens=$('recScreens'),briefScreens=$('briefScreens'),privacyNote=$('privacyNote'),captureFlag=$('captureFlag'),proofStat=$('proofStat');
 const stepScreensLabel=$('stepScreensLabel');
 const transcriptBlock=$('transcriptBlock'),transcriptText=$('transcriptText');
 const pnlProcess=$('panelProcess');
@@ -373,6 +373,21 @@ function gatewayMessage(kind,error,url){
 }
 
 /** Non-blocking hint on the start screen so the user learns before narrating. */
+// First-run proof stat: visible only while the user has never completed a recording.
+// Hidden by default in markup, so a returning user gets no flash before this resolves.
+async function refreshProofStat(){
+  if(!proofStat)return;
+  let recorded=false;
+  try{recorded=!!(await chrome.storage.local.get(KEYS.HAS_RECORDED))[KEYS.HAS_RECORDED];}catch{}
+  proofStat.style.display=recorded?'none':'';
+}
+// Called once a recording is actually captured — from then on the user is a
+// returning user and the proof stat never shows again.
+function markHasRecorded(){
+  chrome.storage.local.set({[KEYS.HAS_RECORDED]:true}).catch(()=>{});
+  if(proofStat)proofStat.style.display='none';
+}
+
 async function refreshOfflineHint(){
   if(DEMO_MODE){offlineHint.style.display='none';return;}   // no calls to be offline for
   try{
@@ -713,6 +728,7 @@ btnStopRec.addEventListener('click',async()=>{
         return;
       }
       lastAudio=r.audioData;
+      markHasRecorded();   // a real recording was captured → returning user from now on
       dispatchTranscribe();
     });
   }catch(err){procFail('stepTranscribe','The recording could not be stopped.',null);}
@@ -1156,6 +1172,7 @@ function resetAll(){
   btnPause.disabled=false;btnStopRec.disabled=false;
   chrome.storage.local.remove([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
   chrome.runtime.sendMessage({type:MSG.CLEAR_PAGE_CONTEXT}).catch(()=>{});setActionState('ready');
+  refreshProofStat();   // returning to start after a recording → stat stays hidden
   setUiState('ready');
 }
 btnNew.addEventListener('click',resetAll);
@@ -1181,6 +1198,7 @@ async function init(){
   // Impossible to mistake a canned run for a live one.
   if(DEMO_MODE)$('demoFlag').style.display='';
   await dp();
+  refreshProofStat();   // first-run credibility line on the start screen
   // The [Persado] wordmark was removed (Chrome's native side-panel bar already shows
   // the mark); keep the version discoverable on hover via the header status chip and
   // the results Done status, both of which persist.

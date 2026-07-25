@@ -60,6 +60,10 @@
     // In a managed deployment this would be an administrator/enterprise-policy
     // decision, not an end-user preference.
     CAPTURE_SCREENSHOTS: 'persado:captureScreenshots',
+    // Set true (local storage, persists) once the user has completed a recording.
+    // The start screen shows the proof-stat footer ONLY to first-run users, i.e.
+    // while this is absent; a returning user who has recorded before never sees it.
+    HAS_RECORDED: 'persado:hasRecorded',
   });
 
   // Field names inside the stored page-context object. The producer

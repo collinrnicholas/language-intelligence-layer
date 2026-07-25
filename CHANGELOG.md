@@ -8,6 +8,17 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.43
+
+Start screen: added a first-run proof-stat footer under the record button —
+"↑ 40%" (13px bold mono, #D62828) + "average engagement lift · Powered by
+Motivation AI" (12.5px, #6B6862), on one line with a hairline divider above it.
+The 96% claim is gone (it was not in the build). Shown ONLY to first-run users:
+a new persistent `persado:hasRecorded` flag (KEYS.HAS_RECORDED) is set once a
+recording is captured, and the stat is hidden from then on. At the 360px design
+width the exact sizes don't fit one line within the 20px gutters, so the line
+runs full-bleed to the panel edges (text stays centered ~10px off each edge).
+
 ## 0.6.42
 
 Results context line (`resCtx`) now wraps only at its `·` separators: each
