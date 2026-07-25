@@ -11,7 +11,18 @@
 // be a classic script and this is the only way all three contexts share one copy.
 importScripts('messages.js', 'config.js');
 const { MSG, KEYS, CTX } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS: CAPTURE_DEFAULT, DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT } = self.PERSADO_CONFIG;
+
+/** Current screen-capture setting: the options-page value, else the config default. */
+async function captureEnabled() {
+  try {
+    const v = (await chrome.storage.local.get(KEYS.CAPTURE_SCREENSHOTS))[KEYS.CAPTURE_SCREENSHOTS];
+    return typeof v === 'boolean' ? v : CAPTURE_DEFAULT;
+  } catch { return CAPTURE_DEFAULT; }
+}
+// Resolved fresh at each recording start (see capturePageContext) and held for the
+// session, so the worker being evicted/restarted mid-flow can't flip it.
+let captureSession = CAPTURE_DEFAULT;
 
 // Log the resolved target once, so "which URL is it even calling" is answerable
 // from the service-worker console without reading code.
@@ -331,6 +342,11 @@ async function extractElements(tabId) {
  * — only the DOM extraction runs. When ON, behaviour is exactly as before.
  */
 async function capturePageContext({ phase, tabId, windowId }) {
+  // Read the toggle at the moment recording STARTS (not at worker startup, which
+  // may be arbitrarily stale) and hold it for the session; a mid-recording change
+  // is intentionally ignored.
+  if (phase === 'start') captureSession = await captureEnabled();
+  const CAPTURE_SCREENSHOTS = captureSession;
   if (!CAPTURE_SCREENSHOTS) {
     // Screenshots opt-in and off: no pixels captured, no timer. Extraction only.
     if (phase === 'start') {

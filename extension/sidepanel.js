@@ -5,7 +5,11 @@
 // this module's evaluation paints the fatal banner instead of dying silently.
 
 const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, ASSET_TYPES, MOCK_SCORES, MOCK_LIFTS, MOCK_SCORE_STYLE, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS: CAPTURE_DEFAULT, ASSET_TYPES, MOCK_SCORES, MOCK_LIFTS, MOCK_SCORE_STYLE, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
+// Runtime value of the screen-capture toggle (options page → chrome.storage.local),
+// falling back to the config default. A `let` so it can be refreshed; existing call
+// sites keep using the name CAPTURE_SCREENSHOTS.
+let CAPTURE_SCREENSHOTS = CAPTURE_DEFAULT;
 const fatal = (e) => self.__persadoFatal?.(e);
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -53,6 +57,22 @@ const PRODUCT_LABELS={retail:'Retail Banking',cards:'Credit Cards',mortgage:'Mor
 // Mirrors REG_BY_AUDIENCE in gateway/server.mjs. The UI must never cite a
 // regulation the model was not asked to check (claude-design.md §6).
 const REG_BY_AUDIENCE={retail:'Reg DD',business:'Reg DD',wealth:'Reg DD',cards:'Reg Z',mortgage:'Reg Z'};
+
+/** Read the stored capture setting; the config default when nothing is stored. */
+async function readStoredCapture(){
+  try{const v=(await chrome.storage.local.get(KEYS.CAPTURE_SCREENSHOTS))[KEYS.CAPTURE_SCREENSHOTS];
+    return typeof v==='boolean'?v:CAPTURE_DEFAULT;}catch{return CAPTURE_DEFAULT;}
+}
+/** Apply everything that depends on the capture flag (screens sections, privacy). */
+function applyCaptureUI(){
+  recScreens.style.display=CAPTURE_SCREENSHOTS?'':'none';
+  briefScreens.style.display=CAPTURE_SCREENSHOTS?'':'none';
+  privacyNote.textContent=CAPTURE_SCREENSHOTS
+    ?'Your narration, the page’s text, and screenshots of the page are sent — all stay on this device until you review the results.'
+    :'Only your narration and the page’s text are sent — no screenshots are taken.';
+}
+/** Refresh the flag from storage and re-apply. Returns the current value. */
+async function refreshCaptureFlag(){CAPTURE_SCREENSHOTS=await readStoredCapture();applyCaptureUI();return CAPTURE_SCREENSHOTS;}
 // Human labels for the asset types (config ASSET_TYPES). Used in the context line
 // and the Brief override select.
 const ASSET_LABELS={'web-headline':'Web headline','web-cta':'Web CTA','email-subject':'Email subject','push':'Push','sms':'SMS','banner':'Banner','social':'Social'};
@@ -148,6 +168,14 @@ function syncCtxSummary(){
   $('ctxSummary').textContent=`${PRODUCT_LABELS[audienceSelect.value]||audienceSelect.value} · ${chip?chip.textContent:goalValue}`;
 }
 audienceSelect.addEventListener('change',syncCtxSummary);
+
+// Reflect an options-page toggle live — but not mid-recording (§ don't change it
+// mid-recording). It always applies on the NEXT recording via beginRecording's refresh.
+chrome.storage.onChanged.addListener((changes,area)=>{
+  if(area!=='local'||!changes[KEYS.CAPTURE_SCREENSHOTS])return;
+  if(uiState==='recording'||uiState==='paused'||uiState==='starting')return;
+  refreshCaptureFlag();
+});
 
 // ─── Timer ───────────────────────────────────────────────────────
 function ut(s){const m=String(Math.floor(s/60)).padStart(2,'0'),ss=String(s%60).padStart(2,'0');recTimer.textContent=m+':'+ss;}
@@ -562,6 +590,7 @@ function recordingStartMessage(err){
 }
 
 async function beginRecording(){
+  await refreshCaptureFlag();   // the recording uses the setting as of its start
   setUiState('starting');
   recStatus.textContent='Starting…';
   btnPause.disabled=false;btnStopRec.disabled=false;
@@ -1076,12 +1105,9 @@ async function offerResume(){
 
 async function init(){
   syncCtxSummary();
-  // Screen capture is opt-in (config.js). When off, no screens section exists on
-  // any screen, and the privacy note tells the truth about what leaves the device.
-  if(!CAPTURE_SCREENSHOTS){
-    recScreens.style.display='none';briefScreens.style.display='none';
-    privacyNote.textContent='Only your narration and the page’s text are sent — no screenshots are taken.';
-  }
+  // Screen capture is opt-in (options page). Reflect the stored setting across the
+  // screens sections and the privacy note.
+  await refreshCaptureFlag();
   // Impossible to mistake a canned run for a live one.
   if(DEMO_MODE)$('demoFlag').style.display='';
   await dp();

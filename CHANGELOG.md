@@ -8,6 +8,26 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.26
+
+Screen-capture flag reads from storage (sections 2 + 4).
+
+- `CAPTURE_SCREENSHOTS` is now a RUNTIME value read from `chrome.storage.local`
+  (options-page setting), with the config constant as the default. The exported
+  name is unchanged, so call sites and the smoke check keep working.
+- `background.js` reads the value at the moment a recording STARTS (not once at
+  worker startup, which is unpredictably evicted) and holds it for the session; a
+  mid-recording change is ignored.
+- The panel refreshes the flag on init, on `storage.onChanged` (live, but never
+  mid-recording), and at the start of each recording — so a toggle takes effect on
+  the NEXT recording without an extension reload. All the conditional UI (screens
+  sections, processing screens step, subtitle, brief thumbnails) follows.
+- Privacy note is truthful in BOTH states (section 4): off → only narration + page
+  text, no screenshots; on → narration, page text, and screenshots, all staying on
+  the device until results are reviewed.
+
+---
+
 ## 0.6.25
 
 Options page for the screen-capture toggle (section 1).
