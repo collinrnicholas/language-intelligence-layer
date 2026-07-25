@@ -69,6 +69,41 @@ const ASSET_GUIDANCE = {
 const EMOTIONS = ['Exclusivity', 'Achievement', 'Gratification', 'Curiosity', 'Safety', 'Urgency', 'Recognition', 'Encouragement'];
 const REG_LABEL = { DD: 'Truth in Savings (Reg DD)', Z: 'TILA (Reg Z)' };
 
+// JSON Schema for the recommend response, enforced provider-side (OpenAI strict
+// structured outputs). `emotion` is REQUIRED and constrained to the fixed set, so
+// the model cannot omit the field the panel's pills depend on. strict mode needs
+// every property listed in `required` and additionalProperties:false throughout.
+const RECOMMEND_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    variants: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          copy: { type: 'string' },
+          emotion: { type: 'string', enum: EMOTIONS },
+          rationale: { type: 'string' },
+          compliance: { type: 'string', enum: ['clear', 'flag'] },
+          complianceNote: { type: 'string' },
+          predictedLift: { type: 'string' },
+        },
+        required: ['copy', 'emotion', 'rationale', 'compliance', 'complianceNote', 'predictedLift'],
+      },
+    },
+  },
+  required: ['variants'],
+};
+
+/** True only if every variant carries an emotion from the fixed EMOTIONS set. */
+function emotionsValid(parsed) {
+  const vs = parsed?.variants;
+  return Array.isArray(vs) && vs.length > 0
+    && vs.every(v => EMOTIONS.includes(String(v?.emotion || '').trim()));
+}
+
 const MODEL_PREMIUM = env('MODEL_PREMIUM', 'gpt-4o');
 const MODEL_STANDARD = env('MODEL_STANDARD', 'gpt-4o-mini');
 const MODEL_ALLOWED = new Set(
@@ -231,6 +266,9 @@ async function completeOpenAI(model, body, hasImages) {
     payload.max_tokens = body.maxTokens || 2000;
     payload.temperature = body.temperature ?? 0.3;
   }
+  // Provider-side structured output (JSON Schema). Only the recommend call sets
+  // this; every other caller is unchanged.
+  if (body.responseFormat) payload.response_format = body.responseFormat;
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -449,36 +487,60 @@ async function handleRecommend(req, res) {
         + ' optimize that element. If not, propose copy for the most relevant element on the page. Return ONLY the JSON.',
   ].join('\n');
 
-  // Resolve model through tier mapping (same logic as handleComplete). Any attached
-  // image forces the premium tier because only it is vision-capable.
+  // ALWAYS the premium tier. The recommend schema (emotion enum, compliance,
+  // predicted lift) is followed far more reliably by the premium model; the
+  // standard tier (gpt-4o-mini) routinely drops the additive `emotion` field,
+  // which is exactly why the panel's emotion pills went missing once screenshots
+  // (and with them the vision→premium route) were removed. Cost is irrelevant at
+  // demo volume; schema compliance is not. An explicit client/allowlisted id still wins.
   const hasImages = images.length > 0;
-  const requested = body.model || (hasImages ? 'premium' : 'standard');
+  const requested = body.model || 'premium';
   const honorExplicit = MODEL_ALLOWED.has(requested) || KNOWN_PROVIDER_ID.test(requested);
-  const model = honorExplicit ? requested : hasImages ? MODEL_PREMIUM : MODEL_STANDARD;
-  console.log(`[gateway] recommend → ${model} ${hasImages ? `(vision, ${images.length} image${images.length === 1 ? '' : 's'})` : '(text-only)'}`
+  const model = honorExplicit ? requested : MODEL_PREMIUM;
+  console.log(`[gateway] recommend → ${model} ${hasImages ? `(vision, ${images.length} image${images.length === 1 ? '' : 's'})` : '(text-only, premium)'}`
     + ` reg=${reg} element=${element.text ? JSON.stringify(element.text.slice(0, 60)) : 'none'} others=${others.length}`);
 
-  try {
-    // completeOpenAI/completeAnthropic already build a multimodal user message from
-    // body.images; text-only calls pass hasImages=false and are unchanged.
-    const llmBody = { prompt: userPrompt, systemPrompt, ...(hasImages ? { images } : {}) };
-    let content;
-    if (isAnthropicModel(model)) {
-      content = await completeAnthropic(model, llmBody, hasImages);
-    } else {
-      content = await completeOpenAI(model, llmBody, hasImages);
-    }
+  // Provider-side structured output for OpenAI: `emotion` is a required property
+  // constrained to the fixed EMOTIONS set, so a valid tag cannot be omitted.
+  // Anthropic has no equivalent wired here; it relies on the validate-and-retry below.
+  const responseFormat = isAnthropicModel(model)
+    ? null
+    : { type: 'json_schema', json_schema: { name: 'persado_recommendations', strict: true, schema: RECOMMEND_SCHEMA } };
 
-    // Parse the LLM response as JSON
-    let parsed;
+  // One model round-trip → { parsed, content }. parsed is null on unparseable JSON.
+  const runOnce = async (extraSystem) => {
+    const sys = extraSystem ? `${systemPrompt}\n\n${extraSystem}` : systemPrompt;
+    const llmBody = { prompt: userPrompt, systemPrompt: sys, ...(hasImages ? { images } : {}), ...(responseFormat ? { responseFormat } : {}) };
+    const content = isAnthropicModel(model)
+      ? await completeAnthropic(model, llmBody, hasImages)
+      : await completeOpenAI(model, llmBody, hasImages);
     try {
       const cleaned = content.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-      parsed = JSON.parse(cleaned);
+      return { parsed: JSON.parse(cleaned), content };
     } catch {
-      // If JSON parsing fails, return a graceful fallback
+      return { parsed: null, content };
+    }
+  };
+
+  try {
+    let { parsed, content } = await runOnce('');
+    // Validate the field the UI depends on. If any variant lacks a valid emotion
+    // (the Anthropic path, or a parse fallback), RETRY ONCE with a stricter
+    // instruction that names the field and the exact allowed set.
+    if (!emotionsValid(parsed)) {
+      console.warn(`[gateway] recommend: emotion missing/invalid on first pass (model=${model}) — retrying once with a stricter instruction`);
+      const stricter = `CRITICAL: Return 2–3 variants. EVERY variant object MUST include an "emotion" field whose value is EXACTLY one of: ${EMOTIONS.join(', ')}. Do not omit it and do not use any other word.`;
+      const retry = await runOnce(stricter);
+      if (emotionsValid(retry.parsed) || parsed == null) { parsed = retry.parsed; content = retry.content; }
+    }
+
+    if (parsed == null) {
+      // Unparseable JSON even after the retry — same graceful fallback as before,
+      // now carrying an (empty) emotion field so the shape is consistent.
       parsed = {
         variants: [{
           copy: content.slice(0, 200).trim() || '(generation failed — raw output unavailable)',
+          emotion: '',
           rationale: 'Fallback — structured output could not be parsed.',
           compliance: 'flag',
           complianceNote: 'Unable to verify compliance — structured generation failed.',

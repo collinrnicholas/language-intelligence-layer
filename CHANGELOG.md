@@ -8,6 +8,19 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.32
+
+Enforce the `emotion` field on `/v1/ai/recommend` so variant emotion pills
+render reliably (results-screen section 1). The standard tier (gpt-4o-mini) was
+dropping the additive field entirely; the panel then warned and rendered no
+pill. Three changes: the recommend call now always routes to the PREMIUM tier
+(the vision→premium route went away when screenshots were removed); OpenAI calls
+use provider-side structured output (a strict JSON Schema with `emotion`
+required and constrained to the fixed set); and the handler validates the field
+server-side and retries once with a stricter instruction if any variant still
+lacks a valid emotion (covers the Anthropic path). The panel's graceful
+behaviour is unchanged — an invalid/missing emotion still renders no pill.
+
 ## 0.6.31
 
 Fix the brief-view footer (brief-view section 4). It is now two items on one
