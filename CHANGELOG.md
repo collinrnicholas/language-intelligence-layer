@@ -8,6 +8,17 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.21
+
+Results 1d — compliance is a bordered pill.
+
+- `.comp` renders as a pill: 1px border, pill radius, 4px/10px padding, light green
+  tint with `--green-text` for a clear result, amber equivalents when flagged.
+- Still one line that never wraps: `UDAAP · {REG} · illustrative`; a long flagged
+  note truncates with an ellipsis and carries the full text in a `title` attribute.
+
+---
+
 ## 0.6.20
 
 Results 1d — mock Motivation AI score on each card (honest label, real form).
