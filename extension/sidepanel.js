@@ -58,9 +58,26 @@ function backToIdle(errorMsg){
 async function dp(){
   try{
     const[t]=await chrome.tabs.query({active:true,currentWindow:true});
-    if(t?.url){currentUrl=t.url;try{pageUrlEl.textContent=new URL(t.url).hostname;}catch{pageUrlEl.textContent=t.url.slice(0,40);}}
-  }catch{pageUrlEl.textContent='current page';}
+    if(t?.url){currentUrl=t.url;try{pageUrlEl.value=new URL(t.url).hostname+new URL(t.url).pathname;}catch{pageUrlEl.value=t.url;}}
+  }catch{pageUrlEl.placeholder='current page';}
 }
+
+// Update page URL dynamically when user switches tabs
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url && tab.active) {
+    currentUrl = changeInfo.url;
+    try { pageUrlEl.value = new URL(changeInfo.url).hostname + new URL(changeInfo.url).pathname; } catch { pageUrlEl.value = changeInfo.url; }
+  }
+});
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  try {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (tab?.url) {
+      currentUrl = tab.url;
+      try { pageUrlEl.value = new URL(tab.url).hostname + new URL(tab.url).pathname; } catch { pageUrlEl.value = tab.url; }
+    }
+  } catch {}
+});
 
 // ─── Messages from background worker ────────────────────────────
 
