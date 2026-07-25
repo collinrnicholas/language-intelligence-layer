@@ -9,10 +9,13 @@
 // Classic (non-module) service worker so the shared message/key contract can be
 // importScripts'd — content scripts cannot be ES modules, so messages.js has to
 // be a classic script and this is the only way all three contexts share one copy.
-importScripts('messages.js');
+importScripts('messages.js', 'config.js');
 const { MSG, KEYS, CTX } = self.PERSADO;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR } = self.PERSADO_CONFIG;
 
-const GATEWAY = 'http://localhost:8787';
+// Log the resolved target once, so "which URL is it even calling" is answerable
+// from the service-worker console without reading code.
+console.log('[persado] gateway →', GATEWAY_URL);
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 function relay(msg) { chrome.runtime.sendMessage(msg).catch(() => {}); }
@@ -22,7 +25,7 @@ async function transcribe(dataUrl) {
   if (blob.size < 100) throw new Error('Audio too short — no speech detected');
   const fd = new FormData();
   fd.append('file', blob, 'narration.webm');
-  const r = await fetch(GATEWAY + '/v1/ai/transcribe', { method: 'POST', body: fd });
+  const r = await fetch(GATEWAY_URL + ENDPOINTS.TRANSCRIBE, { method: 'POST', body: fd });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     const msg = e.error || 'Transcription failed';

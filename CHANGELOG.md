@@ -8,6 +8,29 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.1
+
+Gateway connectivity: one URL, explicit bind, and visible requests.
+
+- `extension/src/config.js` is now the ONLY place the gateway URL is written. It
+  was hardcoded in three files (`sidepanel.js`, `background.js`, and the dead
+  popup), which is how a host or port change becomes an unexplainable
+  "Failed to fetch".
+- The extension targets `http://127.0.0.1:8787` rather than `localhost`, and the
+  gateway binds `127.0.0.1` explicitly (`LOUPE_GATEWAY_HOST` overrides). Previously
+  `server.listen(PORT)` bound every interface while the client used `localhost`,
+  so an IPv6/IPv4 mismatch would look identical to the service being down.
+- `host_permissions` lists `http://127.0.0.1:8787/*` and `http://localhost:8787/*`
+  explicitly instead of relying on the broad `<all_urls>` pattern.
+- The worker logs the resolved gateway URL once at startup.
+- The gateway logs every request as `METHOD path → status duration`, so "did the
+  request arrive" is answerable at a glance.
+- Deleted `extension/popup/` — dead code with no `default_popup` in the manifest
+  and no handler anywhere for its `START_RECORDING_ONCE` / `STOP_AND_TRANSCRIBE`
+  messages. Its stale prefix is removed from `scripts/repo-check.mjs`.
+
+---
+
 ## 0.6.0
 
 Brand realignment, three screens rebuilt, page grounding, and the record-button fix.

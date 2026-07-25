@@ -64,7 +64,15 @@ const GIT_SHA = (() => {
   } catch { return 'unknown'; }
 })();
 
+// Bind explicitly to 127.0.0.1. Without a host, Node listens on all interfaces,
+// which usually works but makes IPv6-vs-IPv4 mismatches possible; the extension
+// targets 127.0.0.1 (see extension/src/config.js) so the two now agree exactly.
+const HOST = process.env.LOUPE_GATEWAY_HOST || '127.0.0.1';
+
 const server = http.createServer(async (req, res) => {
+  // One line per request: path in, status out, duration. Answers "did it arrive".
+  const t0 = Date.now();
+  res.on('finish', () => console.log(`[gateway] ${req.method} ${req.url} → ${res.statusCode} ${Date.now() - t0}ms`));
   try {
     if (req.method === 'GET' && req.url === '/health') {
       // `models` exposes the live tier→model mapping so clients can key their
@@ -90,8 +98,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Persado Demo gateway → http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`Persado Demo gateway → http://${HOST}:${PORT}`);
   console.log(`  OPENAI_API_KEY: ${OPENAI_API_KEY ? 'loaded' : 'MISSING'}`);
   console.log(`  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY ? 'loaded' : 'MISSING'}`);
 });

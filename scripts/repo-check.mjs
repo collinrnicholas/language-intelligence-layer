@@ -26,7 +26,6 @@ const ALLOWED_PREFIXES = [
 // target-design module) — never flagged.
 const SOURCE_PREFIXES = [
   'agent/src/',
-  'extension/popup/',
   'extension/src/',
   'extension/offscreen/',
   'analyzer/',

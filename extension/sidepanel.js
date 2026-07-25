@@ -5,7 +5,7 @@
 // this module's evaluation paints the fatal banner instead of dying silently.
 
 const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
-const GATEWAY = 'http://localhost:8787';
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR } = self.PERSADO_CONFIG;
 const fatal = (e) => self.__persadoFatal?.(e);
 const $ = (id) => {
   const el = document.getElementById(id);
@@ -529,7 +529,7 @@ async function generateRecommendations(narration){
     framesCaptured:frames.length,imagesSent:images.length,
     imageBytes:images.reduce((n,u)=>n+u.length,0)});
   try{
-    const resp=await fetch(GATEWAY+'/v1/ai/recommend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       narration,audience:audienceSelect.value,goal:goalValue,pageUrl:currentUrl,
       ...(element?{element}:{}),
       ...(elements.length>1?{elements:elements.filter(e=>e!==element)}:{}),
