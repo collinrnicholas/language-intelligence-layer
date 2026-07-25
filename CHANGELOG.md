@@ -8,6 +8,15 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.33
+
+Fix the compliance pill (results-screen section 2). The clear pill drops the
+"· illustrative" tail — content is now "UDAAP · REG" — and is content-width
+(inline-flex, no flex-grow, no shrink), so it never stretches or truncates at
+360px. Flagged variants keep "Review: <note>" with CSS ellipsis truncation and
+the full note in `title`. The illustrative caveat moves to the combined
+footnote (section 6).
+
 ## 0.6.32
 
 Enforce the `emotion` field on `/v1/ai/recommend` so variant emotion pills

@@ -1040,11 +1040,14 @@ function vcard(v,i,reg){
   // card is a symptom, and this is where to see the cause.
   if(!emoOk)console.warn(`[persado] variant ${i+1} has no valid emotion (got ${JSON.stringify(v.emotion)}) — no pill rendered`);
   const emoPill=emoOk?`<span class="emotion">${esc(emo)}</span>`:'<span></span>';
-  // Compliance is a model OPINION, not a pass: no checkmark, one line, "illustrative".
+  // Compliance is a model OPINION, not a pass: no checkmark. The clear pill is
+  // compact and content-width ("UDAAP · REG"); the "illustrative" caveat is stated
+  // once in the combined footnote below, not truncated on every pill. A flagged pill
+  // shows "Review: <note>" and truncates via CSS ellipsis, full text in `title`.
   const clear=v.compliance==='clear';
   const comp=clear
-    ? `<span class="comp clear">UDAAP · ${esc(reg)} · illustrative</span>`
-    : `<span class="comp flag" title="${esc(v.complianceNote||'')}">Review: ${esc(trunc(v.complianceNote||'flagged',44))}</span>`;
+    ? `<span class="comp clear">UDAAP · ${esc(reg)}</span>`
+    : `<span class="comp flag" title="${esc(v.complianceNote||'')}">Review: ${esc(v.complianceNote||'flagged')}</span>`;
   return `<div class="vcard" data-i="${i}">`
     +`<div class="vc-top">${emoPill}${scoreSlot(i)}</div>`
     +`<div class="vc-copy">${esc(v.copy)}</div>`
