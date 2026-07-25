@@ -146,13 +146,25 @@ btnStart.addEventListener('click', () => {
 
 // ─── Record ──────────────────────────────────────────────────────
 
-btnRecord.addEventListener('click', () => {
+btnRecord.addEventListener('click', async () => {
+  // Request mic permission HERE (user click = user activation)
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+  } catch (err) {
+    let msg = err.message;
+    if (err.name === 'NotAllowedError') msg = 'Microphone access denied — allow in browser settings';
+    if (err.name === 'NotFoundError') msg = 'No microphone found';
+    recStatus.textContent = msg;
+    recStatus.style.color = '#EF4444';
+    return;
+  }
+
   btnRecord.style.display = 'none';
   btnStopRec.style.display = '';
-  // Hide instructions during recording
   document.querySelector('.instructions').style.display = 'none';
-  recStatus.textContent = 'Requesting microphone access…';
-  recStatus.style.color = '';
+  recStatus.textContent = 'Listening… speak clearly.';
+  recStatus.style.color = '#EF4444';
   recTimer.style.display = 'none';
 
   chrome.storage.local.set({'persado:recording':true,'persado:transcript':''});
