@@ -1,38 +1,50 @@
-// ─── Loupe Dev Gateway ───────────────────────────────────────────
+// ─── Persado Demo — Dev Gateway ──────────────────────────────────
 //
-// The ONLY place model-provider keys live. The CLI/extension are clients that
-// authenticate to this gateway; they never see OPENAI_API_KEY. Run locally for
-// development:
+// The ONLY place model-provider keys live. The extension and CLI are clients
+// that never see OPENAI_API_KEY. Run locally for development:
 //
 //   OPENAI_API_KEY=sk-... node gateway/server.mjs
-//   # then point the client at it:
-//   export LOUPE_API_URL=http://localhost:8787
+//   # the extension targets this by default (extension/src/config.js)
+//   export PERSADO_API_URL=http://127.0.0.1:8787
 //
 // Endpoints:
 //   GET  /health            → { ok, service, openai }   (reachability probe)
 //   POST /v1/ai/transcribe  multipart/form-data (file=...) → { text, segments:[{startMs,endMs,text}] }
 //   POST /v1/ai/complete    application/json               → { content }
+//   POST /v1/ai/recommend   application/json               → { variants:[...] }
+//
+// ENVIRONMENT — PERSADO_* are the primary names. The LOUPE_* equivalents are
+// DEPRECATED BUT STILL SUPPORTED as a fallback, because this repo is a fork of
+// Loupe (see README Provenance) and an existing shell profile or
+// ~/.loupe/gateway.env may still export them. Nothing breaks by leaving them set.
+//
+//   PERSADO_MODEL_PREMIUM   (LOUPE_MODEL_PREMIUM)   premium + vision tier, default gpt-4o
+//   PERSADO_MODEL_STANDARD  (LOUPE_MODEL_STANDARD)  everything else, default gpt-4o-mini
+//   PERSADO_MODEL_ALLOWED   (LOUPE_MODEL_ALLOWED)   comma-separated ids a client may request
+//   PERSADO_GATEWAY_PORT    (LOUPE_GATEWAY_PORT)    default 8787 — unchanged
+//   PERSADO_GATEWAY_HOST    (LOUPE_GATEWAY_HOST)    default 127.0.0.1 — unchanged
+//   PERSADO_GATEWAY_FFMPEG  (LOUPE_GATEWAY_FFMPEG)  '1' to normalise audio to wav
 //
 // Uses only Node built-ins + global fetch/FormData/Blob/Response (Node 18+).
 
 import http from 'node:http';
 import { spawnSync } from 'node:child_process';
 
-const PORT = Number(process.env.LOUPE_GATEWAY_PORT || process.env.PORT || 8787);
+/** PERSADO_* wins; LOUPE_* is the deprecated fallback; then the default. */
+const env = (name, fallback) => process.env[`PERSADO_${name}`] ?? process.env[`LOUPE_${name}`] ?? fallback;
+
+const PORT = Number(env('GATEWAY_PORT', process.env.PORT || 8787));
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;       // gateway-side ONLY
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY; // gateway-side ONLY
 const ANTHROPIC_VERSION = process.env.ANTHROPIC_VERSION || '2023-06-01';
-const ENABLE_FFMPEG = process.env.LOUPE_GATEWAY_FFMPEG === '1';
+const ENABLE_FFMPEG = env('GATEWAY_FFMPEG', '') === '1';
 
-// Model routing is configurable without code edits (restart to apply):
-//   LOUPE_MODEL_PREMIUM  — model for premium-tier + vision calls (default gpt-4o)
-//   LOUPE_MODEL_STANDARD — model for everything else (default gpt-4o-mini)
-//   LOUPE_MODEL_ALLOWED  — comma-separated full model ids a client may request
-//                          explicitly (per-stage A/B via client routing.json).
+// Model routing is configurable without code edits (restart to apply); see the
+// ENVIRONMENT block above for the full name list and the LOUPE_* fallbacks.
 // Provider is chosen by the resolved model id's prefix: `claude*` → Anthropic,
 // everything else → OpenAI. A client may request any real provider id (gpt-*,
 // o1/o3*, claude-*) or a tier hint (premium/standard); other explicit ids are
-// honored only when listed in LOUPE_MODEL_ALLOWED (cost control, ADR-010).
+// honored only when listed in PERSADO_MODEL_ALLOWED (cost control, ADR-010).
 // Cap on images per recommend call — vision tokens are the dominant cost here.
 const MAX_IMAGES = 4;
 // Which disclosure regime applies, by product line. The side panel shows the SAME
@@ -41,10 +53,10 @@ const MAX_IMAGES = 4;
 const REG_BY_AUDIENCE = { retail: 'DD', business: 'DD', wealth: 'DD', cards: 'Z', mortgage: 'Z' };
 const REG_LABEL = { DD: 'Truth in Savings (Reg DD)', Z: 'TILA (Reg Z)' };
 
-const MODEL_PREMIUM = process.env.LOUPE_MODEL_PREMIUM || 'gpt-4o';
-const MODEL_STANDARD = process.env.LOUPE_MODEL_STANDARD || 'gpt-4o-mini';
+const MODEL_PREMIUM = env('MODEL_PREMIUM', 'gpt-4o');
+const MODEL_STANDARD = env('MODEL_STANDARD', 'gpt-4o-mini');
 const MODEL_ALLOWED = new Set(
-  (process.env.LOUPE_MODEL_ALLOWED || '').split(',').map(s => s.trim()).filter(Boolean),
+  env('MODEL_ALLOWED', '').split(',').map(s => s.trim()).filter(Boolean),
 );
 // Real provider model ids are always honorable without an explicit allowlist entry
 // (the client's routing.json is the control point); unknown strings still fall back
@@ -67,7 +79,7 @@ const GIT_SHA = (() => {
 // Bind explicitly to 127.0.0.1. Without a host, Node listens on all interfaces,
 // which usually works but makes IPv6-vs-IPv4 mismatches possible; the extension
 // targets 127.0.0.1 (see extension/src/config.js) so the two now agree exactly.
-const HOST = process.env.LOUPE_GATEWAY_HOST || '127.0.0.1';
+const HOST = env('GATEWAY_HOST', '127.0.0.1');
 
 const server = http.createServer(async (req, res) => {
   // One line per request: path in, status out, duration. Answers "did it arrive".
@@ -77,7 +89,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
       // `models` exposes the live tier→model mapping so clients can key their
       // response caches on the CONCRETE models — without it, changing
-      // LOUPE_MODEL_PREMIUM would silently serve cached answers from the old model.
+      // PERSADO_MODEL_PREMIUM would silently serve cached answers from the old model.
       return sendJson(res, 200, {
         ok: true,
         service: 'loupe-gateway',
@@ -254,7 +266,7 @@ function toAnthropicImage(url) {
 // ─── ffmpeg normalization — STUBBED, OFF by default ──────────────
 //
 // Whisper accepts webm/opus directly, so this is unnecessary in the common case.
-// Enable with LOUPE_GATEWAY_FFMPEG=1 ONLY if segment timestamps come back wrong
+// Enable with PERSADO_GATEWAY_FFMPEG=1 ONLY if segment timestamps come back wrong
 // (some containers report bad durations). Requires ffmpeg on PATH.
 function normalizeToWav(buf) {
   try {

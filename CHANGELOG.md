@@ -8,6 +8,28 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.3
+
+Gateway environment variables rebranded to `PERSADO_*`, with the inherited
+`LOUPE_*` names retained as a fallback.
+
+- `PERSADO_MODEL_PREMIUM`, `PERSADO_MODEL_STANDARD`, `PERSADO_MODEL_ALLOWED`,
+  `PERSADO_GATEWAY_PORT`, `PERSADO_GATEWAY_HOST`, `PERSADO_GATEWAY_FFMPEG` are the
+  primary names. Each falls back to its `LOUPE_*` counterpart, so an existing
+  shell profile or `~/.loupe/gateway.env` keeps working untouched.
+- Precedence lives in one helper rather than being repeated per variable:
+  `PERSADO_*` → `LOUPE_*` → default.
+- Default port (8787) and host (127.0.0.1) unchanged.
+- `gateway/server.mjs` header retitled and documents both name sets, marking
+  `LOUPE_*` deprecated-but-supported.
+- `gateway/install-launchd.sh` prose rebranded and its generated env template now
+  lists the `PERSADO_*` names. The `dev.loupe.gateway` launchd label and the
+  `~/.loupe` paths are deliberately unchanged — the label identifies an agent that
+  may already be installed, and changing it would orphan the old plist and risk
+  two gateways contending for 8787.
+
+---
+
 ## 0.6.2
 
 A failed transcription no longer costs the user their recording, and a stopped
