@@ -1,47 +1,48 @@
-// ─── Persado Demo — Popup Logic ──────────────────────────────────
+// ─── Persado Demo — Popup Logic (simplified) ─────────────────────
 //
-// States: Configure → Recording → Processing → Review → Results
-// Recording survives popup close (offscreen doc + storage).
+// States: Configure → Pick Element → Narrate → Generate → Results
+//
+// No persistent recording session. Element picked via injected script
+// (survives popup close). Narration recorded in offscreen doc while
+// popup stays open. Each step is a single async round-trip.
 
 const GATEWAY = 'http://localhost:8787';
 
 const $ = (id) => document.getElementById(id);
 
 // ─── Panels ──────────────────────────────────────────────────────
-const panelConfigure   = $('panelConfigure');
-const panelRecording   = $('panelRecording');
-const panelProcessing  = $('panelProcessing');
-const panelReview      = $('panelReview');
-const panelResults     = $('panelResults');
+const pnlConfig   = $('panelConfigure');
+const pnlPick     = $('panelPick');
+const pnlNarrate  = $('panelNarrate');
+const pnlResults  = $('panelResults');
 
-// ─── Configure ───────────────────────────────────────────────────
+// ─── Config ──────────────────────────────────────────────────────
 const pageUrl       = $('pageUrl');
 const audienceSelect = $('audience');
 const goalSelect    = $('goal');
-const btnStart      = $('btnStartCapture');
+const btnPick       = $('btnPick');
 
-// ─── Recording ───────────────────────────────────────────────────
-const recTimer      = $('recTimer');
-const recElCard     = $('recElementCard');
-const recElType     = $('recElType');
-const recElText     = $('recElText');
-const recHint       = $('recHint');
-const btnStop       = $('btnStopCapture');
+// ─── Pick ────────────────────────────────────────────────────────
+const pickElCard   = $('pickElCard');
+const pickElType   = $('pickElType');
+const pickElText   = $('pickElText');
+const btnNarrate   = $('btnNarrate');
 
-// ─── Processing ──────────────────────────────────────────────────
-const procStatus    = $('procStatus');
-const procDetail    = $('procDetail');
-
-// ─── Review ──────────────────────────────────────────────────────
-const elType        = $('elType');
-const elText        = $('elText');
-const elContext     = $('elContext');
-const narrationBlock = $('narrationBlock');
-const narrationText  = $('narrationText');
-const narrationFallback = $('narrationFallback');
-const narrationInput = $('narrationInput');
-const btnGenerate   = $('btnGenerate');
-const loadingGen    = $('loadingGenerate');
+// ─── Narrate ─────────────────────────────────────────────────────
+const narrateElType   = $('narrateElType');
+const narrateElText   = $('narrateElText');
+const narrateElCtx    = $('narrateElContext');
+const btnRecord       = $('btnRecord');
+const recStatus       = $('recStatus');
+const recTimer        = $('recTimer');
+const btnStopRec      = $('btnStopRec');
+const narrationBlock  = $('narrationBlock');
+const narrationText   = $('narrationText');
+const narrateFallback = $('narrateFallback');
+const narrationInput  = $('narrationInput');
+const btnGenerate     = $('btnGenerate');
+const genStatus       = $('genStatus');
+const genSpinner      = $('genSpinner');
 
 // ─── Results ─────────────────────────────────────────────────────
 const resultsContainer = $('resultsContainer');
@@ -58,43 +59,49 @@ let capturedElement = null;
 let narrationTranscript = '';
 let recommendations = null;
 let currentUrl = '';
-let recording = false;
 let recSec = 0;
 let recTimerId = null;
+let recordingNow = false;
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-function toastMsg(m, k='ok') { toast.textContent=m; toast.className='toast '+k; setTimeout(()=>toast.className='toast',3000); }
-function status(t, r=false) { headerText.textContent=t; headerStatus.className=r?'header-status rec':'header-status'; }
-function show(p) { [panelConfigure,panelRecording,panelProcessing,panelReview,panelResults].forEach(x=>x.classList.remove('active')); p.classList.add('active'); }
+function toastMsg(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(()=>toast.className='toast',3000);}
+function status(t){headerText.textContent=t;headerStatus.className='header-status';}
+function show(p){[pnlConfig,pnlPick,pnlNarrate,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
 
 // ─── Page ────────────────────────────────────────────────────────
 
 async function detectPage() {
+  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(t?.url){currentUrl=t.url;try{const u=new URL(t.url);pageUrl.textContent=u.hostname+u.pathname}catch{pageUrl.textContent=t.url.slice(0,60)}}}
+  catch{pageUrl.textContent='(unknown)';}
+}
+
+// ─── Step 1: Pick Element ────────────────────────────────────────
+
+btnPick.addEventListener('click', async () => {
   try {
-    const [t] = await chrome.tabs.query({active:true,currentWindow:true});
-    if (t?.url) { currentUrl=t.url; try{const u=new URL(t.url);pageUrl.textContent=u.hostname+u.pathname}catch{pageUrl.textContent=t.url.slice(0,60)} }
-  } catch { pageUrl.textContent='(unknown)'; }
-}
+    const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
+    if (!tab?.id) { toastMsg('No active tab','err'); return; }
+    await chrome.scripting.executeScript({target:{tabId:tab.id},func:injectPicker});
+    toastMsg('Click any element on the page ✦');
+  } catch(e) { toastMsg('Cannot access page: '+e.message,'err'); }
+});
 
-// ─── Element capture (storage-based, survives popup close) ───────
+// ─── Handle element capture (can arrive while on any panel) ──────
 
-function renderEl() {
-  if (!capturedElement) return;
-  elType.textContent = capturedElement.type;
-  elText.textContent = capturedElement.text||'(empty)';
-  elContext.textContent = capturedElement.context||'';
-  elContext.style.display = capturedElement.context?'block':'none';
-}
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'PERSADO_ELEMENT_CAPTURED' && msg.element) {
+    capturedElement = msg.element;
+    pickElType.textContent = msg.element.type;
+    pickElText.textContent = msg.element.text||'(empty)';
+    pickElCard.style.display = 'block';
+    btnNarrate.disabled = false;
+    show(pnlPick);
+    status('Element captured');
+  }
+});
 
-function showRecEl() {
-  if (!capturedElement) return;
-  recElType.textContent=capturedElement.type;
-  recElText.textContent=capturedElement.text||'(empty)';
-  recElCard.style.display='block';
-  recHint.textContent='Element captured! Keep narrating, or click another. 🎤';
-}
-
+// Check for element captured while popup was closed
 async function loadPendingEl() {
   try {
     const s = await chrome.storage.local.get('persado:pendingCapture');
@@ -107,139 +114,121 @@ async function loadPendingEl() {
   return false;
 }
 
-// ─── Timer ───────────────────────────────────────────────────────
+// ─── Step 2: Narrate ─────────────────────────────────────────────
 
-function startTimer() { recSec=0; recTimer.textContent='00:00'; recTimerId=setInterval(()=>{recSec++;const m=String(Math.floor(recSec/60)).padStart(2,'0');const s=String(recSec%60).padStart(2,'0');recTimer.textContent=m+':'+s;},1000); }
-function stopTimer() { if(recTimerId){clearInterval(recTimerId);recTimerId=null;} }
-
-// ─── Messages from background ────────────────────────────────────
-
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'PERSADO_ELEMENT_CAPTURED' && msg.element) {
-    capturedElement = msg.element;
-    if (recording) showRecEl();
-    else { renderEl(); show(panelReview); status('Ready'); }
-  }
-  if (msg.type === 'RECORDING_STARTED') {
-    recording=true; startTimer();
-  }
-  if (msg.type === 'TRANSCRIPT_READY') {
-    narrationTranscript = msg.transcript;
-    narrationText.textContent = msg.transcript;
-    narrationBlock.style.display='block';
-    narrationFallback.style.display='none';
-    show(panelReview);
-    status('Ready');
-  }
-  if (msg.type === 'TRANSCRIPT_ERROR') {
-    narrationFallback.style.display='';
-    show(panelReview);
-    status('Ready');
-    // Don't show error toast — the processing panel already showed the failure
-  }
+btnNarrate.addEventListener('click', () => {
+  if (!capturedElement) return;
+  narrateElType.textContent = capturedElement.type;
+  narrateElText.textContent = capturedElement.text||'(empty)';
+  narrateElCtx.textContent = capturedElement.context||'';
+  narrateElCtx.style.display = capturedElement.context?'block':'none';
+  narrationTranscript = '';
+  narrationText.textContent = '';
+  narrationBlock.style.display = 'none';
+  narrateFallback.style.display = 'none';
+  btnGenerate.style.display = 'none';
+  genStatus.style.display = 'none';
+  genSpinner.style.display = 'none';
+  btnRecord.style.display = '';
+  btnStopRec.style.display = 'none';
+  recStatus.textContent = '';
+  recTimer.style.display = 'none';
+  show(pnlNarrate);
+  status('Ready to narrate');
 });
 
-// ─── Start Capture ───────────────────────────────────────────────
-
-btnStart.addEventListener('click', async () => {
-  try {
-    const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
-    if (!tab?.id) { toastMsg('No active tab','err'); return; }
-
-    // Inject element picker
-    await chrome.scripting.executeScript({target:{tabId:tab.id},func:injectPicker});
-
-    // Start audio via offscreen
-    chrome.runtime.sendMessage({type:'POPUP_START_RECORDING'}, (r) => {
-      if (chrome.runtime.lastError) toastMsg('Mic failed: '+chrome.runtime.lastError.message,'err');
-    });
-
-    recording = true;
-    chrome.storage.local.set({'persado:recording':true});
-    show(panelRecording);
-    status('Recording', true);
-    startTimer();
-    toastMsg('Point at an element, narrate out loud 🎤');
-  } catch(e) { toastMsg('Failed: '+e.message,'err'); }
+// Pick Different Element
+const btnPickAgain = $('btnPickAgain');
+btnPickAgain.addEventListener('click', () => {
+  capturedElement = null;
+  pickElCard.style.display = 'none';
+  btnNarrate.disabled = true;
+  show(pnlConfig);
+  status('Ready');
 });
 
-// ─── Stop & Process ──────────────────────────────────────────────
+// ─── Record narration (one-shot, popup stays open) ───────────────
 
-btnStop.addEventListener('click', async () => {
-  stopTimer();
-  recording = false;
-  chrome.storage.local.remove('persado:recording');
+btnRecord.addEventListener('click', async () => {
+  recordingNow = true;
+  btnRecord.style.display = 'none';
+  btnStopRec.style.display = '';
+  recStatus.textContent = '🎤 Recording… speak your concern about this element';
+  recStatus.style.color = '#EF4444';
+  recSec = 0;
+  recTimer.textContent = '00:00';
+  recTimer.style.display = 'block';
+  recTimerId = setInterval(() => {recSec++;const m=String(Math.floor(recSec/60)).padStart(2,'0');const s=String(recSec%60).padStart(2,'0');recTimer.textContent=m+':'+s;},1000);
+  status('Recording');
 
-  // Load element from storage (captured while popup was closed)
-  await loadPendingEl();
+  // Tell background to start recording via offscreen
+  chrome.runtime.sendMessage({type:'START_RECORDING_ONCE'});
+});
 
-  show(panelProcessing);
-  procStatus.textContent = 'Transcribing narration…';
-  procDetail.textContent = 'Sending audio to speech recognition';
+btnStopRec.addEventListener('click', () => {
+  recordingNow = false;
+  if (recTimerId) { clearInterval(recTimerId); recTimerId = null; }
+  btnStopRec.style.display = 'none';
+  recTimer.style.display = 'none';
+  recStatus.textContent = 'Transcribing…';
+  recStatus.style.color = 'var(--persado-purple)';
   status('Processing');
 
-  // Cycle through meaningful status updates — speak the marketer's language
-  const audienceLabel = audienceSelect.options[audienceSelect.selectedIndex]?.text || 'customers';
-  const goalLabel = goalSelect.options[goalSelect.selectedIndex]?.text || 'performance';
-  const statusCycle = [
-    ['Listening to your brief…',           'Identifying key themes and customer concerns'],
-    ['Matching language to ' + audienceLabel + '…', 'Selecting motivation-tested language patterns for this segment'],
-    ['Generating optimized variants…',     'Applying ' + goalLabel.toLowerCase() + '-focused frameworks'],
-    ['Checking regulatory compliance…',    'Verifying against UDAAP and disclosure guidelines'],
-    ['Estimating campaign impact…',        'Predicting lift based on similar finance campaigns'],
+  const cycle = [
+    ['Transcribing narration…',            ''],
+    ['Identifying key themes…',            ''],
+    ['Matching language patterns…',        ''],
   ];
-  let cycleIdx = 0;
-  const cycleTimer = setInterval(() => {
-    if (cycleIdx < statusCycle.length) {
-      procStatus.textContent = statusCycle[cycleIdx][0];
-      procDetail.textContent = statusCycle[cycleIdx][1];
-      cycleIdx++;
-    }
-  }, 1500);
+  let ci = 0;
+  const ct = setInterval(() => {
+    if (ci < cycle.length) { recStatus.textContent = cycle[ci][0]; ci++; }
+  }, 1200);
 
-  chrome.runtime.sendMessage({type:'POPUP_STOP_RECORDING'}, (r) => {
-    clearInterval(cycleTimer);
+  chrome.runtime.sendMessage({type:'STOP_AND_TRANSCRIBE'}, (r) => {
+    clearInterval(ct);
+    recStatus.textContent = '';
 
     if (chrome.runtime.lastError || !r?.ok) {
-      // Transcription failed — show fallback immediately
-      procStatus.textContent = 'Voice transcription unavailable';
-      procDetail.textContent = r?.error || 'Speech service is not accessible. Type your narration below.';
-      narrationFallback.style.display = '';
-      setTimeout(() => {
-        renderEl();
-        show(panelReview);
-        status('Ready');
-      }, 1000);
+      recStatus.textContent = 'Voice transcription unavailable — type below';
+      recStatus.style.color = '#92400E';
+      narrateFallback.style.display = '';
+      btnGenerate.style.display = '';
       return;
     }
 
-    if (r.transcript) {
-      narrationTranscript = r.transcript;
-      procStatus.textContent = 'Transcription complete';
-      procDetail.textContent = 'Narration captured. Review below.';
-    }
-
-    setTimeout(() => {
-      renderEl();
-      narrationText.textContent = r.transcript || '';
-      narrationBlock.style.display = r.transcript ? 'block' : 'none';
-      narrationFallback.style.display = r.transcript ? 'none' : '';
-      show(panelReview);
-      status('Ready');
-    }, 800);
+    narrationTranscript = r.transcript;
+    narrationText.textContent = r.transcript;
+    narrationBlock.style.display = 'block';
+    narrateFallback.style.display = 'none';
+    btnGenerate.style.display = '';
+    recStatus.textContent = '';
+    status('Ready');
   });
 });
 
-// ─── Generate ────────────────────────────────────────────────────
+// ─── Step 3: Generate ────────────────────────────────────────────
 
 btnGenerate.addEventListener('click', async () => {
-  if (!capturedElement) { toastMsg('No element captured','err'); return; }
+  if (!capturedElement) { toastMsg('No element','err'); return; }
   const narration = narrationTranscript || narrationInput.value.trim();
-  if (!narration) { toastMsg('No narration provided','err'); return; }
+  if (!narration) { toastMsg('No narration','err'); return; }
 
-  btnGenerate.style.display='none';
-  loadingGen.classList.add('active');
-  status('Generating…');
+  btnGenerate.style.display = 'none';
+  genStatus.style.display = 'block';
+  genSpinner.style.display = 'block';
+  status('Generating');
+
+  const al = audienceSelect.selectedOptions[0]?.text || 'Customers';
+  const gl = goalSelect.selectedOptions[0]?.text || 'performance';
+  const cycle = [
+    ['Generating optimized variants…',     'Applying '+gl.toLowerCase()+'-focused frameworks for '+al],
+    ['Checking regulatory compliance…',    'Verifying against UDAAP and disclosure guidelines'],
+    ['Estimating campaign impact…',        'Predicting lift based on similar finance campaigns'],
+  ];
+  let ci = 0;
+  const ct = setInterval(() => {
+    if (ci < cycle.length) { genStatus.textContent = cycle[ci][0]; ci++; }
+  }, 1500);
 
   try {
     const resp = await fetch(GATEWAY+'/v1/ai/recommend',{
@@ -250,14 +239,16 @@ btnGenerate.addEventListener('click', async () => {
     const data = await resp.json();
     recommendations = data.variants||[];
     renderResults();
-    show(panelResults);
+    show(pnlResults);
     status('Done');
   } catch(e) {
     toastMsg(e.message||'Generation failed','err');
     status('Error');
   } finally {
-    loadingGen.classList.remove('active');
-    btnGenerate.style.display='';
+    clearInterval(ct);
+    genStatus.style.display = 'none';
+    genSpinner.style.display = 'none';
+    btnGenerate.style.display = '';
   }
 });
 
@@ -282,39 +273,39 @@ function renderResults() {
   `).join('');
 }
 
-function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
 // ─── Export ──────────────────────────────────────────────────────
 
 btnExport.addEventListener('click',()=>{
-  if (!capturedElement||!recommendations) { toastMsg('Nothing to export','err'); return; }
+  if (!capturedElement||!recommendations){toastMsg('Nothing to export','err');return;}
   const pl={retail:'Retail Banking',cards:'Credit Cards',mortgage:'Mortgage & Lending',wealth:'Wealth Management',business:'Small Business Banking'};
   const ob={acquisition:'Acquisition','cross-sell':'Cross-Sell',engagement:'Engagement',retention:'Retention',trust:'Trust & Compliance'};
   const md=[
-    '# Persado Marketing Brief','',
-    `**Page:** ${currentUrl}`,`**Product Line:** ${pl[audienceSelect.value]}`,
-    `**Objective:** ${ob[goalSelect.value]}`,'',
-    '## Captured Element',`- **Type:** ${capturedElement.type}`,
-    `- **Current Copy:** "${capturedElement.text}"`,
-    capturedElement.context?`- **Context:** ${capturedElement.context}`:'',
-    `- **Selector:** \`${capturedElement.selector}\``,'',
-    '## Narration',`> ${narrationText.textContent||'(none)'}`,'',
-    '## Recommendations','',
-    '> ⚠️ **Demo only.** Generated by a general-purpose LLM standing in for Persado Motivation AI.','',
-    ...recommendations.flatMap((v,i)=>[`### Variant ${i+1}`,`- **Copy:** ${v.copy}`,`- **Rationale:** ${v.rationale||'—'}`,`- **Compliance:** ${v.compliance==='clear'?'✓ Clear':'⚠ '+(v.complianceNote||'Flag')}`,`- **Predicted Lift:** ${v.predictedLift||'+5–12%'} *(illustrative)*`,'']),
+    '# Persado Marketing Brief','',`**Page:** ${currentUrl}`,`**Product Line:** ${pl[audienceSelect.value]}`,
+    `**Objective:** ${ob[goalSelect.value]}`,'','## Captured Element',`- **Type:** ${capturedElement.type}`,
+    `- **Current Copy:** "${capturedElement.text}"`,capturedElement.context?`- **Context:** ${capturedElement.context}`:'',
+    `- **Selector:** \`${capturedElement.selector}\``,'','## Narration',`> ${narrationText.textContent||'(none)'}`,'',
+    '## Recommendations','','> ⚠️ **Demo only.** Generated by a general-purpose LLM standing in for Persado Motivation AI.','',
+    ...recommendations.flatMap((v,i)=>[`### Variant ${i+1}`,`- **Copy:** ${v.copy}`,`- **Rationale:** ${v.rationale||'—'}`,
+    `- **Compliance:** ${v.compliance==='clear'?'✓ Clear':'⚠ '+(v.complianceNote||'Flag')}`,
+    `- **Predicted Lift:** ${v.predictedLift||'+5–12%'} *(illustrative)*`,'']),
   ].filter(Boolean).join('\n');
   navigator.clipboard.writeText(md).then(()=>toastMsg('Brief copied ✓')).catch(()=>{const t=document.createElement('textarea');t.value=md;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toastMsg('Brief copied ✓');});
 });
 
-// ─── New ─────────────────────────────────────────────────────────
+// ─── New Brief ───────────────────────────────────────────────────
 
 btnNew.addEventListener('click',()=>{
   capturedElement=null;recommendations=null;narrationTranscript='';
   narrationText.textContent='';narrationBlock.style.display='none';
-  narrationFallback.style.display='none';narrationInput.value='';
+  narrateFallback.style.display='none';narrationInput.value='';
   resultsContainer.innerHTML='';
-  btnGenerate.style.display='';loadingGen.classList.remove('active');
-  show(panelConfigure);status('Ready');
+  btnGenerate.style.display='';genStatus.style.display='none';genSpinner.style.display='none';
+  btnRecord.style.display='';btnStopRec.style.display='none';
+  recStatus.textContent='';recTimer.style.display='none';
+  pickElCard.style.display='none';btnNarrate.disabled=true;
+  show(pnlConfig);status('Ready');
 });
 
 // ─── Element Picker (injected) ───────────────────────────────────
@@ -324,12 +315,10 @@ function injectPicker() {
   let hovered=null;
   const ov=document.createElement('div');ov.id='persado-picker-overlay';ov.style.cssText='position:fixed;inset:0;z-index:2147483646;cursor:crosshair;';document.body.appendChild(ov);
   const hl=document.createElement('div');hl.id='persado-highlight';hl.style.cssText='position:fixed;z-index:2147483647;border:2px solid #E8388C;background:rgba(92,45,145,0.08);pointer-events:none;transition:all 0.1s;border-radius:4px;';document.body.appendChild(hl);
-
   function cl(el){const t=(el.textContent||'').trim().toLowerCase();const g=el.tagName.toLowerCase();if(g==='a'||g==='button'||el.getAttribute('role')==='button'){if(/(apply|open|start|get started|sign up|learn more|see |try |compare)/i.test(t))return'CTA'}if(/^h[1-4]$/.test(g))return'Headline';if(/^h[5-6]$/.test(g)||/subhead/i.test(el.className||''))return'Subhead';if(/(guarantee|secure|trust|fdic|insured|protection|safe|backed)/i.test(t))return'Trust Line';if(/(offer|rate|bonus|cash|reward|save|earn|fee|apr|apy)/i.test(t))return'Promo';return'Body Copy';}
   function ctx(el){const p=el.closest('section,article,[class*="hero"],[class*="banner"],[class*="card"],[class*="feature"]');if(!p)return'';const f=(p.textContent||'').trim().slice(0,250);return f.replace((el.textContent||'').trim(),'⟦'+(el.textContent||'').trim()+'⟧');}
-  function sel(el){if(el.id)return'#'+el.id;if(el.className&&typeof el.className==='string'){const c=el.className.trim().split(/\s+/).slice(0,2).join('.');if(c)return el.tagName.toLowerCase()+'.'+c;}return el.tagName.toLowerCase();}
+  function sel(el){if(el.id)return'#'+el.id;if(el.className&&typeof el.className==='string'){const c=el.className.trim().split(/\s+/).slice(0,2).join('.');if(c)return el.tagName.toLowerCase()+'.'+c}return el.tagName.toLowerCase();}
   function pick(el){ov.remove();hl.remove();chrome.runtime.sendMessage({type:'PERSADO_ELEMENT_CAPTURED',element:{type:cl(el),text:(el.textContent||'').trim().slice(0,300),context:ctx(el),selector:sel(el)}});}
-
   ov.addEventListener('mousemove',e=>{const el=document.elementFromPoint(e.clientX,e.clientY);if(!el||el===ov||el===hl)return;hovered=el;const r=el.getBoundingClientRect();hl.style.left=r.left+'px';hl.style.top=r.top+'px';hl.style.width=r.width+'px';hl.style.height=r.height+'px';});
   ov.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(hovered)pick(hovered);});
   document.addEventListener('keydown',function esc(e){if(e.key==='Escape'){ov.remove();hl.remove();document.removeEventListener('keydown',esc);}});
@@ -340,21 +329,13 @@ function injectPicker() {
 async function init() {
   await detectPage();
   const hasEl = await loadPendingEl();
-
-  // Check recording state (survives popup close)
-  try {
-    const s = await chrome.storage.local.get('persado:recording');
-    if (s['persado:recording']) {
-      recording = true;
-      show(panelRecording);
-      status('Recording', true);
-      startTimer();
-      if (capturedElement) showRecEl();
-      return;
-    }
-  } catch {}
-
-  if (capturedElement) { renderEl(); show(panelReview); }
+  if (hasEl) {
+    pickElType.textContent = capturedElement.type;
+    pickElText.textContent = capturedElement.text||'(empty)';
+    pickElCard.style.display = 'block';
+    btnNarrate.disabled = false;
+    show(pnlPick);
+  }
   status('Ready');
 }
 
