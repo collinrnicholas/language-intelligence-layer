@@ -53,7 +53,13 @@ btnRecord.addEventListener('click',async()=>{
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id){recStatus.textContent='No active tab';recStatus.style.color='#EF4444';return;}
-    await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});
+    // Inject content script if not already loaded (page was open before extension)
+    try{await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});}
+    catch{
+      await chrome.scripting.executeScript({target:{tabId:tab.id},files:['src/content.js']});
+      await new Promise(r=>setTimeout(r,200));
+      await chrome.tabs.sendMessage(tab.id,{type:'SHOW_RECORD_BUTTON'});
+    }
   }catch(err){recStatus.textContent='Cannot access page. Refresh and retry.';recStatus.style.color='#EF4444';return;}
   btnRecord.style.display='none';btnStopRec.style.display='';
   document.querySelector('.instructions').style.display='none';
