@@ -35,7 +35,7 @@ const btnBriefContinue=$('btnBriefContinue'),btnCopyJson=$('btnCopyJson');
 const btnSendPersado=$('btnSendPersado'),handoffResult=$('handoffResult'),handoffPayload=$('handoffPayload');
 const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnNew=$('btnNewBrief');
 const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrigText=$('resOrigText'),resNote=$('resNote');
-const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload');
+const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload'),portalDismiss=$('portalDismiss');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 
 const LISTENING='Listening — describe the problem and the audience.';
@@ -1034,8 +1034,8 @@ btnSendPortal.addEventListener('click',()=>{
   if(!recommendations?.length){tm('Nothing to send','err');return;}
   portalPayload.textContent=portalPayloadText();
   portalResult.style.display='';
-  portalResult.scrollIntoView({block:'nearest'});
 });
+portalDismiss.addEventListener('click',()=>{portalResult.style.display='none';});
 
 // ─── New ─────────────────────────────────────────────────────────
 

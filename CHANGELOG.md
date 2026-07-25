@@ -8,6 +8,18 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.24
+
+Results 1d — payload confirmation no longer clipped under the footer.
+
+- The "Would deliver this payload / Not connected in this prototype" block moved
+  OUT of the scrolling results area to a flex-none sibling ABOVE the pinned footer,
+  so it is always fully visible. The results list (`.res-main`) scrolls
+  independently, keeping both the confirmation and the footer reachable.
+- Added a `Dismiss` action to the confirmation.
+
+---
+
 ## 0.6.23
 
 Results 1d — footer is one clean row.
