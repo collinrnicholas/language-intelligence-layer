@@ -8,6 +8,16 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.44
+
+Moved the first-run proof stat from under the record button to the very bottom of
+the start panel. It is now a `flex:none` footer that is a sibling of `.start-main`
+(not inside the button group), so `.start-main{flex:1}` pushes it to the bottom
+edge and the empty space falls between the button cluster and the stat. Full-bleed
+horizontally (fits one line at 360px) and flush to the bottom edge (negative bottom
+margin cancels the panel's bottom padding). Visibility logic unchanged (first-run
+only).
+
 ## 0.6.43
 
 Start screen: added a first-run proof-stat footer under the record button —
