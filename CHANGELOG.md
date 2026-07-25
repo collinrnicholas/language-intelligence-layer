@@ -8,6 +8,12 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.36
+
+Original block uses a dashed hairline on white (results-screen section 5),
+matching the target — it reads as a quoted source rather than a filled grey
+card. The "ORIGINAL — FROM YOUR PAGE" label treatment is unchanged.
+
 ## 0.6.35
 
 Card actions read as a real button pair (results-screen section 4). "Copy" is

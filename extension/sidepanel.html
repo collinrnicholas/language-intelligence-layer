@@ -86,8 +86,9 @@
     .view-brief{flex:none;margin-top:2px;white-space:nowrap;}
     .res-cap{margin-top:6px;font-size:11.5px;color:var(--text-3);font-variant-numeric:tabular-nums;}
 
-    /* One original block, from the page. No strikethrough — we improve on it. */
-    .res-orig{margin:16px 0;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);}
+    /* One original block, from the page. No strikethrough — we improve on it.
+       Dashed hairline on white, to read as a quoted source rather than a filled card. */
+    .res-orig{margin:16px 0;padding:14px 16px;border:1px dashed var(--border);border-radius:12px;background:var(--surface);}
     .res-orig-t{margin-top:6px;font-size:13px;line-height:1.5;color:var(--text-2);}
 
     /* Variant card — single white surface, hairline, red border when selected. */
