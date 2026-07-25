@@ -4,264 +4,113 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=400, user-scalable=no">
   <title>Persado Demo</title>
-  <link rel="icon" type="image/png" sizes="16x16" href="../icon16.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="../icon32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../public/icon16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="../public/icon32.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --persado-purple: #5C2D91;
-      --persado-magenta: #E8388C;
-      --persado-deep: #2D1154;
-      --persado-dark: #1A1128;
+      --persado-purple: #5C2D91; --persado-magenta: #E8388C;
+      --persado-deep: #2D1154; --persado-dark: #1A1128;
       --persado-gradient: linear-gradient(135deg, #5C2D91 0%, #E8388C 100%);
-
-      --surface: #FFFFFF;
-      --surface-muted: #F8F7FA;
-      --text-primary: #1A1128;
-      --text-secondary: #5C506C;
-      --text-muted: #9088A0;
-      --border: #E8E4F0;
-      --border-strong: #D4CCE0;
-
-      --green: #10B981;
-      --green-tint: #ECFDF5;
-      --red: #EF4444;
-      --red-tint: #FEF2F2;
-      --amber: #F59E0B;
-      --amber-tint: #FFFBEB;
-
-      --r-card: 12px;
-      --r-control: 8px;
+      --surface: #FFFFFF; --surface-muted: #F8F7FA;
+      --text-primary: #1A1128; --text-secondary: #5C506C; --text-muted: #9088A0;
+      --border: #E8E4F0; --border-strong: #D4CCE0;
+      --green: #10B981; --green-tint: #ECFDF5;
+      --red: #EF4444; --red-tint: #FEF2F2; --amber: #F59E0B; --amber-tint: #FFFBEB;
+      --r-card: 12px; --r-control: 8px;
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      width: 400px; font-family: var(--font-sans);
-      background: var(--surface); color: var(--text-primary);
-      font-size: 13px; line-height: 1.5;
-      overflow-x: hidden;
-    }
+    body { width: 400px; font-family: var(--font-sans); background: var(--surface); color: var(--text-primary); font-size: 13px; line-height: 1.5; overflow-x: hidden; }
 
-    /* Header */
-    .header {
-      background: var(--persado-gradient);
-      height: 48px; padding: 0 16px;
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .logo {
-      font-weight: 800; font-size: 18px; letter-spacing: -0.02em;
-      color: #FFFFFF;
-    }
-    .logo .demo-badge {
-      font-size: 9px; font-weight: 500; opacity: 0.7;
-      margin-left: 6px; letter-spacing: 0.04em;
-    }
-    .header-status {
-      font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,0.7);
-      display: flex; align-items: center; gap: 5px;
-    }
+    .header { background: var(--persado-gradient); height: 48px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-weight: 800; font-size: 18px; letter-spacing: -0.02em; color: #FFFFFF; }
+    .logo .demo-badge { font-size: 9px; font-weight: 500; opacity: 0.7; margin-left: 6px; letter-spacing: 0.04em; }
+    .header-status { font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 5px; }
     .header-status .dot { width: 5px; height: 5px; border-radius: 50%; background: #fff; }
     .header-status.rec .dot { background: var(--red); animation: pulse 1.4s ease-in-out infinite; }
 
-    /* Content */
     .view { display: none; padding: 16px; max-height: 460px; overflow-y: auto; }
     .view.active { display: block; }
     .panel { display: none; }
     .panel.active { display: block; }
 
-    /* Fields */
     .field { margin-bottom: 12px; }
-    .field label {
-      display: block; font-family: var(--font-mono); font-size: 9px;
-      font-weight: 600; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;
-    }
-    .field input, .field select, .field textarea {
-      width: 100%; padding: 9px 12px; border: 1px solid var(--border);
-      border-radius: var(--r-control); font-family: var(--font-sans);
-      font-size: 13px; color: var(--text-primary); background: var(--surface);
-      outline: none; transition: border-color 0.16s;
-    }
-    .field input:focus, .field select:focus, .field textarea:focus {
-      border-color: var(--persado-purple);
-      box-shadow: 0 0 0 3px rgba(92, 45, 145, 0.1);
-    }
+    .field label { display: block; font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+    .field input, .field select, .field textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--r-control); font-family: var(--font-sans); font-size: 13px; color: var(--text-primary); background: var(--surface); outline: none; transition: border-color 0.16s; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--persado-purple); box-shadow: 0 0 0 3px rgba(92,45,145,0.1); }
     .field textarea { resize: vertical; min-height: 60px; font-size: 12px; }
     .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
     .field-row { display: flex; gap: 8px; }
     .field-row .field { flex: 1; }
 
-    /* Buttons */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      border: none; border-radius: var(--r-control); font-family: var(--font-sans);
-      font-size: 13px; font-weight: 600; cursor: pointer;
-      letter-spacing: -0.01em; padding: 10px 16px;
-      transition: all 0.16s; height: 40px;
-    }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: var(--r-control); font-family: var(--font-sans); font-size: 13px; font-weight: 600; cursor: pointer; letter-spacing: -0.01em; padding: 10px 16px; transition: all 0.16s; height: 40px; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-block { width: 100%; }
-    .btn-primary {
-      background: var(--persado-gradient); color: #fff;
-    }
+    .btn-primary { background: var(--persado-gradient); color: #fff; }
     .btn-primary:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
-    .btn-outline {
-      background: transparent; border: 1px solid var(--border-strong);
-      color: var(--text-primary);
-    }
+    .btn-outline { background: transparent; border: 1px solid var(--border-strong); color: var(--text-primary); }
     .btn-outline:hover:not(:disabled) { background: var(--surface-muted); }
     .btn-danger { background: var(--red); color: #fff; }
     .btn-danger:hover:not(:disabled) { opacity: 0.9; }
     .btn-sm { height: 32px; padding: 6px 12px; font-size: 11.5px; }
-    .btn-ghost {
-      background: none; border: none; font-family: var(--font-sans);
-      font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer;
-    }
+    .btn-ghost { background: none; border: none; font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer; }
     .btn-ghost:hover { color: var(--persado-purple); }
+    .btn-rec { background: var(--red); color: #fff; animation: recPulse 1.5s ease-in-out infinite; }
 
-    /* Recording banner */
-    .rec-banner {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; background: var(--red-tint);
-      border-radius: var(--r-card); border: 1px solid rgba(239,68,68,0.2);
-      margin-bottom: 14px;
-    }
-    .rec-banner .rec-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--red); animation: pulse 1.4s ease-in-out infinite;
-    }
+    .capture-card { border: 1px solid var(--border-strong); border-radius: var(--r-card); padding: 12px; margin-bottom: 14px; background: var(--surface-muted); }
+    .capture-card .cc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .capture-card .cc-label { font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: var(--persado-purple); text-transform: uppercase; letter-spacing: 0.08em; }
+    .capture-card .cc-type { font-size: 10px; font-weight: 600; color: var(--persado-magenta); padding: 2px 8px; border-radius: 10px; background: rgba(232,56,140,0.08); }
+    .capture-card .cc-text { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; word-break: break-word; }
+    .capture-card .cc-context { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
+    .narration-block { background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--r-card); padding: 12px; margin-bottom: 14px; }
+    .narration-block .nb-label { font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+    .narration-block .nb-text { font-size: 13px; color: var(--text-primary); line-height: 1.5; font-style: italic; }
+
+    .rec-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--red-tint); border-radius: var(--r-card); border: 1px solid rgba(239,68,68,0.2); margin-bottom: 14px; }
+    .rec-banner .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse 1.4s ease-in-out infinite; }
     .rec-banner .rec-label { font-weight: 700; font-size: 13px; color: var(--red); }
     .rec-banner .rec-timer { margin-left: auto; font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--red); }
 
-    /* Stats */
-    .stat-grid { display: grid; gap: 6px; margin-bottom: 12px; }
-    .stat-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-    .stat-grid .stat {
-      background: var(--surface-muted); border: 1px solid var(--border);
-      border-radius: var(--r-control); padding: 8px; text-align: center;
-    }
-    .stat .stat-val { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--persado-purple); }
-    .stat .stat-lbl { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-
-    /* Captured element card */
-    .capture-card {
-      border: 1px solid var(--border-strong); border-radius: var(--r-card);
-      padding: 12px; margin-bottom: 14px; background: var(--surface-muted);
-    }
-    .capture-card .cc-head {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    .capture-card .cc-label {
-      font-family: var(--font-mono); font-size: 9px; font-weight: 600;
-      color: var(--persado-purple); text-transform: uppercase; letter-spacing: 0.08em;
-    }
-    .capture-card .cc-type {
-      font-size: 10px; font-weight: 600; color: var(--persado-magenta);
-      padding: 2px 8px; border-radius: 10px;
-      background: rgba(232,56,140,0.08);
-    }
-    .capture-card .cc-text {
-      font-family: var(--font-mono); font-size: 13px; font-weight: 500;
-      color: var(--text-primary); margin-bottom: 4px; word-break: break-word;
-    }
-    .capture-card .cc-context {
-      font-size: 11px; color: var(--text-muted); line-height: 1.4;
-    }
-
-    /* Narration block */
-    .narration-block {
-      background: var(--surface-muted); border: 1px solid var(--border);
-      border-radius: var(--r-card); padding: 12px; margin-bottom: 14px;
-    }
-    .narration-block .nb-label {
-      font-family: var(--font-mono); font-size: 9px; font-weight: 600;
-      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em;
-      margin-bottom: 4px;
-    }
-    .narration-block .nb-text {
-      font-size: 13px; color: var(--text-primary); line-height: 1.5;
-      font-style: italic;
-    }
-
-    /* Recommendation cards */
-    .rec-card {
-      border: 1px solid var(--border); border-radius: var(--r-card);
-      margin-bottom: 10px; overflow: hidden;
-    }
-    .rec-card .rc-header {
-      padding: 10px 13px;
-      background: linear-gradient(135deg, rgba(92,45,145,0.06) 0%, rgba(232,56,140,0.04) 100%);
-      border-bottom: 1px solid var(--border);
-    }
-    .rec-card .rc-number {
-      font-family: var(--font-mono); font-size: 10px; font-weight: 600;
-      color: var(--persado-purple); text-transform: uppercase; letter-spacing: 0.06em;
-    }
-    .rec-card .rc-variant {
-      font-family: var(--font-mono); font-size: 13px; font-weight: 600;
-      color: var(--text-primary); margin-top: 4px; line-height: 1.4;
-    }
+    .rec-card { border: 1px solid var(--border); border-radius: var(--r-card); margin-bottom: 10px; overflow: hidden; }
+    .rec-card .rc-header { padding: 10px 13px; background: linear-gradient(135deg, rgba(92,45,145,0.06) 0%, rgba(232,56,140,0.04) 100%); border-bottom: 1px solid var(--border); }
+    .rec-card .rc-number { font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--persado-purple); text-transform: uppercase; letter-spacing: 0.06em; }
+    .rec-card .rc-variant { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--text-primary); margin-top: 4px; line-height: 1.4; }
     .rec-card .rc-body { padding: 10px 13px; }
-    .rec-card .rc-row {
-      display: flex; align-items: center; gap: 8px; margin-top: 6px;
-      font-size: 11px;
-    }
+    .rec-card .rc-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; }
     .rc-rationale { color: var(--text-secondary); line-height: 1.4; }
-    .badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-family: var(--font-mono); font-size: 9.5px; font-weight: 600;
-      padding: 3px 8px; border-radius: 10px;
-    }
+    .badge { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; padding: 3px 8px; border-radius: 10px; }
     .badge.clear { background: var(--green-tint); color: #065F46; }
     .badge.flag { background: var(--amber-tint); color: #92400E; }
-    .badge.lift {
-      background: linear-gradient(135deg, rgba(92,45,145,0.1) 0%, rgba(232,56,140,0.08) 100%);
-      color: var(--persado-purple); font-weight: 700;
-    }
-    .disclaimer {
-      background: var(--amber-tint); border: 1px solid rgba(245,158,11,0.25);
-      border-radius: var(--r-control); padding: 8px 11px;
-      font-size: 10.5px; color: #92400E; line-height: 1.45;
-      margin-top: 10px; font-weight: 500;
-    }
+    .badge.lift { background: linear-gradient(135deg, rgba(92,45,145,0.1) 0%, rgba(232,56,140,0.08) 100%); color: var(--persado-purple); font-weight: 700; }
+    .disclaimer { background: var(--amber-tint); border: 1px solid rgba(245,158,11,0.25); border-radius: var(--r-control); padding: 8px 11px; font-size: 10.5px; color: #92400E; line-height: 1.45; margin-top: 10px; font-weight: 500; }
     .disclaimer strong { color: #B45309; }
 
-    /* Loading */
-    .loading {
-      display: none; flex-direction: column; align-items: center;
-      padding: 30px 16px; gap: 12px;
-    }
+    .loading { display: none; flex-direction: column; align-items: center; padding: 20px 16px; gap: 10px; }
     .loading.active { display: flex; }
-    .spinner {
-      width: 32px; height: 32px; border-radius: 50%;
-      border: 3px solid var(--border);
-      border-top-color: var(--persado-purple);
-      animation: spin 0.8s linear infinite;
-    }
+    .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--persado-purple); animation: spin 0.8s linear infinite; }
     .loading-text { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-
-    /* Empty */
     .empty-state { text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 
-    /* Toast */
-    .toast {
-      display: none; padding: 8px 13px; border-radius: var(--r-control);
-      margin: 8px 16px 0; font-size: 11.5px; text-align: center; font-weight: 600;
-    }
+    .toast { display: none; padding: 8px 13px; border-radius: var(--r-control); margin: 8px 16px 0; font-size: 11.5px; text-align: center; font-weight: 600; }
     .toast.ok { display: block; background: var(--green-tint); color: #065F46; }
     .toast.err { display: block; background: var(--red-tint); color: var(--red); }
 
+    .rec-actions { display: flex; gap: 8px; }
+    .rec-actions button { flex: 1; }
+
     @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
+    @keyframes recPulse { 0%,100% { opacity:1 } 50% { opacity:0.8 } }
     @keyframes spin { to { transform: rotate(360deg) } }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
   <div class="header">
     <div class="logo">persado<span class="demo-badge">DEMO</span></div>
     <span class="header-status" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
@@ -269,19 +118,16 @@
 
   <div class="toast" id="toast"></div>
 
-  <!-- View -->
   <div class="view active" id="viewMain">
 
-    <!-- Step 1: Point at element (always visible while recording via content script) -->
-
-    <!-- Step 2: Configure campaign context -->
+    <!-- ═══ CONFIGURE ═══ -->
     <div class="panel active" id="panelConfigure">
-      <div style="text-align:center;padding:8px 0 14px;">
-        <div style="font-size:16px;font-weight:700;color:var(--persado-purple);margin-bottom:4px;">Marketing Brief → Variants</div>
-        <div style="font-size:12px;color:var(--text-muted);">Point at an element, narrate its problem, get optimized copy with compliance checks.</div>
+      <div style="text-align:center;padding:6px 0 14px;">
+        <div style="font-size:16px;font-weight:700;color:var(--persado-purple);margin-bottom:2px;">Marketing Brief → Variants</div>
+        <div style="font-size:12px;color:var(--text-muted);">Point at an element, talk about it, get compliant copy.</div>
       </div>
 
-      <div class="capture-card" style="margin-bottom:14px;">
+      <div class="capture-card" style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-family:var(--font-mono);font-size:9px;font-weight:600;color:var(--persado-purple);text-transform:uppercase;letter-spacing:0.08em;">Page</span>
           <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="pageUrl">detecting…</span>
@@ -307,36 +153,63 @@
         </div>
       </div>
 
-      <!-- Select element prompt -->
-      <div style="text-align:center;padding:10px 0;">
-        <button class="btn btn-outline btn-block" id="btnSelectElement">
-          🔭 Select Element on Page
-        </button>
-        <div style="font-size:10.5px;color:var(--text-muted);margin-top:5px;line-height:1.4;">
-          Click any headline, CTA, promo, or trust line on the page, then return here.
-        </div>
+      <button class="btn btn-primary btn-block" id="btnStartCapture">
+        🎙 Start Capture
+      </button>
+      <div style="font-size:10.5px;color:var(--text-muted);text-align:center;margin-top:6px;line-height:1.4;">
+        Opens the element picker on the page. Click any element, then narrate your concern by voice.
       </div>
     </div>
 
-    <!-- Step 3: Element captured + narration -->
-    <div class="panel" id="panelCaptured">
-      <div class="capture-card" id="elementCard">
+    <!-- ═══ RECORDING ═══ -->
+    <div class="panel" id="panelRecording">
+      <div class="rec-banner">
+        <div class="rec-dot"></div>
+        <span class="rec-label">Capturing</span>
+        <span class="rec-timer" id="recTimer">00:00</span>
+      </div>
+
+      <div class="capture-card" id="recElementCard" style="display:none;">
+        <div class="cc-head">
+          <span class="cc-label">Element Selected</span>
+          <span class="cc-type" id="recElType">—</span>
+        </div>
+        <div class="cc-text" id="recElText"></div>
+      </div>
+
+      <div style="font-size:12px;color:var(--text-muted);text-align:center;margin:8px 0;">
+        <span id="recHint">Click an element on the page, then narrate the problem. 🎤 Listening…</span>
+      </div>
+
+      <div class="rec-actions">
+        <button class="btn btn-danger" id="btnStopCapture">⏹ Stop &amp; Process</button>
+      </div>
+    </div>
+
+    <!-- ═══ REVIEW ═══ -->
+    <div class="panel" id="panelReview">
+      <div class="capture-card">
         <div class="cc-head">
           <span class="cc-label">Selected Element</span>
           <span class="cc-type" id="elType">—</span>
         </div>
         <div class="cc-text" id="elText">No element selected</div>
-        <div class="cc-context" id="elContext"></div>
+        <div class="cc-context" id="elContext" style="display:none;"></div>
       </div>
 
       <div class="narration-block" id="narrationBlock" style="display:none;">
-        <div class="nb-label">Narration</div>
+        <div class="nb-label">Narration Transcript</div>
         <div class="nb-text" id="narrationText"></div>
       </div>
 
-      <div class="field" id="narrationField">
-        <label>Describe the problem <span style="font-weight:400;text-transform:none;letter-spacing:0;">(type or narrate by voice)</span></label>
-        <textarea id="narration" placeholder="e.g. This headline doesn&#39;t convert — it&#39;s too generic and doesn&#39;t speak to first-time banking customers who are nervous about hidden fees…"></textarea>
+      <div id="transcribingStatus" style="display:none;text-align:center;padding:12px;">
+        <div class="spinner" style="margin:0 auto 8px;"></div>
+        <div class="loading-text">Transcribing narration…</div>
+      </div>
+
+      <div class="field" id="narrationFallback" style="display:none;">
+        <label>Describe the problem</label>
+        <textarea id="narrationInput" placeholder="e.g. This headline doesn't convert — it's too generic…"></textarea>
       </div>
 
       <button class="btn btn-primary btn-block" id="btnGenerate">
@@ -349,7 +222,7 @@
       </div>
     </div>
 
-    <!-- Step 4: Results -->
+    <!-- ═══ RESULTS ═══ -->
     <div class="panel" id="panelResults">
       <div style="font-size:12px;font-weight:600;color:var(--persado-purple);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
         Recommendations
