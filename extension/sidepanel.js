@@ -1016,8 +1016,10 @@ function renderResults(){
   // Dynamic heading, singular at 1.
   resHeading.textContent=`${n} variant${n===1?'':'s'} ready`;
   // Context line: OBJECTIVE · PRODUCT LINE · ELEMENT TYPE (type omitted if unknown).
-  resCtx.textContent=[b.goal||goalValue,PRODUCT_LABELS[b.audience||audienceSelect.value]||b.audience,ASSET_LABELS[b.assetType]]
-    .filter(Boolean).join(' · ').toUpperCase();
+  // Each segment is kept whole (nowrap span); only the " · " separators are break
+  // opportunities, so a phrase like "RETAIL BANKING" never splits across lines.
+  resCtx.innerHTML=[b.goal||goalValue,PRODUCT_LABELS[b.audience||audienceSelect.value]||b.audience,ASSET_LABELS[b.assetType]]
+    .filter(Boolean).map(s=>`<span class="nw">${esc(String(s).toUpperCase())}</span>`).join(' · ');
   // Demoted time-saved line — real duration, structural counts, not a boxed callout.
   capLine.textContent=`Brief captured in ${mmss(briefSec)} · 1 click`;
   // ONE original block from the page — no strikethrough. Omitted when nothing extracted.

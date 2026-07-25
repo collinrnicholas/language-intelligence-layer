@@ -8,6 +8,12 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.42
+
+Results context line (`resCtx`) now wraps only at its `·` separators: each
+segment (e.g. "RETAIL BANKING") is a nowrap span, so phrases no longer split
+mid-word across lines. Size stays at the 11px meta floor.
+
 ## 0.6.41
 
 The record button ("Record marketing brief", `#btnStart`) now turns fully red on
