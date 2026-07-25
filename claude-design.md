@@ -122,9 +122,9 @@ Four states, all in the side panel (tall, docked). Nothing opens a tab or covers
 
 **1a — Start.** Plain-language copy (`Record your brief`), objective presented as selectable chips rather than a dropdown, and a short privacy note beneath the record button explaining what is captured. One click starts recording; there is no separate configure step. The record button is pinned to the bottom of the panel with the footer stat below it, so the primary action sits in the same place regardless of how much content is above it.
 
-**1b — Recording.** A running timer, a live waveform, the live transcript as it is captured, and thumbnails of the screen captures taken during the session. Stop is always visible.
+**1b — Recording.** A running timer, a live waveform, the live transcript as it is captured, and — *when screen capture is enabled* — thumbnails of the screen captures taken during the session. Screen capture is optional and OFF by default (`CAPTURE_SCREENSHOTS` in `extension/src/config.js`); when off, the “Screens captured” section is hidden entirely and DOM extraction of the on-page copy is the grounding. Stop is always visible.
 
-**1c — Processing.** A step checklist rather than an indeterminate spinner, so the user sees progress: transcribing, reviewing the page, writing variants, and the compliance check as its own explicit step.
+**1c — Processing.** A step checklist rather than an indeterminate spinner, so the user sees progress: transcribing, reviewing the page, writing variants, and the compliance check as its own explicit step. The page-review step is conditional on capture: with screenshots on it reads “Read the captured screens”, with them off (the default) it reads “Read the page copy” and is driven by the DOM extraction result — it is never marked done when no grounding was read.
 
 **1d — Results.** Variant cards, each carrying an emotion tag, a predicted lift figure, and its own compliance badge.
 

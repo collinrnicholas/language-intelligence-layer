@@ -43,7 +43,7 @@ Everything painful in this codebase comes from state being split across four JS 
 
 **`extension/src/content.js`** — runs in the PAGE context. Owns `getUserMedia`, the `MediaRecorder`, the `SpeechRecognition` live transcript, and the `AnalyserNode` that produces waveform levels. The MediaStream cannot cross into the panel, which is why amplitude is reduced here and posted as throttled `AUDIO_LEVELS` messages.
 
-**`extension/src/background.js`** — service worker. Owns `chrome.tabs.captureVisibleTab` screenshots, the session context in `chrome.storage.session` (`persado:pageContext` → `{ frames: [{full, thumb}], elements }`), gateway relay, and the toolbar `chrome.action` icon/badge state.
+**`extension/src/background.js`** — service worker. Owns `chrome.tabs.captureVisibleTab` screenshots (FLAG-GATED behind `CAPTURE_SCREENSHOTS` in `config.js`, **default OFF** — when off, capture never runs and no `frames` are written), the DOM element extraction (`extractPageElements`, which runs in BOTH modes and is the PRIMARY grounding path), the session context in `chrome.storage.session` (`persado:pageContext` → `{ frames: [{full, thumb}], elements }`), gateway relay, and the toolbar `chrome.action` icon/badge state.
 
 **`gateway/server.mjs`** — the ONLY place model-provider API keys live. Endpoints: `POST /v1/ai/transcribe` (Whisper) and `POST /v1/ai/recommend` (variants). Model tiers resolve via `PERSADO_MODEL_PREMIUM` (default `gpt-4o`, vision-capable) and `PERSADO_MODEL_STANDARD` (default `gpt-4o-mini`); the legacy `LOUPE_*` names still work as a fallback. An attached image routes the call to the premium/vision tier. Must be running (`npm run gateway`) or transcription and generation fail — a down gateway is NOT a microphone bug, do not conflate them.
 

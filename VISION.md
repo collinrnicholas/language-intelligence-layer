@@ -24,7 +24,9 @@ The capture mechanism is disposable. The structured brief is the durable asset.
 
 ## What it produces
 
-A brief record containing the page URL, the on-page element under discussion with its current copy and selector, screenshots taken during the session, the product line, the objective, the narration verbatim, and a completeness assessment of whether the marketer covered the element, the audience, the objective, and the desired outcome.
+A brief record containing the page URL, the on-page element under discussion with its current copy and selector, the product line, the objective, the asset type the copy is for (web headline, web CTA, email subject, push, SMS, banner, or social), the narration verbatim, and a completeness assessment of whether the marketer covered the element, the audience, the objective, and the desired outcome.
+
+Screen capture is optional and off by default. The load-bearing grounding is the extracted on-page copy, not pixels; capturing the screen is a switch, not a requirement — which matters because screen and microphone access inside a bank is the security review this project has to pass, and not sending images is the posture that passes it.
 
 That last part matters: the tool does not just record input, it tells the marketer what their brief is missing while they can still fix it.
 
