@@ -38,6 +38,9 @@ let narrationTranscript='',recommendations=null,currentUrl='',recSec=0,recTimerI
 // Persisted when recording stops so the processing screen can report the real
 // duration and screen count after the recording UI is gone.
 let briefSec=0,shotTotal=0,lastAudio=null;
+// The exact object POSTed to /v1/ai/recommend, kept for the Brief view and the
+// variant cards' "Current" line.
+let briefPayload=null;
 
 const PRODUCT_LABELS={retail:'Retail Banking',cards:'Credit Cards',mortgage:'Mortgage & Lending',wealth:'Wealth Management',business:'Small Business Banking'};
 // Mirrors REG_BY_AUDIENCE in gateway/server.mjs. The UI must never cite a
@@ -594,13 +597,17 @@ async function generateRecommendations(narration){
   console.log('[persado] grounding →',{element:element?.text,candidates:elements.length,
     framesCaptured:frames.length,imagesSent:images.length,
     imageBytes:images.reduce((n,u)=>n+u.length,0)});
+  // Built once and RETAINED: the variant cards show `element.text` as the current
+  // copy, and the Brief view copies this exact object as JSON. What the audience
+  // sees is what the gateway received, not a reconstruction.
+  briefPayload={
+    narration,audience:audienceSelect.value,goal:goalValue,pageUrl:currentUrl,
+    ...(element?{element}:{}),
+    ...(elements.length>1?{elements:elements.filter(e=>e!==element)}:{}),
+    ...(images.length?{images}:{}),
+  };
   try{
-    const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      narration,audience:audienceSelect.value,goal:goalValue,pageUrl:currentUrl,
-      ...(element?{element}:{}),
-      ...(elements.length>1?{elements:elements.filter(e=>e!==element)}:{}),
-      ...(images.length?{images}:{}),
-    })});
+    const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(briefPayload)});
     if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
     const variants=(await resp.json()).variants||[];
     if(!variants.length)throw new Error('The gateway returned no variants.');
@@ -631,7 +638,26 @@ async function generateRecommendations(narration){
 
 function renderResults(){
   if(!recommendations?.length){resultsContainer.innerHTML='<div class="empty-state">No variants generated.</div>';return;}
-  resultsContainer.innerHTML=recommendations.map((v,i)=>`<div class="rec-card"><div class="rh"><div class="rn">Variant ${i+1}</div><div class="rv">${esc(v.copy)}</div></div><div class="rb"><div class="rrationale">${esc(v.rationale||'')}</div><div class="rr" style="margin-top:8px;justify-content:space-between;"><span class="badge ${v.compliance==='clear'?'clear':'flag'}">${v.compliance==='clear'?'✓ Compliance Clear':'⚠ '+esc(v.complianceNote||'Flag')}</span><span class="badge lift">📈 ${esc(v.predictedLift||'+5–12%')} (illustrative)</span></div></div></div>`).join('');
+  // `current` is the copy actually on the page, so the card reads current → proposed
+  // and the grounding is visible rather than implied. Omitted when nothing was
+  // extracted — a placeholder would imply we had it.
+  const current=briefPayload?.element?.text||'';
+  resultsContainer.innerHTML=recommendations.map((v,i)=>`<div class="rec-card">`
+    +`<div class="rh">`
+      +`<div class="rn">Variant ${i+1}</div>`
+      +(current?`<div class="rc"><span class="rc-l">Current</span><span class="rc-t">${esc(current)}</span></div>`:'')
+      +`<div class="rv">${esc(v.copy)}</div>`
+    +`</div>`
+    +`<div class="rb">`
+      +`<div class="rrationale">${esc(v.rationale||'')}</div>`
+      +`<div class="rr" style="margin-top:8px;justify-content:space-between;">`
+        +`<span class="badge ${v.compliance==='clear'?'clear':'flag'}">${v.compliance==='clear'?'Compliance: clear':'Compliance: '+esc(v.complianceNote||'review')}</span>`
+        // The integration seam, shown as an empty slot rather than GPT-4o's guess
+        // dressed up as a score. predictedLift still arrives; we just don't print it.
+        +`<span class="badge seam">Motivation AI score — not connected</span>`
+      +`</div>`
+    +`</div>`
+  +`</div>`).join('');
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
@@ -658,7 +684,7 @@ function resetAll(){
   chrome.tabs.query({active:true,currentWindow:true})
     .then(([t])=>t?.id&&chrome.tabs.sendMessage(t.id,{type:MSG.STOP_RECORDING}).catch(()=>{}))
     .catch(()=>{});
-  narrationTranscript='';recommendations=null;transcriptText.textContent='';transcriptBlock.style.display='none';
+  narrationTranscript='';recommendations=null;briefPayload=null;transcriptText.textContent='';transcriptBlock.style.display='none';
   resultsContainer.innerHTML='';
   recRetry.style.display='none';recLive.classList.remove('on');procErr.style.display='none';
   recStatus.textContent='';trFinal='';trInterim='';recSec=0;briefSec=0;shotTotal=0;lastAudio=null;retryFn=null;

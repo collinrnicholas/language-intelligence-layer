@@ -8,6 +8,27 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.5
+
+Variant cards: the fake score becomes the integration argument, and the grounding
+becomes visible.
+
+- `predictedLift` is no longer displayed as a number. Each card carries an
+  explicitly empty slot — "Motivation AI score — not connected" — styled muted
+  with a dashed border. The gateway still returns the field; the response contract
+  is unchanged. Presenting a general-purpose model's guess as a score was the
+  weakest claim in the demo; as an empty seam it is the strongest.
+- Cards now read **current → proposed**: the extracted on-page copy appears above
+  the rewrite, struck through, so the grounding is visible rather than asserted.
+  Omitted entirely when no element was extracted.
+- Compliance badges drop their emoji for "Compliance: clear" / "Compliance: <note>"
+  per claude-design.md §6.
+- The variant card header loses the last purple gradient on this screen.
+- The exact payload POSTed to /v1/ai/recommend is retained in `briefPayload`, so
+  what is shown is what was sent.
+
+---
+
 ## 0.6.4
 
 Demo build for the CPO/CEO presentation. The audience is Persado, so the UI stops
