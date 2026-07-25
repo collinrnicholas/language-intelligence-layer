@@ -264,13 +264,13 @@ function normalizeToWav(buf) {
 async function handleRecommend(req, res) {
   const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
 
-  const audienceLabels = { new: 'New Customers', existing: 'Existing Customers', lapsed: 'Lapsed / Dormant' };
-  const goalLabels = { conversions: 'Conversions', clicks: 'Clicks / CTR', trust: 'Trust / Credibility' };
+  const productLabels = { retail: 'Retail Banking', cards: 'Credit Cards', mortgage: 'Mortgage & Lending', wealth: 'Wealth Management', business: 'Small Business Banking' };
+  const objectiveLabels = { acquisition: 'Acquisition', 'cross-sell': 'Cross-Sell', engagement: 'Engagement', retention: 'Retention', trust: 'Trust & Compliance' };
 
   const element = body.element || {};
   const narration = body.narration || '(none)';
-  const audience = audienceLabels[body.audience] || body.audience || 'General';
-  const goal = goalLabels[body.goal] || body.goal || 'Conversions';
+  const productLine = productLabels[body.audience] || body.audience || 'Retail Banking';
+  const objective = objectiveLabels[body.goal] || body.goal || 'Acquisition';
 
   const systemPrompt = [
     'You are a marketing language AI trained on millions of high-performing marketing messages across',
@@ -327,8 +327,8 @@ async function handleRecommend(req, res) {
     'MARKETING BRIEF',
     '─────────────────',
     `Page: ${body.pageUrl || body.campaign || 'Unknown page'}`,
-    `Target Audience: ${audience}`,
-    `Objective: ${goal}`,
+    `Product Line: ${productLine}`,
+    `Objective: ${objective}`,
     '',
     'ELEMENT TO OPTIMIZE',
     '─────────────────',

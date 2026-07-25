@@ -178,12 +178,15 @@ btnStop.addEventListener('click', async () => {
   procDetail.textContent = 'Sending audio to speech recognition';
   status('Processing');
 
-  // Cycle through meaningful status updates
+  // Cycle through meaningful status updates — speak the marketer's language
+  const audienceLabel = audienceSelect.options[audienceSelect.selectedIndex]?.text || 'customers';
+  const goalLabel = goalSelect.options[goalSelect.selectedIndex]?.text || 'performance';
   const statusCycle = [
-    ['Analyzing narration…',         'Identifying key concerns and emotional signals'],
-    ['Evaluating element context…',  'Mapping element type to marketing frameworks'],
-    ['Building variants…',           'Applying language psychology and compliance rules'],
-    ['Reasoning over lift models…',  'Generating predicted performance ranges'],
+    ['Listening to your brief…',           'Identifying key themes and customer concerns'],
+    ['Matching language to ' + audienceLabel + '…', 'Selecting motivation-tested language patterns for this segment'],
+    ['Generating optimized variants…',     'Applying ' + goalLabel.toLowerCase() + '-focused frameworks'],
+    ['Checking regulatory compliance…',    'Verifying against UDAAP and disclosure guidelines'],
+    ['Estimating campaign impact…',        'Predicting lift based on similar finance campaigns'],
   ];
   let cycleIdx = 0;
   const cycleTimer = setInterval(() => {
@@ -285,12 +288,12 @@ function esc(s) { const d=document.createElement('div'); d.textContent=s; return
 
 btnExport.addEventListener('click',()=>{
   if (!capturedElement||!recommendations) { toastMsg('Nothing to export','err'); return; }
-  const aud={new:'New Customers',existing:'Existing Customers',lapsed:'Lapsed/Dormant'};
-  const gl={conversions:'Conversions',clicks:'Clicks/CTR',trust:'Trust/Credibility'};
+  const pl={retail:'Retail Banking',cards:'Credit Cards',mortgage:'Mortgage & Lending',wealth:'Wealth Management',business:'Small Business Banking'};
+  const ob={acquisition:'Acquisition','cross-sell':'Cross-Sell',engagement:'Engagement',retention:'Retention',trust:'Trust & Compliance'};
   const md=[
     '# Persado Marketing Brief','',
-    `**Page:** ${currentUrl}`,`**Audience:** ${aud[audienceSelect.value]}`,
-    `**Goal:** ${gl[goalSelect.value]}`,'',
+    `**Page:** ${currentUrl}`,`**Product Line:** ${pl[audienceSelect.value]}`,
+    `**Objective:** ${ob[goalSelect.value]}`,'',
     '## Captured Element',`- **Type:** ${capturedElement.type}`,
     `- **Current Copy:** "${capturedElement.text}"`,
     capturedElement.context?`- **Context:** ${capturedElement.context}`:'',
