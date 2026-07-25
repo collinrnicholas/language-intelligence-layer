@@ -8,6 +8,14 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.31
+
+Fix the brief-view footer (brief-view section 4). It is now two items on one
+row, vertically centred, no wrapping: the ink-filled primary "Back to variants"
+and the quiet secondary "Copy brief as JSON". The orphaned "Not connected in
+this prototype" label is gone. The footer is pinned by layout (flex, not
+position:fixed) — the same treatment as the results footer.
+
 ## 0.6.30
 
 Consolidate the duplicated handoff action (brief-view section 3). The brief's
