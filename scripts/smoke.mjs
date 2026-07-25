@@ -235,25 +235,14 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
 
 // ── 11. no deprecated purple survives on rebuilt surfaces ─────────
 {
-  const banned = ['#5C2D91', '#E8388C', '--prp', '--grad'];
-  // The results screen (1d) is NOT rebuilt yet, so its rules and markup may still
-  // reference the deprecated palette. Every such survivor must be listed here, so
-  // the list itself is the to-do — anything unlisted fails.
-  const NOT_YET_REBUILT = [
-    '--prp:', '--mag:', '--grad:',        // the alias declarations themselves
-    'DEPRECATED',                          // the comment marking them
-    '.rec-card .rh', '.rec-card .rn',      // results variant cards
-    '.badge.lift',                         // results lift pill
-    'Recommendations',                     // results section heading markup
-  ];
-  const resultsAt = HTML.indexOf('id="panelResults"');
+  // Every screen is now rebuilt on the token system — the whole file is covered,
+  // no results exemption. Re-introducing any of these anywhere fails the build.
+  const banned = ['#5C2D91', '#E8388C', '--prp', '--mag', '--grad'];
   const lineAt = (i) => HTML.slice(HTML.lastIndexOf('\n', i) + 1, HTML.indexOf('\n', i));
   for (const tok of banned) {
     for (const m of HTML.matchAll(new RegExp(tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))) {
-      if (resultsAt >= 0 && m.index > resultsAt) continue;        // inside results markup
       const line = lineAt(m.index);
-      if (NOT_YET_REBUILT.some(a => line.includes(a))) continue;
-      fail('deprecated purple', `${tok} on a rebuilt surface → ${line.trim().slice(0, 70)}`);
+      fail('deprecated palette', `${tok} on a rebuilt surface → ${line.trim().slice(0, 70)}`);
     }
   }
   if (HTML.indexOf('</style>') < 0) fail('sidepanel.html', 'no </style> found');

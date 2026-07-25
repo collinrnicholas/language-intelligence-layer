@@ -8,6 +8,19 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.16
+
+Purge the deprecated purple/magenta palette (results screen, part 3).
+
+- Deleted the `--prp` / `--mag` / `--grad` alias declarations from `:root` — the
+  results heading was their last consumer, removed in 0.6.15.
+- `scripts/smoke.mjs`: removed the `NOT_YET_REBUILT` allowlist and the `resultsAt`
+  skip, so the banned-token check (`#5C2D91`, `#E8388C`, `--prp`, `--mag`,
+  `--grad`) now covers the ENTIRE `sidepanel.html`, results markup included.
+  Verified: reintroducing `#5C2D91` inside the results markup now fails the build.
+
+---
+
 ## 0.6.15
 
 Results screen (1d) rebuilt to the Claude Design layout (part 2).
