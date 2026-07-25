@@ -244,6 +244,12 @@ btnNew.addEventListener('click',()=>{
 async function init() {
   await detectPage();
 
+  // Show version from manifest
+  try {
+    const manifest = chrome.runtime.getManifest();
+    document.getElementById('versionTag').textContent = 'v' + manifest.version;
+  } catch {}
+
   // Check if recording was active when popup closed
   try {
     const stored = await chrome.storage.local.get(['persado:recording','persado:transcript']);
