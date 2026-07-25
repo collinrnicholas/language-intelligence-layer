@@ -39,3 +39,7 @@ memory-digest.md
 
 # ─── OS noise ────────────────────────────────────────────────────
 .DS_Store
+
+# Throwaway verification harnesses (extension/_*.html). Never committed —
+# CONTRIBUTING.md anti-sprawl rule. Regenerate them when testing.
+extension/_*.html

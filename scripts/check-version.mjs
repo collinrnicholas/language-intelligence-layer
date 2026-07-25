@@ -20,6 +20,9 @@ const CHANGELOG = 'CHANGELOG.md';
 // Directories whose contents are shipped to users. Changes here require a bump;
 // docs/ and scripts/ do not.
 const SHIPPED = /^(extension|gateway)\//;
+// Paths under those trees that are NOT shipped: throwaway verification harnesses
+// (gitignored, regenerated per session). Adding or removing one is not a release.
+const NOT_SHIPPED = [/^extension\/_[^/]*\.html$/];
 
 const staged = process.argv.includes('--staged');
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' });
@@ -33,7 +36,7 @@ const gt = (a, b) => {
 const changed = git('diff', '--name-only', ...(staged ? ['--cached'] : []), 'HEAD')
   .split('\n').map(s => s.trim()).filter(Boolean);
 
-const shipped = changed.filter(f => SHIPPED.test(f));
+const shipped = changed.filter(f => SHIPPED.test(f) && !NOT_SHIPPED.some(re => re.test(f)));
 if (!shipped.length) {
   console.log('version gate: no shipped code changed — no bump required');
   process.exit(0);
