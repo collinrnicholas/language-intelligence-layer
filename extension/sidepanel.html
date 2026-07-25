@@ -133,6 +133,11 @@
     .res-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;border-top:1px solid var(--border);}
     .res-foot>*{flex:none;height:34px;white-space:nowrap;}
     .res-foot .btn-quiet{display:inline-flex;align-items:center;}
+    /* Re-record is a red, destructive-ish action with a rotate glyph (typographic,
+       not an emoji). Scoped to .res-foot so it outranks the grey .btn-quiet:hover. */
+    .res-foot .re-record{color:var(--red);gap:6px;}
+    .res-foot .re-record:hover{color:var(--red);opacity:.8;}
+    .re-ico{font-size:14px;line-height:1;}
     .portal-ok{flex:none;margin-top:12px;padding:12px 14px;background:var(--green-bg);border:1px solid var(--green);border-radius:10px;}
     .portal-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--green-text);}
     .portal-x{margin-left:auto;background:none;border:none;font-family:var(--sans);font-size:11px;font-weight:600;color:var(--green-text);cursor:pointer;padding:2px 4px;text-decoration:underline;}
@@ -587,8 +592,8 @@
   </div>
 
   <div class="res-foot">
-    <button class="btn-quiet" id="btnNewBrief">Re-record brief</button>
-    <button class="btn btn-primary btn-sm" id="btnSendPortal">Send to Motivation AI</button>
+    <button class="btn-quiet re-record" id="btnNewBrief"><span class="re-ico" aria-hidden="true">↻</span>Re-record brief</button>
+    <button class="btn btn-outline btn-sm" id="btnSendPortal">Send to Motivation AI</button>
   </div>
 </div>
 

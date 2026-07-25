@@ -8,6 +8,14 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.38
+
+Results footer restyle (results-screen section 7). The handoff button (kept as
+the consolidated "Send to Motivation AI" from 0.6.30) is now an OUTLINED button
+— dark text on white — rather than ink-filled. "Re-record brief" is now a red
+action with a rotate glyph (typographic, not an emoji). Both stay on one
+vertically-centred row, no wrapping, pinned by layout.
+
 ## 0.6.37
 
 One combined disclaimer above the results footer (results-screen section 6).
