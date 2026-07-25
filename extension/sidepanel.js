@@ -970,19 +970,39 @@ async function init(){
   // discoverable on hover instead of adding a visible element back.
   try{$('brandLockup').title='Persado Capture v'+chrome.runtime.getManifest().version;}catch{}
   refreshOfflineHint();
-  await offerResume();
+  // A pending unsent brief means a recording that was STOPPED and failed to
+  // transcribe — so the page is not recording. Honour that offer and stop; do not
+  // let the recording branch below override it (its return value was discarded before).
+  if(await offerResume()){setUiState('ready');return;}
+  // No recording runs for hours; a flag older than this is a leftover, not a session.
+  const STALE_RECORDING_MS=2*60*60*1000;
   try{const s=await chrome.storage.local.get([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
     if(s[KEYS.RECORDING]){
-      // Reopened mid-session: content.js is still recording and still posting
-      // levels/transcript, so reattach the live UI and pick the clock back up.
-      recSec=Math.max(0,Math.round((Date.now()-(s[KEYS.RECORDING_START]||Date.now()))/1000));
-      recStatus.textContent=LISTENING;
-      renderTranscript();renderShots([],0);
-      startWave();ut(recSec);runTimer();
-      setUiState('recording');
-      try{const c=await chrome.runtime.sendMessage({type:MSG.GET_PAGE_CONTEXT});
-        const cf=c?.[CTX.FRAMES];if(cf?.length)renderShots(cf.map(f=>f.thumb),cf.length);}catch{}
-      return;
+      // KEYS.RECORDING is a CLAIM, not a fact. Verify the page is ACTUALLY recording
+      // before mounting the live UI — a stale flag (extension reload, page nav,
+      // worker restart) otherwise resurrects a ghost session over a dead recorder.
+      const startedAt=s[KEYS.RECORDING_START]||0;
+      let live=false;
+      if(startedAt && Date.now()-startedAt<STALE_RECORDING_MS){
+        try{const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
+          if(tab?.id){const hello=await chrome.tabs.sendMessage(tab.id,{type:MSG.PING}).catch(()=>null);
+            live=!!(hello?.ok&&hello.version===CONTENT_VERSION&&hello.recording);}}catch{}
+      }
+      if(live){
+        // Genuinely mid-session: content.js is recording and still posting levels/
+        // transcript, so reattach the live UI and pick the clock back up.
+        recSec=Math.max(0,Math.round((Date.now()-startedAt)/1000));
+        recStatus.textContent=LISTENING;
+        renderTranscript();renderShots([],0);
+        startWave();ut(recSec);runTimer();
+        setUiState('recording');
+        try{const c=await chrome.runtime.sendMessage({type:MSG.GET_PAGE_CONTEXT});
+          const cf=c?.[CTX.FRAMES];if(cf?.length)renderShots(cf.map(f=>f.thumb),cf.length);}catch{}
+        return;
+      }
+      // Stale, expired, or unverifiable → clear the ghost flag and fall through to Ready.
+      console.warn('[persado] stale recording flag (page not recording) — clearing');
+      await chrome.storage.local.remove([KEYS.RECORDING,KEYS.RECORDING_START]);
     }
     if(s[KEYS.TRANSCRIPT]){
       narrationTranscript=s[KEYS.TRANSCRIPT];

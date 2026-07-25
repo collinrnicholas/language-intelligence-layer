@@ -8,6 +8,24 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.12
+
+Part 4 — stale session state no longer resurrects a ghost recording.
+
+- On open, `KEYS.RECORDING` is treated as a CLAIM, not a fact: the panel PINGs the
+  content script and only reattaches the live UI if the page reports it is actually
+  recording (matching CONTENT_VERSION). Otherwise the flag is cleared and the panel
+  returns to Ready instead of mounting a live-looking screen over a dead recorder.
+- `offerResume()`'s result is now respected: a pending unsent brief (a stopped,
+  un-transcribed recording) shows its resume card and returns, instead of being
+  overridden by the recording-resume branch a few lines later.
+- A `KEYS.RECORDING` flag older than 2 hours is treated as leftover and cleared.
+
+Verified: stale flag with a non-recording page → Ready (flag cleared); a genuinely
+recording page → recording mounted; a >2h flag → Ready; no flag → Ready.
+
+---
+
 ## 0.6.11
 
 Part 3 — never render an empty panel.
