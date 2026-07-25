@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Persado Demo",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "Persado Marketing Brief Demo — record your marketing problem, get AI-optimized compliant copy variants.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "offscreen",
     "sidePanel"
   ],
   "host_permissions": [

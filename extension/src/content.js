@@ -1,22 +1,67 @@
-// ─── Persado Demo — Content Script (minimal) ─────────────────────
+// ─── Persado Demo — Content Script ───────────────────────────────
 //
-// Only job: relay element-capture messages from the injected picker
-// back to the extension background worker. No recording, no DOM
-// snapshots, no click tracking.
+// Owns getUserMedia (runs in page context — Chrome shows proper
+// mic permission prompt). Manages MediaRecorder directly.
+// Same approach as Loupe.
 
-console.log('[Persado Demo] Content script loaded');
+let mediaRecorder = null;
+let mediaStream = null;
+let audioChunks = [];
 
-// Listen for messages from the injected element picker (runs in page
-// main world via scripting.executeScript).
-window.addEventListener('message', (event) => {
-  // Only accept messages from our own picker
-  if (event.source !== window) return;
-  if (!event.data || event.data.source !== 'persado-picker') return;
-
-  if (event.data.type === 'PERSADO_ELEMENT_CAPTURED') {
-    chrome.runtime.sendMessage({
-      type: 'PERSADO_ELEMENT_CAPTURED',
-      element: event.data.element,
-    });
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'START_RECORDING') {
+    startRecording()
+      .then(() => sendResponse({ ok: true }))
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
   }
+
+  if (msg.type === 'STOP_RECORDING') {
+    stopRecording()
+      .then(dataUrl => sendResponse({ ok: true, audioData: dataUrl }))
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  return false;
 });
+
+async function startRecording() {
+  if (mediaRecorder) return;
+
+  mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  audioChunks = [];
+
+  mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+
+  return new Promise((resolve, reject) => {
+    mediaRecorder.onstart = () => resolve();
+    mediaRecorder.onerror = () => reject(new Error('MediaRecorder error'));
+    mediaRecorder.start(100);
+  });
+}
+
+async function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state !== 'recording') {
+    throw new Error('Recorder not active');
+  }
+
+  return new Promise((resolve, reject) => {
+    mediaRecorder.onstop = () => {
+      if (audioChunks.length === 0) {
+        reject(new Error('No audio captured'));
+        return;
+      }
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Failed to read audio'));
+      reader.readAsDataURL(blob);
+
+      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+      mediaRecorder = null;
+    };
+    mediaRecorder.stop();
+  });
+}

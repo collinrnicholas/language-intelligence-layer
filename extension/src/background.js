@@ -1,8 +1,9 @@
 // ─── Persado Demo — Background Worker ────────────────────────────
+//
+// Relays recording commands to content script (which owns getUserMedia).
+// Transcribes audio via gateway Whisper endpoint.
 
 const GATEWAY = 'http://localhost:8787';
-
-// ─── Side Panel ──────────────────────────────────────────────────
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
@@ -12,28 +13,11 @@ function safeSend(msg) {
   chrome.runtime.sendMessage(msg).catch(() => {});
 }
 
-// ─── Offscreen ───────────────────────────────────────────────────
-
-async function ensureOffscreen() {
-  if (await chrome.offscreen.hasDocument()) return;
-  await chrome.offscreen.createDocument({
-    url: 'offscreen/index.html',
-    reasons: ['USER_MEDIA'],
-    justification: 'Record narration for Persado marketing brief',
-  });
-  // Wait for offscreen script to load and register listener
-  await new Promise(r => setTimeout(r, 300));
-}
-
-async function closeOffscreen() {
-  try { if (await chrome.offscreen.hasDocument()) await chrome.offscreen.closeDocument(); } catch {}
-}
-
 // ─── Transcription ───────────────────────────────────────────────
 
 async function transcribe(dataUrl) {
   const blob = await fetch(dataUrl).then(r => r.blob());
-  if (blob.size < 100) throw new Error('Audio too short or empty — no speech captured');
+  if (blob.size < 100) throw new Error('Audio too short — no speech detected');
   const fd = new FormData();
   fd.append('file', blob, 'narration.webm');
   const r = await fetch(GATEWAY + '/v1/ai/transcribe', { method: 'POST', body: fd });
@@ -47,28 +31,22 @@ async function transcribe(dataUrl) {
   return (await r.json()).text || '(no speech detected)';
 }
 
+// ─── Content script relay ────────────────────────────────────────
+
+async function sendToActiveTab(msg) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) throw new Error('No active tab');
+  return chrome.tabs.sendMessage(tab.id, msg);
+}
+
 // ─── Messages ────────────────────────────────────────────────────
 
 let pendingSend = null;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  // Offscreen callbacks — relay to sidepanel
-  if (msg.type === 'RECORDING_STARTED') {
-    chrome.storage.local.set({ 'persado:recordingStart': Date.now() });
-    safeSend(msg);
-    return false;
-  }
-
-  if (msg.type === 'RECORDING_ERROR') {
-    chrome.storage.local.remove('persado:recording');
-    if (pendingSend) { pendingSend({ ok: false, error: msg.error }); pendingSend = null; }
-    safeSend(msg);
-    closeOffscreen();
-    return false;
-  }
-
-  if (msg.type === 'AUDIO_CAPTURED' && msg.audioData) {
-    transcribe(msg.audioData)
+  // Audio blob from content script → transcribe
+  if (msg.type === 'AUDIO_BLOB' && msg.data) {
+    transcribe(msg.data)
       .then(text => {
         chrome.storage.local.set({ 'persado:transcript': text });
         chrome.storage.local.remove('persado:recording');
@@ -81,29 +59,50 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (pendingSend) { pendingSend({ ok: false, error: err.message }); pendingSend = null; }
         safeSend({ type: 'TRANSCRIPT_ERROR', error: err.message });
       });
-    closeOffscreen();
     return false;
   }
 
-  // Sidepanel: start one-shot recording
+  // Sidepanel: start recording → forward to content script
   if (msg.type === 'START_RECORDING_ONCE') {
-    ensureOffscreen().then(() => {
-      safeSend({ type: 'START_RECORDING' });
-    }).catch(err => {
-      safeSend({ type: 'RECORDING_ERROR', error: 'Microphone access failed: ' + err.message });
-    });
-    return false;
+    sendToActiveTab({ type: 'START_RECORDING' })
+      .then(r => {
+        if (r?.ok) {
+          chrome.storage.local.set({ 'persado:recording': true, 'persado:recordingStart': Date.now() });
+          safeSend({ type: 'RECORDING_STARTED' });
+          sendResponse({ ok: true });
+        } else {
+          safeSend({ type: 'RECORDING_ERROR', error: r?.error || 'Failed to start recording' });
+          sendResponse({ ok: false, error: r?.error || 'Failed to start recording' });
+        }
+      })
+      .catch(err => {
+        safeSend({ type: 'RECORDING_ERROR', error: err.message });
+        sendResponse({ ok: false, error: err.message });
+      });
+    return true;
   }
 
-  // Sidepanel: stop + transcribe
+  // Sidepanel: stop recording → forward to content script
   if (msg.type === 'STOP_AND_TRANSCRIBE') {
     pendingSend = sendResponse;
-    safeSend({ type: 'STOP_RECORDING' });
+    sendToActiveTab({ type: 'STOP_RECORDING' })
+      .then(r => {
+        if (!r?.ok) {
+          pendingSend({ ok: false, error: r?.error || 'Failed to stop recording' });
+          pendingSend = null;
+        }
+        // If ok, wait for AUDIO_BLOB → transcribe → resolve
+      })
+      .catch(err => {
+        pendingSend({ ok: false, error: err.message });
+        pendingSend = null;
+      });
+
+    // Timeout
     setTimeout(() => {
       if (pendingSend) {
         pendingSend({ ok: false, error: 'Transcription timed out after 20s' });
         pendingSend = null;
-        closeOffscreen();
       }
     }, 20000);
     return true;

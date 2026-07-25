@@ -16,9 +16,6 @@ const pageUrlEl      = $('pageUrl');
 const audienceSelect = $('audience');
 const goalSelect     = $('goal');
 const btnStart       = $('btnStart');
-const btnAllowMic    = $('btnAllowMic');
-const micGate        = $('micGate');
-const micStatus      = $('micStatus');
 
 // ─── Record ──────────────────────────────────────────────────────
 const btnRecord      = $('btnRecord');
@@ -122,25 +119,6 @@ chrome.runtime.onMessage.addListener((msg) => {
     btnStopRec.style.display = 'none';
     btnRecord.style.display = 'none';
     status('Ready');
-  }
-});
-
-// ─── Mic permission gate ─────────────────────────────────────────
-
-btnAllowMic.addEventListener('click', async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(t => t.stop());
-    micGate.style.display = 'none';
-    micStatus.style.display = 'block';
-    btnStart.style.display = '';
-  } catch (err) {
-    let msg = err.message;
-    if (err.name === 'NotAllowedError') msg = 'Permission denied. Click the lock icon in the address bar → allow microphone, then try again.';
-    if (err.name === 'NotFoundError') msg = 'No microphone detected. Connect a mic and try again.';
-    micStatus.textContent = '⚠ ' + msg;
-    micStatus.style.color = '#EF4444';
-    micStatus.style.display = 'block';
   }
 });
 
@@ -309,9 +287,6 @@ btnNew.addEventListener('click',()=>{
   btnRecord.style.display='';btnStopRec.style.display='none';
   recTimer.style.display='none';recStatus.textContent='';recStatus.style.color='';
   stopTimer();
-  micGate.style.display = '';
-  micStatus.style.display = 'none';
-  btnStart.style.display = '';
   chrome.storage.local.remove(['persado:recording','persado:transcript','persado:recordingStart']);
   show(pnlConfig);status('Ready');
 });
