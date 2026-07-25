@@ -8,6 +8,20 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.27
+
+Visible indicator when screen capture is ON (section 3).
+
+- A quiet header pill — a small red dot + `Screen capture on` — shows whenever
+  capture is enabled, consistent with the demo-mode flag treatment. The header is
+  shared, so it is present on the start and recording screens (and everywhere
+  else); someone whose screen is being captured is never unaware of it.
+- The header flags + status chip are grouped in a right-aligned row; the demo flag
+  keeps its dashed-amber look. Single line, no overflow at 360px even alongside the
+  RECORDING status.
+
+---
+
 ## 0.6.26
 
 Screen-capture flag reads from storage (sections 2 + 4).

@@ -24,7 +24,7 @@ const btnRecord=$('btnRecord'),btnStopRec=$('btnStopRec'),btnPause=$('btnPause')
 const recLive=$('recLive'),recRetry=$('recRetry'),recRetryMsg=$('recRetryMsg');
 const recTimer=$('recTimer'),recStatus=$('recStatus'),liveTranscript=$('liveTranscript');
 const wave=$('wave'),waveStatic=$('waveStatic'),waveStaticFill=$('waveStaticFill');
-const shotCount=$('shotCount'),shotStrip=$('shotStrip'),recScreens=$('recScreens'),briefScreens=$('briefScreens'),privacyNote=$('privacyNote');
+const shotCount=$('shotCount'),shotStrip=$('shotStrip'),recScreens=$('recScreens'),briefScreens=$('briefScreens'),privacyNote=$('privacyNote'),captureFlag=$('captureFlag');
 const stepScreensLabel=$('stepScreensLabel');
 const transcriptBlock=$('transcriptBlock'),transcriptText=$('transcriptText');
 const pnlProcess=$('panelProcess');
@@ -65,6 +65,9 @@ async function readStoredCapture(){
 }
 /** Apply everything that depends on the capture flag (screens sections, privacy). */
 function applyCaptureUI(){
+  // A persistent header indicator whenever capture is on — someone whose screen is
+  // being captured must never be unaware of it.
+  captureFlag.style.display=CAPTURE_SCREENSHOTS?'':'none';
   recScreens.style.display=CAPTURE_SCREENSHOTS?'':'none';
   briefScreens.style.display=CAPTURE_SCREENSHOTS?'':'none';
   privacyNote.textContent=CAPTURE_SCREENSHOTS

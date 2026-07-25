@@ -44,8 +44,12 @@
     .hdr-st.work{color:var(--amber-text);}
     .hdr-st.work .dot{background:var(--amber);}
 
-    /* Demo-mode indicator — unobtrusive but always present when canned. */
-    .demo-flag{margin-left:auto;margin-right:10px;padding:2px 8px;border:1px dashed var(--amber);border-radius:999px;background:var(--amber-bg);color:var(--amber-text);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
+    /* Header flags (demo mode, screen-capture-on) — quiet, muted, unmissable if
+       you look. Consistent pill treatment, sitting left of the status chip. */
+    .hdr-right{display:flex;align-items:center;gap:10px;}
+    .hdr-flag{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
+    .hdr-flag.demo{border-style:dashed;border-color:var(--amber);background:var(--amber-bg);color:var(--amber-text);}
+    .hdr-flag.capture .cap-i{width:6px;height:6px;border-radius:50%;background:var(--red);flex:none;}
 
     .view{padding:24px 20px;}
     .panel{display:none;}.panel.active{display:block;}
@@ -352,8 +356,11 @@
 
 <div class="hdr">
   <div class="logo" id="brandLockup"><span class="br">[</span>Persado<span class="br">]</span></div>
-  <span class="demo-flag" id="demoFlag" style="display:none;">Demo mode</span>
-  <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
+  <div class="hdr-right">
+    <span class="hdr-flag capture" id="captureFlag" style="display:none;"><span class="cap-i"></span>Screen capture on</span>
+    <span class="hdr-flag demo" id="demoFlag" style="display:none;">Demo mode</span>
+    <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="fatal" id="fatalBanner" style="display:none;">
