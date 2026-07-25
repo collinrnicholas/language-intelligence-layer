@@ -8,6 +8,20 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.6.11
+
+Part 3 — never render an empty panel.
+
+- `setUiState` heals: if the coherence check ever finds the record panel blank
+  (neither live nor retry), it shows the retry card with "Recording stopped
+  unexpectedly. Try again." rather than nothing.
+- `paintable(state)` refuses to show the Brief or Results panel before its content
+  has been rendered (`briefFields` / `resultsContainer` empty), falling back to
+  Ready. Normal flow renders before switching, so this only catches a future
+  ordering bug.
+
+---
+
 ## 0.6.10
 
 Fix: recording screen could render blank while the header still said RECORDING.

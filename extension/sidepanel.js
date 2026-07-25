@@ -79,15 +79,30 @@ const UI_STATES={
   results:     {panel:pnlResults, header:'Done'},
 };
 let uiState=null;
+// A panel must not be shown before its content is rendered. brief/results are
+// filled by renderBrief()/renderResults() immediately before the switch; if that
+// order is ever broken, fall back to Ready rather than showing an empty screen.
+function paintable(state){
+  if(state==='brief')   return briefFields.childElementCount>0;
+  if(state==='results') return resultsContainer.childElementCount>0;
+  return true;   // config/record/process contents are static markup, always present
+}
 function setUiState(state){
   const s=UI_STATES[state];
   if(!s){console.error('[persado] setUiState: unknown state',state);return;}
+  if(!paintable(state)){console.error('[persado] setUiState('+state+') before its content was rendered → Ready');return setUiState('ready');}
   uiState=state;
   sh(s.panel);
   st(s.header);
   recLive.classList.toggle('on',!!s.live);
   recRetry.style.display=s.retry?'':'none';
-  assertUiCoherent();
+  // Part 3: a blank record panel is never a valid end state. If the invariants are
+  // ever violated (a future bug), heal to the visible retry rather than show nothing.
+  if(assertUiCoherent().some(p=>p.includes('blank'))){
+    recRetryMsg.textContent='Recording stopped unexpectedly. Try again.';
+    recRetry.style.display='';recLive.classList.remove('on');
+    console.warn('[persado] healed a blank record panel → retry');
+  }
 }
 
 // Dev-time invariant: it must be impossible to show RECORDING without the live UI
