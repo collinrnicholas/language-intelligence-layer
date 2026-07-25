@@ -3,662 +3,370 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=400, user-scalable=no">
-  <title>Loupe</title>
+  <title>Persado Demo</title>
   <link rel="icon" type="image/png" sizes="16x16" href="../icon16.png">
   <link rel="icon" type="image/png" sizes="32x32" href="../icon32.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --ink: #101317; --green: #12C97E; --green-press: #0FB070; --on-green: #08231A;
-      --green-text: #12996A; --green-text-strong: #0F9D63; --green-tint: #E7F8F0;
-      --surface: #FFFFFF; --surface-sunken: #F7F8F9; --fill-ghost: #F1F2F4;
-      --text-primary: #101317; --text-secondary: #374151; --text-body: #6B7280; --text-muted: #9AA0A6;
-      --text-on-ink: #FFFFFF; --text-on-ink-muted: #AEB6BF;
-      --border: #ECEEF1; --border-strong: #E6E8EB; --divider: #EEF0F2; --row-divider: #F3F4F6;
-      --danger: #E5432F; --danger-tint: #FDECEA;
-      --warning: #E8A23D; --warning-tint: #FEF6E7;
-      --r-card: 12px; --r-control: 10px;
-      --font-ui: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'Spline Sans Mono', 'SF Mono', monospace;
-    }
-    html[data-theme="dark"] {
-      --ink: #0B0D10; --green-tint: #0F2A1F; --green-text: #34D399; --green-text-strong: #34D399;
-      --surface: #14171C; --surface-sunken: #0F1216; --fill-ghost: #1C2026;
-      --text-primary: #F2F4F7; --text-secondary: #C9CED6; --text-body: #9AA0A6; --text-muted: #6B7280;
-      --border: #23272E; --border-strong: #2B3038; --divider: #1E2228; --row-divider: #1A1E24;
-      --danger-tint: #2E1512; --warning-tint: #2C2110;
+      --persado-purple: #5C2D91;
+      --persado-magenta: #E8388C;
+      --persado-deep: #2D1154;
+      --persado-dark: #1A1128;
+      --persado-gradient: linear-gradient(135deg, #5C2D91 0%, #E8388C 100%);
+
+      --surface: #FFFFFF;
+      --surface-muted: #F8F7FA;
+      --text-primary: #1A1128;
+      --text-secondary: #5C506C;
+      --text-muted: #9088A0;
+      --border: #E8E4F0;
+      --border-strong: #D4CCE0;
+
+      --green: #10B981;
+      --green-tint: #ECFDF5;
+      --red: #EF4444;
+      --red-tint: #FEF2F2;
+      --amber: #F59E0B;
+      --amber-tint: #FFFBEB;
+
+      --r-card: 12px;
+      --r-control: 8px;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 400px; font-family: var(--font-ui);
+      width: 400px; font-family: var(--font-sans);
       background: var(--surface); color: var(--text-primary);
-      font-size: 14px; line-height: 1.5; letter-spacing: -0.01em;
+      font-size: 13px; line-height: 1.5;
       overflow-x: hidden;
     }
 
-    /* ─── Header ───────────────────────────── */
+    /* Header */
     .header {
-      background: var(--ink); height: 48px; padding: 0 16px;
+      background: var(--persado-gradient);
+      height: 48px; padding: 0 16px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .logo-lockup { display: flex; align-items: center; gap: 9px; }
-    .logo-icon { width: 24px; height: 24px; display: block; }
-    .logo-wordmark { font-weight: 600; font-size: 17px; letter-spacing: -0.03em; color: var(--text-on-ink); }
+    .logo {
+      font-weight: 800; font-size: 18px; letter-spacing: -0.02em;
+      color: #FFFFFF;
+    }
+    .logo .demo-badge {
+      font-size: 9px; font-weight: 500; opacity: 0.7;
+      margin-left: 6px; letter-spacing: 0.04em;
+    }
     .header-status {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-family: var(--font-mono); font-size: 10px; color: var(--text-on-ink-muted);
+      font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,0.7);
+      display: flex; align-items: center; gap: 5px;
     }
-    .header-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
-    .header-status.rec .dot { background: var(--danger); animation: pulse 1.4s ease-in-out infinite; }
+    .header-status .dot { width: 5px; height: 5px; border-radius: 50%; background: #fff; }
+    .header-status.rec .dot { background: var(--red); animation: pulse 1.4s ease-in-out infinite; }
 
-    /* ─── Nav ──────────────────────────────── */
-    .nav {
-      display: flex; border-bottom: 1px solid var(--divider);
-      background: var(--surface);
-    }
-    .nav-tab {
-      position: relative; flex: 1; background: none; border: none; cursor: pointer;
-      font-family: var(--font-ui); font-size: 12.5px; font-weight: 500;
-      color: var(--text-muted); padding: 10px 0; letter-spacing: -0.01em;
-      text-align: center;
-    }
-    .nav-tab:hover { color: var(--text-secondary); }
-    .nav-tab.active { color: var(--text-primary); font-weight: 600; }
-    .nav-tab.active::after {
-      content: ''; position: absolute; left: 18px; right: 18px; bottom: -1px;
-      height: 2px; border-radius: 2px; background: var(--green);
-    }
-    .nav-tab .tab-dot {
-      display: none; position: absolute; top: 9px; right: 12px;
-      width: 5px; height: 5px; border-radius: 50%; background: var(--danger);
-    }
-    .nav-tab.has-dot .tab-dot { display: block; animation: pulse 1.4s ease-in-out infinite; }
-
-    /* ─── Layout ───────────────────────────── */
-    .view { display: none; padding: 14px 16px 16px; max-height: 460px; overflow-y: auto; }
+    /* Content */
+    .view { display: none; padding: 16px; max-height: 460px; overflow-y: auto; }
     .view.active { display: block; }
     .panel { display: none; }
     .panel.active { display: block; }
 
-    .footer {
-      border-top: 1px solid var(--divider); height: 34px;
-      padding: 0 16px; display: flex; align-items: center; justify-content: space-between;
-    }
-    .footer-hint { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
-
-    /* ─── Fields ───────────────────────────── */
-    .field { margin-bottom: 10px; }
+    /* Fields */
+    .field { margin-bottom: 12px; }
     .field label {
-      display: block; font-family: var(--font-mono); font-size: 10px;
-      font-weight: 500; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 4px;
+      display: block; font-family: var(--font-mono); font-size: 9px;
+      font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px;
     }
-    .field input, .field select {
+    .field input, .field select, .field textarea {
       width: 100%; padding: 9px 12px; border: 1px solid var(--border);
-      border-radius: var(--r-control); font-family: var(--font-ui);
+      border-radius: var(--r-control); font-family: var(--font-sans);
       font-size: 13px; color: var(--text-primary); background: var(--surface);
       outline: none; transition: border-color 0.16s;
     }
-    .field input:focus, .field select:focus {
-      border-color: var(--green); box-shadow: 0 0 0 3px rgba(18, 201, 126, 0.12);
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: var(--persado-purple);
+      box-shadow: 0 0 0 3px rgba(92, 45, 145, 0.1);
     }
-    .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
-    .field input.mono { font-family: var(--font-mono); font-size: 12px; }
+    .field textarea { resize: vertical; min-height: 60px; font-size: 12px; }
+    .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+    .field-row { display: flex; gap: 8px; }
+    .field-row .field { flex: 1; }
 
-    /* ─── Output card ──────────────────────── */
-    .output-card {
-      border: 1px solid var(--border); border-radius: var(--r-card);
-      padding: 11px 13px; margin: 12px 0 14px; background: var(--surface-sunken);
-    }
-    .output-card .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
-    .output-card .card-label {
-      font-family: var(--font-mono); font-size: 9px; font-weight: 500;
-      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.12em;
-    }
-    .output-card .card-path {
-      font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .output-card .card-desc { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
-    .link-btn {
-      background: none; border: none; font-family: var(--font-ui);
-      font-size: 11.5px; font-weight: 500; color: var(--green-text);
-      cursor: pointer; padding: 0;
-    }
-    .link-btn:hover { opacity: 0.8; }
-    .link-btn.danger { color: var(--danger); }
-
-    /* ─── Buttons ──────────────────────────── */
+    /* Buttons */
     .btn {
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      border: none; border-radius: var(--r-card); font-family: var(--font-ui);
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      letter-spacing: -0.01em; padding: 12px 18px; transition: all 0.16s;
-      width: 100%; height: 44px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      border: none; border-radius: var(--r-control); font-family: var(--font-sans);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      letter-spacing: -0.01em; padding: 10px 16px;
+      transition: all 0.16s; height: 40px;
     }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-green { background: var(--green); color: var(--on-green); }
-    .btn-green:hover:not(:disabled) { background: var(--green-press); }
-    .btn-ink { background: var(--ink); color: #FFFFFF; }
-    .btn-ink:hover:not(:disabled) { opacity: 0.92; }
-    html[data-theme="dark"] .btn-ink { background: #F2F4F7; color: #101317; }
-    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-block { width: 100%; }
+    .btn-primary {
+      background: var(--persado-gradient); color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent; border: 1px solid var(--border-strong);
+      color: var(--text-primary);
+    }
+    .btn-outline:hover:not(:disabled) { background: var(--surface-muted); }
+    .btn-danger { background: var(--red); color: #fff; }
     .btn-danger:hover:not(:disabled) { opacity: 0.9; }
-    .btn-outline { background: transparent; border: 1px solid var(--border-strong); color: var(--text-primary); }
-    .btn-outline:hover:not(:disabled) { background: var(--fill-ghost); }
+    .btn-sm { height: 32px; padding: 6px 12px; font-size: 11.5px; }
     .btn-ghost {
-      background: none; border: none; font-family: var(--font-ui);
-      font-size: 13px; font-weight: 500; color: var(--text-muted); cursor: pointer; padding: 4px 0;
+      background: none; border: none; font-family: var(--font-sans);
+      font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer;
     }
-    .btn-ghost:hover { color: var(--green-text); }
+    .btn-ghost:hover { color: var(--persado-purple); }
 
-    /* ─── Capture panels ───────────────────── */
-    /* status-pill remains only for the recovered-recording banner */
-    .status-pill {
-      display: inline-flex; align-items: center; gap: 7px;
-      padding: 5px 11px; border-radius: 20px;
-      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
-      margin-bottom: 12px;
-    }
-    .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
-
-    .rec-header {
+    /* Recording banner */
+    .rec-banner {
       display: flex; align-items: center; gap: 10px;
-      padding: 9px 12px; background: var(--danger-tint);
-      border-radius: var(--r-card); margin-bottom: 12px;
+      padding: 10px 14px; background: var(--red-tint);
+      border-radius: var(--r-card); border: 1px solid rgba(239,68,68,0.2);
+      margin-bottom: 14px;
     }
-    .rec-header .rec-dot {
+    .rec-banner .rec-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--danger); animation: pulse 1.4s ease-in-out infinite;
+      background: var(--red); animation: pulse 1.4s ease-in-out infinite;
     }
-    .rec-header .rec-label { font-weight: 600; font-size: 13px; color: var(--danger); }
-    .rec-header .rec-timer {
-      margin-left: auto; font-family: var(--font-mono);
-      font-size: 15px; font-weight: 500; color: var(--danger);
-    }
-    .rec-header .rec-stop-dot {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: var(--danger); border: none; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .rec-header .rec-stop-dot svg { width: 11px; height: 11px; fill: #fff; }
-    .rec-url {
-      background: var(--surface-sunken); border: 1px solid var(--border);
-      border-radius: var(--r-control); padding: 8px 12px; margin-bottom: 12px;
-      font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
+    .rec-banner .rec-label { font-weight: 700; font-size: 13px; color: var(--red); }
+    .rec-banner .rec-timer { margin-left: auto; font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--red); }
+
+    /* Stats */
     .stat-grid { display: grid; gap: 6px; margin-bottom: 12px; }
     .stat-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-    .stat-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-    .stat-grid.cols-2 { grid-template-columns: 1fr 1fr; }
-    .stat-grid .h-item {
-      background: var(--surface-sunken); border: 1px solid var(--border);
+    .stat-grid .stat {
+      background: var(--surface-muted); border: 1px solid var(--border);
       border-radius: var(--r-control); padding: 8px; text-align: center;
     }
-    .stat-grid .h-val {
-      font-family: var(--font-mono); font-size: 15px; font-weight: 600;
-      color: var(--text-primary); line-height: 1.1;
-    }
-    .stat-grid .h-lbl {
-      font-family: var(--font-mono); font-size: 9px; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px;
-    }
-    .stat-grid .h-item.ping .h-val { color: var(--green); }
-    .rec-actions { display: flex; gap: 8px; }
-    .rec-actions button { flex: 1; }
-    .target-capture { margin: 0 0 12px; }
-    .target-capture button { width: 100%; }
-    .target-hint { margin-top: 6px; font-size: 11px; line-height: 1.4; color: var(--text-secondary); }
-    .target-status { margin-top: 6px; font-size: 11.5px; font-weight: 600; color: var(--green-text-strong); }
-    .target-preview { display: block; margin-top: 8px; width: 100%; max-height: 120px; object-fit: contain;
-      border: 1px solid var(--border); border-radius: 8px; background: var(--surface-sunken); }
+    .stat .stat-val { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--persado-purple); }
+    .stat .stat-lbl { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
-    /* Saved */
-    .saved-wrap { text-align: center; padding: 8px 0 4px; }
-    .saved-check {
-      width: 46px; height: 46px; border-radius: 50%;
-      background: var(--green-tint); display: flex; align-items: center;
-      justify-content: center; margin: 0 auto 10px;
+    /* Captured element card */
+    .capture-card {
+      border: 1px solid var(--border-strong); border-radius: var(--r-card);
+      padding: 12px; margin-bottom: 14px; background: var(--surface-muted);
     }
-    .saved-check svg { width: 24px; height: 24px; color: var(--green); }
-    .saved-title { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
-    .saved-meta { font-size: 13px; color: var(--text-body); margin-bottom: 12px; }
-    .saved-actions { display: flex; flex-direction: column; gap: 6px; }
+    .capture-card .cc-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .capture-card .cc-label {
+      font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+      color: var(--persado-purple); text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .capture-card .cc-type {
+      font-size: 10px; font-weight: 600; color: var(--persado-magenta);
+      padding: 2px 8px; border-radius: 10px;
+      background: rgba(232,56,140,0.08);
+    }
+    .capture-card .cc-text {
+      font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+      color: var(--text-primary); margin-bottom: 4px; word-break: break-word;
+    }
+    .capture-card .cc-context {
+      font-size: 11px; color: var(--text-muted); line-height: 1.4;
+    }
 
-    /* Intent cards — what do you want to accomplish with this session? */
-    .intent-cards { display: flex; flex-direction: column; gap: 8px; text-align: left; }
-    .intent-card {
-      display: block; width: 100%; cursor: pointer;
+    /* Narration block */
+    .narration-block {
+      background: var(--surface-muted); border: 1px solid var(--border);
+      border-radius: var(--r-card); padding: 12px; margin-bottom: 14px;
+    }
+    .narration-block .nb-label {
+      font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .narration-block .nb-text {
+      font-size: 13px; color: var(--text-primary); line-height: 1.5;
+      font-style: italic;
+    }
+
+    /* Recommendation cards */
+    .rec-card {
       border: 1px solid var(--border); border-radius: var(--r-card);
-      background: var(--surface); padding: 11px 13px;
-      font-family: var(--font-ui); transition: all 0.14s;
+      margin-bottom: 10px; overflow: hidden;
     }
-    .intent-card:hover { border-color: var(--border-strong); background: var(--surface-sunken); }
-    .intent-card.primary { border-color: var(--green); background: var(--green-tint); }
-    .intent-card.primary:hover { box-shadow: 0 0 0 3px rgba(18, 201, 126, 0.15); }
-    .ic-head { display: flex; align-items: center; gap: 7px; }
-    .ic-icon { font-size: 13px; line-height: 1; }
-    .ic-title { font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
-    .ic-badge {
-      font-family: var(--font-mono); font-size: 8.5px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.08em;
-      padding: 2px 7px; border-radius: 10px;
-      background: var(--green); color: var(--on-green);
+    .rec-card .rc-header {
+      padding: 10px 13px;
+      background: linear-gradient(135deg, rgba(92,45,145,0.06) 0%, rgba(232,56,140,0.04) 100%);
+      border-bottom: 1px solid var(--border);
     }
-    .ic-badge.alt { background: var(--fill-ghost); color: var(--text-body); }
-    .ic-time {
-      margin-left: auto; font-family: var(--font-mono);
-      font-size: 10px; color: var(--text-muted);
+    .rec-card .rc-number {
+      font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+      color: var(--persado-purple); text-transform: uppercase; letter-spacing: 0.06em;
     }
-    .ic-desc { font-size: 11.5px; color: var(--text-body); line-height: 1.45; margin-top: 4px; }
-    .saved-links {
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      margin-top: 10px;
+    .rec-card .rc-variant {
+      font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+      color: var(--text-primary); margin-top: 4px; line-height: 1.4;
     }
-    .link-sep { color: var(--text-muted); font-size: 11px; }
+    .rec-card .rc-body { padding: 10px 13px; }
+    .rec-card .rc-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 6px;
+      font-size: 11px;
+    }
+    .rc-rationale { color: var(--text-secondary); line-height: 1.4; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--font-mono); font-size: 9.5px; font-weight: 600;
+      padding: 3px 8px; border-radius: 10px;
+    }
+    .badge.clear { background: var(--green-tint); color: #065F46; }
+    .badge.flag { background: var(--amber-tint); color: #92400E; }
+    .badge.lift {
+      background: linear-gradient(135deg, rgba(92,45,145,0.1) 0%, rgba(232,56,140,0.08) 100%);
+      color: var(--persado-purple); font-weight: 700;
+    }
+    .disclaimer {
+      background: var(--amber-tint); border: 1px solid rgba(245,158,11,0.25);
+      border-radius: var(--r-control); padding: 8px 11px;
+      font-size: 10.5px; color: #92400E; line-height: 1.45;
+      margin-top: 10px; font-weight: 500;
+    }
+    .disclaimer strong { color: #B45309; }
 
-    /* Mic intro */
-    .mic-wrap { text-align: center; padding: 22px 0 10px; }
-    .mic-icon {
-      width: 44px; height: 44px; border-radius: 50%; background: var(--green-tint);
-      display: flex; align-items: center; justify-content: center; margin: 0 auto 12px;
-      color: var(--green-text);
+    /* Loading */
+    .loading {
+      display: none; flex-direction: column; align-items: center;
+      padding: 30px 16px; gap: 12px;
     }
+    .loading.active { display: flex; }
+    .spinner {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 3px solid var(--border);
+      border-top-color: var(--persado-purple);
+      animation: spin 0.8s linear infinite;
+    }
+    .loading-text { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
-    /* ─── Lists (sessions / exports / recent) ── */
-    .row-line {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 2px; border-bottom: 1px solid var(--row-divider);
-    }
-    .row-line:last-child { border-bottom: none; }
-    .row-main { flex: 1; min-width: 0; }
-    .row-main .name {
-      font-size: 13px; font-weight: 500; overflow: hidden;
-      text-overflow: ellipsis; white-space: nowrap;
-    }
-    .row-main .sub {
-      font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px;
-    }
-    /* Flow line under a project name (sessions rows) — UI font, not mono */
-    .row-main .sub.plain { font-family: var(--font-ui); font-size: 11.5px; }
-    .row-time { font-size: 10.5px; color: var(--text-muted); font-family: var(--font-mono); flex-shrink: 0; }
-    .row-actions { display: flex; gap: 10px; flex-shrink: 0; }
-    .row-actions .link-btn { font-size: 11px; }
-    .chip {
-      font-family: var(--font-mono); font-size: 9px; padding: 2px 7px;
-      border-radius: 10px; background: var(--fill-ghost); color: var(--text-body);
-      flex-shrink: 0;
-    }
-    .chip.ok { background: var(--green-tint); color: var(--green-text-strong); }
-    .empty-state {
-      text-align: center; color: var(--text-muted); font-size: 12.5px;
-      padding: 28px 12px; line-height: 1.6;
-    }
-    .empty-state .big { font-size: 13.5px; font-weight: 600; color: var(--text-body); margin-bottom: 2px; }
+    /* Empty */
+    .empty-state { text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 
-    .toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-    .toolbar input[type="search"] {
-      width: 100%; padding: 8px 11px; border: 1px solid var(--border);
-      border-radius: var(--r-control); font-family: var(--font-ui); font-size: 12.5px;
-      color: var(--text-primary); background: var(--surface); outline: none;
+    /* Toast */
+    .toast {
+      display: none; padding: 8px 13px; border-radius: var(--r-control);
+      margin: 8px 16px 0; font-size: 11.5px; text-align: center; font-weight: 600;
     }
-    .toolbar input[type="search"]:focus { border-color: var(--green); }
-    .toolbar select {
-      width: 100%; padding: 8px 9px; border: 1px solid var(--border); border-radius: var(--r-control);
-      font-family: var(--font-ui); font-size: 12px; color: var(--text-secondary);
-      background: var(--surface); outline: none;
-    }
-    .filter-pills { display: flex; gap: 6px; }
-    .filter-pill {
-      flex: 1; padding: 5px 0; border-radius: 20px; cursor: pointer;
-      border: 1px solid var(--border); background: var(--surface);
-      font-family: var(--font-ui); font-size: 11.5px; font-weight: 500;
-      color: var(--text-body); transition: all 0.14s;
-    }
-    .filter-pill:hover { background: var(--fill-ghost); }
-    .filter-pill.active {
-      background: var(--green-tint); border-color: var(--green);
-      color: var(--green-text-strong); font-weight: 600;
-    }
+    .toast.ok { display: block; background: var(--green-tint); color: #065F46; }
+    .toast.err { display: block; background: var(--red-tint); color: var(--red); }
 
-    .section-title {
-      display: flex; align-items: center; justify-content: space-between;
-      font-family: var(--font-mono); font-size: 10px; font-weight: 500;
-      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.12em;
-      margin: 14px 0 6px;
-    }
-    .section-title:first-child { margin-top: 0; }
-
-    /* ─── Settings ─────────────────────────── */
-    .settings-group { margin-bottom: 16px; }
-    .toggle-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 0; gap: 12px;
-    }
-    .toggle-row .t-label { font-size: 13px; font-weight: 500; }
-    .toggle-row .t-sub { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
-    .switch { position: relative; width: 36px; height: 21px; flex-shrink: 0; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .switch .track {
-      position: absolute; inset: 0; border-radius: 20px; cursor: pointer;
-      background: var(--fill-ghost); border: 1px solid var(--border-strong); transition: all 0.16s;
-    }
-    .switch .track::after {
-      content: ''; position: absolute; top: 2px; left: 2px;
-      width: 15px; height: 15px; border-radius: 50%; background: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: transform 0.16s;
-    }
-    .switch input:checked + .track { background: var(--green); border-color: var(--green); }
-    .switch input:checked + .track::after { transform: translateX(15px); }
-    .settings-note {
-      font-size: 11px; color: var(--text-muted); line-height: 1.5;
-      background: var(--surface-sunken); border: 1px solid var(--border);
-      border-radius: var(--r-control); padding: 9px 11px;
-    }
-    .settings-note code { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-secondary); }
-
-    /* ─── Message toast ────────────────────── */
-    .msg {
-      display: none; padding: 9px 13px; border-radius: var(--r-control);
-      margin: 10px 16px 0; font-size: 12px; text-align: center; font-weight: 500;
-    }
-    .msg.ok { display: block; background: var(--green-tint); color: var(--green-text-strong); }
-    .msg.err { display: block; background: var(--danger-tint); color: var(--danger); }
-
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
+    @keyframes spin { to { transform: rotate(360deg) } }
   </style>
 </head>
 <body>
 
-  <!-- ── Header ──────────────────────────── -->
+  <!-- Header -->
   <div class="header">
-    <div class="logo-lockup">
-      <img class="logo-icon" src="../icon32.png" alt="Loupe" />
-      <span class="logo-wordmark">loupe</span>
-    </div>
+    <div class="logo">persado<span class="demo-badge">DEMO</span></div>
     <span class="header-status" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
   </div>
 
-  <!-- ── Nav ─────────────────────────────── -->
-  <nav class="nav" id="nav">
-    <button class="nav-tab active" data-tab="capture">Capture<span class="tab-dot"></span></button>
-    <button class="nav-tab" data-tab="sessions">Sessions</button>
-    <button class="nav-tab" data-tab="exports">Exports</button>
-    <button class="nav-tab" data-tab="settings">Settings</button>
-  </nav>
+  <div class="toast" id="toast"></div>
 
-  <div id="msg" class="msg"></div>
+  <!-- View -->
+  <div class="view active" id="viewMain">
 
-  <!-- ═══════════ CAPTURE ═══════════ -->
-  <div class="view active" id="viewCapture">
+    <!-- Step 1: Point at element (always visible while recording via content script) -->
 
-    <!-- Mic intro (first run only) -->
-    <div class="panel" id="panelPermission">
-      <div class="mic-wrap">
-        <div class="mic-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-        </div>
-        <div style="font-size:16px;font-weight:700;margin-bottom:5px;">Narrate your review</div>
-        <div style="font-size:12.5px;color:var(--text-body);margin-bottom:16px;line-height:1.6;">
-          Loupe records your voice while you walk through the product — your narration
-          drives the analysis and the build prompt. Mic access is requested per-site
-          when you start recording.
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;align-items:center;">
-          <button class="btn btn-green" id="btnAllowMic" style="width:200px;">Got it</button>
-          <button class="btn-ghost" id="btnDenyMic">Continue without narration</button>
-        </div>
+    <!-- Step 2: Configure campaign context -->
+    <div class="panel active" id="panelConfigure">
+      <div style="text-align:center;padding:8px 0 14px;">
+        <div style="font-size:16px;font-weight:700;color:var(--persado-purple);margin-bottom:4px;">Marketing Brief → Variants</div>
+        <div style="font-size:12px;color:var(--text-muted);">Point at an element, narrate its problem, get optimized copy with compliance checks.</div>
       </div>
-    </div>
 
-    <!-- Ready -->
-    <div class="panel" id="panelReady">
       <div class="field">
-        <label>Project</label>
-        <input id="project" type="text" placeholder="e.g. PM Toolkit" spellcheck="false" />
-      </div>
-      <div class="field">
-        <label>Flow / Page</label>
-        <input id="flow" type="text" placeholder="e.g. Dashboard" spellcheck="false" />
+        <label>Campaign / Page</label>
+        <input id="campaign" type="text" placeholder="e.g. Checking Account Landing" spellcheck="false" />
       </div>
 
-      <button class="btn btn-ink" id="btnRecordReady" style="margin-top:6px;">Start Recording</button>
-
-      <div class="section-title" style="margin-top:16px;">
-        Recent Sessions
-        <button class="link-btn" id="btnViewAllSessions">View all</button>
+      <div class="field-row">
+        <div class="field">
+          <label>Target Audience</label>
+          <select id="audience">
+            <option value="new">New Customers</option>
+            <option value="existing">Existing Customers</option>
+            <option value="lapsed">Lapsed / Dormant</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Goal</label>
+          <select id="goal">
+            <option value="conversions">Conversions</option>
+            <option value="clicks">Clicks / CTR</option>
+            <option value="trust">Trust / Credibility</option>
+          </select>
+        </div>
       </div>
-      <div id="recentList"></div>
-    </div>
 
-    <!-- Recording -->
-    <div class="panel" id="panelRecording">
-      <div class="rec-header">
-        <div class="rec-dot"></div>
-        <span class="rec-label">Recording</span>
-        <span class="rec-timer" id="recTimer">00:00:00</span>
-        <button class="rec-stop-dot" id="recStopBtn" title="Stop recording">
-          <svg viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" rx="1.5"/></svg>
+      <!-- Select element prompt -->
+      <div style="text-align:center;padding:10px 0;">
+        <button class="btn btn-outline btn-block" id="btnSelectElement">
+          🔭 Select Element on Page
         </button>
-      </div>
-
-      <div class="rec-url" id="recUrlDisplay">—</div>
-
-      <div class="stat-grid cols-3">
-        <div class="h-item"><div class="h-val" id="recClicks">0</div><div class="h-lbl">Clicks</div></div>
-        <div class="h-item"><div class="h-val" id="recScreenshots">0</div><div class="h-lbl">Snapshots</div></div>
-        <div class="h-item ping"><div class="h-val">✓</div><div class="h-lbl">Audio</div></div>
-      </div>
-
-      <div id="recWarn" hidden></div>
-
-      <div class="target-capture">
-        <button class="btn btn-outline" id="recTargetBtn">Capture Target Screenshot</button>
-        <button class="btn btn-ghost" id="recTargetScreenBtn">Capture from another app / screen…</button>
-        <div class="target-hint" id="recTargetHint">Chrome tab → use the first button on that tab. A different app (Figma desktop, Safari) → use the second and <strong>pick the specific window, not your whole screen</strong> (unless intentional — a full screen may include private content). Compared against the current UI when you Build This.</div>
-        <div class="target-status" id="recTargetStatus" hidden>Target captured — it will ship with this session. Check the preview; recapture if it's noisy.</div>
-        <img class="target-preview" id="recTargetPreview" alt="Captured target design" hidden />
-      </div>
-
-      <div class="rec-actions">
-        <button class="btn btn-outline" id="recPauseBtn">Pause</button>
-        <button class="btn btn-danger" id="recStopBtn2">Stop Recording</button>
-      </div>
-    </div>
-
-    <!-- Saved -->
-    <div class="panel" id="panelSaved">
-      <div class="saved-wrap">
-        <div class="saved-check">
-          <svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <polyline points="5 13 10 18 21 7"/>
-          </svg>
-        </div>
-        <div class="saved-title">Session Captured</div>
-        <div class="saved-meta">
-          <span id="savedProject">—</span> · <span id="savedFlow">—</span>
-          <span id="savedDuration" style="margin-left:4px;">(0s)</span>
-        </div>
-        <div class="stat-grid cols-4">
-          <div class="h-item"><div class="h-val" id="savedClicks">0</div><div class="h-lbl">Clicks</div></div>
-          <div class="h-item"><div class="h-val" id="savedScreenshots">0</div><div class="h-lbl">Shots</div></div>
-          <div class="h-item"><div class="h-val" id="savedDOM">0</div><div class="h-lbl">DOM</div></div>
-          <div class="h-item"><div class="h-val" id="savedNotes">0</div><div class="h-lbl">Notes</div></div>
-        </div>
-        <div class="intent-cards">
-          <button class="intent-card primary" id="btnIntentBuild">
-            <div class="ic-head">
-              <span class="ic-icon">⚡</span>
-              <span class="ic-title">Build This</span>
-              <span class="ic-badge">Fastest</span>
-              <span class="ic-time">30–60s</span>
-            </div>
-            <div class="ic-desc">Generate an implementation package for your AI coding agent.</div>
-          </button>
-          <button class="intent-card" id="btnIntentReview">
-            <div class="ic-head">
-              <span class="ic-icon">👁</span>
-              <span class="ic-title">UX Review</span>
-              <span class="ic-badge alt">For exploration</span>
-              <span class="ic-time">2–3 min</span>
-            </div>
-            <div class="ic-desc">Find opportunities and understand what to improve.</div>
-          </button>
-          <button class="intent-card" id="btnIntentAudit">
-            <div class="ic-head">
-              <span class="ic-icon">🔍</span>
-              <span class="ic-title">Complete Audit</span>
-              <span class="ic-badge alt">Deep</span>
-              <span class="ic-time">5+ min</span>
-            </div>
-            <div class="ic-desc">Run a comprehensive product review before shipping.</div>
-          </button>
-        </div>
-        <div class="saved-links">
-          <button class="link-btn" id="btnSavedExport">Export .loupe</button>
-          <span class="link-sep">·</span>
-          <button class="link-btn" id="btnRecordAnother">Record another</button>
+        <div style="font-size:10.5px;color:var(--text-muted);margin-top:5px;line-height:1.4;">
+          Click any headline, CTA, promo, or trust line on the page, then return here.
         </div>
       </div>
     </div>
 
-    <!-- Recovered -->
-    <div class="panel" id="panelRecovered">
-      <div class="status-pill" style="background:var(--warning-tint);color:var(--warning);">
-        <span class="dot" style="background:var(--warning);"></span> Recovered Recording
+    <!-- Step 3: Element captured + narration -->
+    <div class="panel" id="panelCaptured">
+      <div class="capture-card" id="elementCard">
+        <div class="cc-head">
+          <span class="cc-label">Selected Element</span>
+          <span class="cc-type" id="elType">—</span>
+        </div>
+        <div class="cc-text" id="elText">No element selected</div>
+        <div class="cc-context" id="elContext"></div>
       </div>
-      <div style="font-size:13px;color:var(--text-body);margin-bottom:12px;line-height:1.6;">
-        A recording was interrupted before it was saved. Your data is safe — choose what to do with it.
+
+      <div class="narration-block" id="narrationBlock" style="display:none;">
+        <div class="nb-label">Narration</div>
+        <div class="nb-text" id="narrationText"></div>
       </div>
-      <div class="saved-meta" style="text-align:center;">
-        <span id="recoveredProject">—</span> · <span id="recoveredFlow">—</span>
+
+      <div class="field" id="narrationField">
+        <label>Describe the problem <span style="font-weight:400;text-transform:none;letter-spacing:0;">(type or narrate by voice)</span></label>
+        <textarea id="narration" placeholder="e.g. This headline doesn&#39;t convert — it&#39;s too generic and doesn&#39;t speak to first-time banking customers who are nervous about hidden fees…"></textarea>
       </div>
-      <div class="stat-grid cols-2" style="margin-top:10px;">
-        <div class="h-item"><div class="h-val" id="recoveredEvents">0</div><div class="h-lbl">Events</div></div>
-        <div class="h-item"><div class="h-val" id="recoveredScreens">0</div><div class="h-lbl">Screenshots</div></div>
-      </div>
-      <div class="saved-actions" style="margin-top:12px;">
-        <button class="btn btn-ink" id="btnRecoverResume">Resume Recording</button>
-        <button class="btn btn-green" id="btnRecoverExport">Export .loupe File</button>
-        <button class="btn-ghost" id="btnRecoverDiscard" style="color:var(--danger);">Discard</button>
+
+      <button class="btn btn-primary btn-block" id="btnGenerate">
+        ⚡ Generate Recommendations
+      </button>
+
+      <div class="loading" id="loadingGenerate">
+        <div class="spinner"></div>
+        <div class="loading-text">Generating compliant variants…</div>
       </div>
     </div>
+
+    <!-- Step 4: Results -->
+    <div class="panel" id="panelResults">
+      <div style="font-size:12px;font-weight:600;color:var(--persado-purple);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
+        Recommendations
+        <span class="badge lift" style="font-size:10px;">Illustrative — Persado Stand-In</span>
+      </div>
+      <div id="resultsContainer"></div>
+
+      <div class="disclaimer">
+        <strong>⚠ Demo only.</strong> Variants generated by a general-purpose LLM acting as a stand-in for Persado's Motivation AI. Compliance flags are illustrative. Predicted lift is stubbed. Not validated against any regulatory framework.
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-outline btn-block btn-sm" id="btnExportBrief">📋 Export Brief (Markdown)</button>
+        <button class="btn btn-ghost btn-sm" id="btnNewBrief">New Brief</button>
+      </div>
+    </div>
+
   </div>
 
-  <!-- ═══════════ SESSIONS ═══════════ -->
-  <div class="view" id="viewSessions">
-    <div class="toolbar">
-      <select id="sessionsProject"><option value="">All projects</option></select>
-      <input type="search" id="sessionsSearch" placeholder="Search sessions…" spellcheck="false" />
-      <div class="filter-pills" id="sessionsTime">
-        <button class="filter-pill active" data-range="all">All</button>
-        <button class="filter-pill" data-range="today">Today</button>
-        <button class="filter-pill" data-range="week">This Week</button>
-        <button class="filter-pill" data-range="month">This Month</button>
-      </div>
-    </div>
-    <div id="sessionsList"></div>
-  </div>
-
-  <!-- ═══════════ EXPORTS ═══════════ -->
-  <div class="view" id="viewExports">
-    <div class="output-card" style="margin-top:0;">
-      <div class="card-head">
-        <span class="card-label">Build Prompt Destination</span>
-        <button class="link-btn" id="btnExportsChangeDest">Change…</button>
-      </div>
-      <div class="card-path" id="exportsDestPath">~/Projects/.ai/tasks/build-prompt.md</div>
-      <div class="card-desc">The Loupe CLI writes build-prompt.md here after analysis. Captured sessions below export to ~/Downloads/loupe/.</div>
-    </div>
-
-    <div class="section-title">
-      Exported Sessions
-      <button class="link-btn" id="btnOpenDownloads">Open Downloads Folder</button>
-    </div>
-    <div id="exportsList"></div>
-  </div>
-
-  <!-- ═══════════ SETTINGS ═══════════ -->
-  <div class="view" id="viewSettings">
-
-    <div class="settings-group">
-      <div class="section-title">Output</div>
-      <div class="field">
-        <label>Build Prompt Destination</label>
-        <input id="setPromptDest" class="mono" type="text" placeholder="~/Projects/.ai/tasks/build-prompt.md" spellcheck="false" />
-        <div class="hint">Loupe will save the generated build prompt here. Any agent or automation can pick it up — Loupe doesn't need to know which.</div>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="t-label">Reveal file after export</div>
-          <div class="t-sub">Show the exported .loupe file in your file manager.</div>
-        </div>
-        <label class="switch"><input type="checkbox" id="setRevealOnExport" /><span class="track"></span></label>
-      </div>
-    </div>
-
-    <div class="settings-group">
-      <div class="section-title">Recording</div>
-      <div class="field">
-        <label>Screenshot Quality</label>
-        <select id="setQuality">
-          <option value="standard">Standard — smaller sessions</option>
-          <option value="high">High — sharper small text</option>
-        </select>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <div class="t-label">Microphone intro</div>
-          <div class="t-sub">Show the narration explainer next time the popup opens.</div>
-        </div>
-        <button class="link-btn" id="btnResetMicIntro">Show again</button>
-      </div>
-    </div>
-
-    <div class="settings-group">
-      <div class="section-title">General</div>
-      <div class="field">
-        <label>Theme</label>
-        <select id="setTheme">
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </div>
-      <div class="settings-note" style="margin-top:8px;">
-        <strong>Privacy</strong> — recordings, screenshots and narration stay on this
-        device. Nothing leaves your machine until you export a session or run the
-        Loupe CLI on it.
-      </div>
-    </div>
-
-    <div class="settings-group">
-      <div class="section-title">Advanced</div>
-      <div class="settings-note">
-        Analysis, model routing and prompt generation are configured in the Loupe CLI
-        — see <code>~/.loupe/config/</code>. The extension only captures sessions and
-        hands them off.
-      </div>
-      <div class="toggle-row" style="margin-top:6px;">
-        <div class="t-sub" id="settingsVersion">Loupe —</div>
-        <button class="link-btn" id="btnCopyDiag">Copy diagnostics</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Footer ──────────────────────────── -->
-  <div class="footer">
-    <span class="footer-hint">All data stays on your device</span>
-  </div>
-
-  <script type="module" src="./popup.ts"></script>
+  <script src="popup.js" type="module"></script>
 </body>
 </html>

@@ -74,6 +74,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && req.url === '/v1/ai/transcribe') return await handleTranscribe(req, res);
     if (req.method === 'POST' && req.url === '/v1/ai/complete') return await handleComplete(req, res);
+    if (req.method === 'POST' && req.url === '/v1/ai/recommend') return await handleRecommend(req, res);
     sendJson(res, 404, { error: 'Not found' });
   } catch (err) {
     console.error('[gateway]', err);
@@ -82,9 +83,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Loupe dev gateway → http://localhost:${PORT}`);
+  console.log(`Persado Demo gateway → http://localhost:${PORT}`);
   console.log(`  OPENAI_API_KEY: ${OPENAI_API_KEY ? 'loaded' : 'MISSING'}`);
-  console.log(`  ffmpeg normalization: ${ENABLE_FFMPEG ? 'on' : 'off (default)'}`);
+  console.log(`  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY ? 'loaded' : 'MISSING'}`);
 });
 
 // ─── Transcription (Whisper) ─────────────────────────────────────
@@ -251,6 +252,131 @@ function normalizeToWav(buf) {
     console.warn('[gateway] ffmpeg not available; using original audio');
   }
   return null;
+}
+
+// ─── Recommendation (Persado Demo) ────────────────────────────────
+//
+// Accepts a marketing brief (element + narration + audience + goal)
+// and returns Persado-style copy variants with compliance flags and
+// stubbed predicted lift. Uses a general LLM as a stand-in for
+// Persado's Motivation AI — clearly labeled throughout.
+
+async function handleRecommend(req, res) {
+  const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+
+  const audienceLabels = { new: 'New Customers', existing: 'Existing Customers', lapsed: 'Lapsed / Dormant' };
+  const goalLabels = { conversions: 'Conversions', clicks: 'Clicks / CTR', trust: 'Trust / Credibility' };
+
+  const element = body.element || {};
+  const narration = body.narration || '(none)';
+  const audience = audienceLabels[body.audience] || body.audience || 'General';
+  const goal = goalLabels[body.goal] || body.goal || 'Conversions';
+
+  const systemPrompt = [
+    'You are a marketing language AI trained on millions of high-performing marketing messages across',
+    'regulated industries — finance, banking, insurance, healthcare. You operate like Persado\'s',
+    'Motivation AI: you understand that word choice, emotional framing, and narrative structure drive',
+    'measurable conversion lifts, and you ground every recommendation in that data-driven understanding.',
+    '',
+    'Your job: given an existing on-page marketing element (headline, CTA, promo, trust line) and a',
+    'marketer\'s spoken concern about its performance, generate 2–3 optimized copy variants that would',
+    'be expected to outperform the original. Each variant is backed by a rationale grounded in marketing',
+    'psychology and language-performance data.',
+    '',
+    'FINANCE COMPLIANCE (illustrative — you are a stand-in, not a real compliance engine):',
+    '- Flag any language that could raise UDAAP concerns: unsubstantiated claims ("guaranteed", "risk-free",',
+    '  "100% safe"), misleading urgency ("limited time" without actual limits), hidden conditions.',
+    '- Flag missing TILA/Reg Z disclosures: APY without qualifiers, loan terms without APR, promotional',
+    '  rates without the go-to rate or duration.',
+    '- Flag language that implies a promise the bank cannot keep ("you\'ll never pay a fee" vs "no monthly',
+    '  maintenance fee on this account").',
+    '- If no issues, mark compliance as "clear". If flagged, explain the specific concern briefly.',
+    '',
+    'PREDICTED LIFT:',
+    '- Provide a stubbed predicted-lift range (e.g. "+8–14%") based on the type of change:',
+    '  - Emotional language / narrative reframe: +10–20%',
+    '  - Specificity / number anchoring: +5–12%',
+    '  - Trust/credibility emphasis: +8–15%',
+    '  - Urgency/scarcity (when compliant): +12–25%',
+    '  - Removing friction / clarifying: +3–8%',
+    '- Always label these as illustrative estimates.',
+    '',
+    'OUTPUT FORMAT — return ONLY valid JSON, no markdown, no code fences:',
+    '{',
+    '  "variants": [',
+    '    {',
+    '      "copy": "The rewritten element text",',
+    '      "rationale": "One-line explanation of why this motivates (e.g., anchors savings to a concrete number, uses social proof framing, invokes loss aversion)",',
+    '      "compliance": "clear",',
+    '      "complianceNote": "",',
+    '      "predictedLift": "+8–14%"',
+    '    }',
+    '  ]',
+    '}',
+    '',
+    'Rules:',
+    '- Each variant should take a DIFFERENT psychological approach (emotion, specificity, social proof,',
+    '  urgency, authority, curiosity, loss aversion, etc.).',
+    '- Copy should match the element TYPE: headlines are short and punchy, CTAs are action-oriented,',
+    '  trust lines are reassuring and specific, promos are benefit-forward.',
+    '- Never invent specific numbers (rates, APYs, dollar amounts) unless the original had them.',
+    '- Keep copy concise. A variant should not be longer than 2x the original.',
+  ].join('\n');
+
+  const userPrompt = [
+    'MARKETING BRIEF',
+    '─────────────────',
+    `Campaign: ${body.campaign || 'Unnamed'}`,
+    `Target Audience: ${audience}`,
+    `Objective: ${goal}`,
+    '',
+    'ELEMENT TO OPTIMIZE',
+    '─────────────────',
+    `Type: ${element.type || 'Unknown'}`,
+    `Current Copy: "${element.text || '(none)'}"`,
+    `Surrounding Context: ${element.context || '(none)'}`,
+    `Selector: ${element.selector || 'unknown'}`,
+    '',
+    'MARKETER\'S CONCERN (spoken narration)',
+    '─────────────────────────────────────',
+    `"${narration}"`,
+    '',
+    'Generate 2–3 optimized variants for this element. Return ONLY the JSON.',
+  ].join('\n');
+
+  // Use the standard model (no need for premium on this task)
+  const requested = body.model || 'standard';
+
+  try {
+    let content;
+    if (isAnthropicModel(requested)) {
+      content = await completeAnthropic(requested, { prompt: userPrompt, systemPrompt }, false);
+    } else {
+      content = await completeOpenAI(requested, { prompt: userPrompt, systemPrompt }, false);
+    }
+
+    // Parse the LLM response as JSON
+    let parsed;
+    try {
+      const cleaned = content.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
+      // If JSON parsing fails, return a graceful fallback
+      parsed = {
+        variants: [{
+          copy: content.slice(0, 200).trim() || '(generation failed — raw output unavailable)',
+          rationale: 'Fallback — structured output could not be parsed.',
+          compliance: 'flag',
+          complianceNote: 'Unable to verify compliance — structured generation failed.',
+          predictedLift: 'N/A',
+        }],
+      };
+    }
+
+    sendJson(res, 200, parsed);
+  } catch (err) {
+    sendJson(res, 502, { error: String(err?.message || err) });
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
