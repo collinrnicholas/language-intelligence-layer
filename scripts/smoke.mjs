@@ -238,7 +238,19 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   if (HTML.indexOf('</style>') < 0) fail('sidepanel.html', 'no </style> found');
 }
 
-// ── 11. no emoji in the panel UI ──────────────────────────────────
+// ── 11. manifest version is documented in the changelog ───────────
+{
+  const version = MANIFEST.version;
+  if (!/^\d+\.\d+\.\d+$/.test(version)) fail('version', `manifest version "${version}" is not x.y.z`);
+  let log = '';
+  try { log = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8'); } catch { fail('version', 'CHANGELOG.md is missing'); }
+  if (log && !new RegExp(`^##\\s*\\[?${version.replace(/\./g, '\\.')}\\]?`, 'm').test(log)) {
+    fail('version', `CHANGELOG.md has no "## ${version}" section`);
+  }
+  notes.push(`manifest version ${version}`);
+}
+
+// ── 12. no emoji in the panel UI ──────────────────────────────────
 {
   const start = HTML.indexOf('id="panelResults"');
   const rebuilt = HTML.slice(0, start < 0 ? HTML.length : start);

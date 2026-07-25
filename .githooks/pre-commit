@@ -1,8 +1,16 @@
 #!/bin/sh
-# Blocks a commit when the static extension contracts are broken.
 # Enable once per clone:  git config core.hooksPath .githooks
+# Bypass in an emergency with:  git commit --no-verify
+
 npm run --silent smoke || {
   echo ""
-  echo "pre-commit: npm run smoke failed — fix the above or commit with --no-verify."
+  echo "pre-commit: npm run smoke failed."
+  exit 1
+}
+
+# Shipped code must not change without a version bump + changelog entry.
+node scripts/check-version.mjs --staged || {
+  echo ""
+  echo "pre-commit: version gate failed."
   exit 1
 }

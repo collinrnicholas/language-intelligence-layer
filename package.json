@@ -13,7 +13,11 @@
     "repo:check": "node scripts/repo-check.mjs",
     "doctor": "node agent/dist/cli.js doctor",
     "gateway": "node gateway/server.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "bump": "node scripts/bump-version.mjs patch",
+    "bump:minor": "node scripts/bump-version.mjs minor",
+    "bump:major": "node scripts/bump-version.mjs major",
+    "version:check": "node scripts/check-version.mjs"
   },
   "workspaces": [
     "extension",
