@@ -44,7 +44,7 @@ const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrig
 const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload'),portalDismiss=$('portalDismiss');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 // Scan screen (the panel's front door).
-const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount');
+const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount'),hdrPage=$('hdrPage');
 const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanList=$('scanList'),scanDetail=$('scanDetail');
 const btnBackToScan=$('btnBackToScan'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
 
@@ -138,7 +138,7 @@ function setUiState(state){
   st(s.header);
   // The scan screen knows what page it is on; "Ready" told the reader nothing, so the
   // URL takes that slot. Every other screen keeps the status chip (REC / working).
-  if(scanUrl){scanUrl.hidden=state!=='scan';if(state==='scan')scanUrl.title=currentUrl||'';}
+  if(hdrPage)hdrPage.hidden=state!=='scan';
   headerStatus.style.display=state==='scan'?'none':'';
   recLive.classList.toggle('on',!!s.live);
   recRetry.style.display=s.retry?'':'none';
@@ -517,10 +517,18 @@ function shortUrl(u){
     return `${host}/${segs[0]}/…/${segs[segs.length-1]}`;
   }catch{return u;}
 }
+/** The header shows the whole address — only the scheme and "www." are dropped, so a
+ *  deep link is still readable in full. It wraps rather than being ellipsised. */
+function displayUrl(u){
+  if(!u)return '';
+  // Whole address, no ellipsis. Only the scheme and "www." are dropped so it still
+  // fits a 400px panel; the text stays clean for copying.
+  return u.replace(/^[a-z]+:\/\//i,'').replace(/^www\./i,'').replace(/\/$/,'');
+}
 function showUrl(u){
   currentUrl=u;
   pageUrlEl.textContent=shortUrl(u);
-  if(scanUrl){scanUrl.textContent=shortUrl(u);scanUrl.title=u||'';}
+  if(scanUrl){scanUrl.textContent=displayUrl(u);scanUrl.title=u||'';}
 }
 
 async function dp(){
@@ -646,9 +654,9 @@ function renderScanList(){
     ?`Start here: <b>${esc(trunc(top.text,64))}</b> — it takes ${top.prominence}% of the page’s attention and scores ${top.score} (${esc(top.band?.label||'')}), so it is the largest single gain on this page. Everything below it matters less.`
     :'';
   scanList.innerHTML=ms.map((m,i)=>`<div class="scan-row${i===0?' weak':''}" data-i="${i}" role="button" tabindex="0">`
-    +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
+    +`<div class="scan-row-k">${i===0?'':`<span class="scan-idx">${i+1}</span> · `}${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
     +`<div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
-    +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Start here</span>':`<span class="scan-idx">${i+1}</span>`}`
+    +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Start here</span>':''}`
     +`<span class="scan-score ${scoreClass(m.score)}">${m.score}</span>`
     +`<span class="scan-band ${m.band?.key||''}">${esc(m.band?.label||'')}</span></div></div>`).join('');
   selectMaterial(0);

@@ -33,7 +33,7 @@
     html,body{height:100%;}
     body{font-family:var(--sans);background:var(--surface);color:var(--text-1);font-size:13px;line-height:1.5;display:flex;flex-direction:column;overflow:hidden;}
 
-    .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:flex-end;flex:none;}
+    .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:flex-end;flex:none;gap:8px;}
     /* Results screen carries its Done status inline on the heading row, so the global
        header bar is redundant there and is hidden (the chip stays in the DOM for
        setUiState). Every other screen keeps the header status chip. */
@@ -50,7 +50,10 @@
 
     /* Header flags (demo mode, screen-capture-on) — quiet, muted, unmissable if
        you look. Consistent pill treatment, sitting left of the status chip. */
-    .hdr-right{display:flex;align-items:center;gap:10px;}
+    .hdr-right{display:flex;align-items:center;gap:10px;flex:1;min-width:0;justify-content:flex-end;}
+    .hdr-page{display:flex;align-items:center;gap:8px;flex:1;min-width:0;justify-content:flex-end;}
+    .hdr-page[hidden]{display:none;}
+    .hdr-count{flex:none;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:2px 7px;}
     .hdr-flag{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
     .hdr-flag.demo{border-style:dashed;border-color:var(--amber);background:var(--amber-bg);color:var(--amber-text);}
     .hdr-flag.capture .cap-i{width:6px;height:6px;border-radius:50%;background:var(--red);flex:none;}
@@ -448,13 +451,14 @@
     /* The band is not decoration: it is the ceiling a line earned, so it never
        appears without the number and vice versa. */
     .scan-cap{font-size:11px;color:var(--text-2);margin:2px 0 6px;}
-    .hdr-url{max-width:58%;font-family:var(--mono);font-size:11px;color:var(--text-2);
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
+    /* The full URL, never ellipsised: it wraps onto a second line instead of being cut. */
+    .hdr-url{font-family:var(--mono);font-size:11px;line-height:1.4;color:var(--text-2);
+      min-width:0;overflow-wrap:anywhere;text-align:right;}
     .hdr-url[hidden]{display:none;}
     .back-scan{align-self:flex-start;margin-bottom:6px;padding:0;font-size:12px;font-weight:600;}
     .scan-pri{font-size:12px;line-height:1.45;color:var(--text-2);margin-top:2px;}
     .scan-pri b{color:var(--text-1);font-weight:600;}
-    .scan-idx{font-family:var(--mono);font-size:11px;color:var(--text-3);min-width:10px;text-align:right;}
+    .scan-idx{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-right:4px;}
     .scan-band{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
       padding:2px 6px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);background:var(--surface-2);white-space:nowrap;}
     .scan-band.weak,.scan-band.fair{color:var(--red);border-color:rgba(190,40,40,.25);}
@@ -499,7 +503,10 @@
   <div class="hdr-right">
     <span class="hdr-flag capture" id="captureFlag" style="display:none;"><span class="cap-i"></span>Screen capture on</span>
     <span class="hdr-flag demo" id="demoFlag" style="display:none;">Demo mode</span>
-    <span class="hdr-url" id="scanUrl" title=""></span>
+    <span class="hdr-page" id="hdrPage">
+      <span class="hdr-url" id="scanUrl" title=""></span>
+      <span class="cap-tag hdr-count" id="scanCount">—</span>
+    </span>
     <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
   </div>
 </div>
@@ -519,10 +526,6 @@
         <div class="scr-sub" id="scanSub">Reading the page’s copy…</div>
       </div>
       <button class="scan-refresh" id="btnRescan" title="Re-read this page" aria-label="Re-read this page">Refresh</button>
-    </div>
-    <div class="cap-chip">
-      <span class="cap-dot"></span>
-      <span class="cap-tag" id="scanCount">—</span>
     </div>
     <!-- The product line is still detected, it just isn't a question worth asking:
          it only seeds the rewrite prompt, so it stays as state instead of a field. -->

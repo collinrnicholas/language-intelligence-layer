@@ -8,6 +8,17 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.5
+
+The scan header is one row again, and the address is no longer cut.
+
+- **Full URL in the header.** It shows the whole address minus the scheme and `www.`
+  (path and query included) and wraps to a second line at a panel width instead of
+  collapsing to `bidpa…`. Only the ellipsis is gone — nothing is shortened.
+- **The count is in that same row**, right of the URL, instead of a separate chip
+  under the scan title, so "6 found" reads as a property of the page.
+- Ranks read `2 · CALL TO ACTION · ABOVE FOLD` rather than sitting next to the score
+  as a bare `2`, which looked like part of the number.
 ## 0.7.4
 
 Fixes the crash on opening the panel, and stops the demo from falling into a flow
