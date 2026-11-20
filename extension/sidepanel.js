@@ -45,7 +45,7 @@ const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayl
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 // Scan screen (the panel's front door).
 const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount');
-const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),productLine=$('productLine'),productHint=$('productHint'),btnRescan=$('btnRescan'),scanList=$('scanList'),scanDetail=$('scanDetail');
+const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanUrlEl=$('scanUrl'),scanList=$('scanList'),scanDetail=$('scanDetail');
 const btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick'),btnRecordInstead=$('btnRecordInstead');
 
 const LISTENING='Listening — describe the problem and the audience.';
@@ -136,6 +136,11 @@ function setUiState(state){
   uiState=state;
   sh(s.panel);
   st(s.header);
+  // The scan screen knows what page it is on; "Ready" told the reader nothing, so the
+  // URL takes that slot. Every other screen keeps the status chip (REC / working).
+  const sc=scanUrlEl;
+  if(sc){sc.hidden=state!=='scan';if(state==='scan')sc.title=currentUrl||'';}
+  headerStatus.style.display=state==='scan'?'none':'';
   recLive.classList.toggle('on',!!s.live);
   recRetry.style.display=s.retry?'':'none';
   // Part 3: a blank record panel is never a valid end state. If the invariants are
@@ -504,8 +509,20 @@ function renderShots(thumbs,count){
 
 // The chip is display-only: it shows hostname + first path segment, while
 // `currentUrl` keeps the full URL that is sent to the gateway.
-function shortUrl(u){try{const x=new URL(u),seg=x.pathname.split('/').filter(Boolean)[0];return x.hostname.replace(/^www\./,'')+(seg?'/'+seg:'');}catch{return u;}}
-function showUrl(u){currentUrl=u;pageUrlEl.textContent=shortUrl(u);}
+function shortUrl(u){
+  try{
+    const x=new URL(u),segs=x.pathname.split('/').filter(Boolean),host=x.hostname.replace(/^www\./,'');
+    // Enough of the path to know which page this is, without spending the header on it.
+    if(!segs.length)return host;
+    if(segs.length<=2)return host+'/'+segs.join('/');
+    return `${host}/${segs[0]}/…/${segs[segs.length-1]}`;
+  }catch{return u;}
+}
+function showUrl(u){
+  currentUrl=u;
+  pageUrlEl.textContent=shortUrl(u);
+  if(scanUrlEl){scanUrlEl.textContent=shortUrl(u);scanUrlEl.title=u||'';}
+}
 
 async function dp(){
   try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(t?.url)showUrl(t.url);}
@@ -599,18 +616,13 @@ async function autoScan(){
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
     if(!tab?.id)throw new Error('No active tab.');
     if(tab.url)showUrl(tab.url);
-    scanUrl.textContent=shortUrl(tab.url||'');
     lastScanUrl=tab.url||lastScanUrl;
     await injectScanner(tab.id);
     const r=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PAGE});
     if(!r?.ok)throw new Error(r?.error||'The page did not return a scan.');
     scanResult=r;
-    if(!productLine.value.trim()){
-      productLine.value=r.productLine||'';
-      productHint.textContent=r.productSource
-        ?`Detected from the ${r.productSource} — edit it if it is wrong.`
-        :'No product or offer name found on this page — type one.';
-    }
+    // The product line is no longer a question on the scan screen; the scanner's
+    // detection still travels with the result and seeds the rewrite prompt.
     const ms=r.materials||[];
     scanCount.textContent=ms.length?`${ms.length} found`:'nothing found';
     scanSub.textContent=ms.length
@@ -630,10 +642,14 @@ async function autoScan(){
 function renderScanList(){
   const ms=scanResult?.materials||[];
   if(!ms.length){scanDetail.style.display='none';return;}
+  const top=ms[0];
+  scanPriority.innerHTML=top
+    ?`Start here: <b>${esc(trunc(top.text,64))}</b> — it takes ${top.prominence}% of the page’s attention and scores ${top.score} (${esc(top.band?.label||'')}), so it is the largest single gain on this page. Everything below it matters less.`
+    :'';
   scanList.innerHTML=ms.map((m,i)=>`<div class="scan-row${i===0?' weak':''}" data-i="${i}" role="button" tabindex="0">`
     +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
     +`<div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
-    +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Weakest</span>':''}`
+    +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Start here</span>':`<span class="scan-idx">${i+1}</span>`}`
     +`<span class="scan-score ${scoreClass(m.score)}">${m.score}</span>`
     +`<span class="scan-band ${m.band?.key||''}">${esc(m.band?.label||'')}</span></div></div>`).join('');
   selectMaterial(0);
@@ -700,7 +716,7 @@ chrome.runtime.onMessage.addListener((msg)=>{
 
 // ─── Confirm / Optimize ──────────────────────────────────────────
 
-function currentProduct(){return (productLine?.value||'').trim()||scanResult?.productLine||'';}
+function currentProduct(){return (scanResult?.productLine||'').trim();}
 
 btnConfirm.addEventListener('click',()=>{
   if(!scanMaterial){tm('Pick a piece of copy first','err');return;}

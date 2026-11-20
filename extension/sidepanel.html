@@ -448,6 +448,12 @@
     /* The band is not decoration: it is the ceiling a line earned, so it never
        appears without the number and vice versa. */
     .scan-cap{font-size:11px;color:var(--text-2);margin:2px 0 6px;}
+    .hdr-url{max-width:58%;font-family:var(--mono);font-size:11px;color:var(--text-2);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
+    .hdr-url[hidden]{display:none;}
+    .scan-pri{font-size:12px;line-height:1.45;color:var(--text-2);margin-top:2px;}
+    .scan-pri b{color:var(--text-1);font-weight:600;}
+    .scan-idx{font-family:var(--mono);font-size:11px;color:var(--text-3);min-width:10px;text-align:right;}
     .scan-band{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
       padding:2px 6px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);background:var(--surface-2);white-space:nowrap;}
     .scan-band.weak,.scan-band.fair{color:var(--red);border-color:rgba(190,40,40,.25);}
@@ -492,6 +498,7 @@
   <div class="hdr-right">
     <span class="hdr-flag capture" id="captureFlag" style="display:none;"><span class="cap-i"></span>Screen capture on</span>
     <span class="hdr-flag demo" id="demoFlag" style="display:none;">Demo mode</span>
+    <span class="hdr-url" id="scanUrl" title=""></span>
     <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
   </div>
 </div>
@@ -514,7 +521,6 @@
     </div>
     <div class="cap-chip">
       <span class="cap-dot"></span>
-      <span class="cap-url" id="scanUrl">detecting…</span>
       <span class="cap-tag" id="scanCount">—</span>
     </div>
     <!-- The product line is still detected, it just isn't a question worth asking:
@@ -523,7 +529,8 @@
     <span id="productHint" hidden></span>
   </div>
 
-  <div class="sec-label" style="margin-top:18px;">Material on this page</div>
+  <div class="scan-pri" id="scanPriority"></div>
+  <div class="sec-label" style="margin-top:14px;">Material on this page</div>
   <div id="scanList" class="scan-list"></div>
   <div class="scan-detail" id="scanDetail" style="display:none;"></div>
 

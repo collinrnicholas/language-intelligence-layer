@@ -8,6 +8,21 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.3
+
+The list now answers "where do I start?" instead of leaving it to the reader.
+
+- One sentence above the list names the first fix and why: **Start here: "<headline>"
+  — it takes 90% of the page's attention and scores 41 (Fair), so it is the largest
+  single gain on this page.** The top row is badged **Start here**; the rest are
+  numbered so the order is explicit.
+- The page URL moved into the header, in the slot "Ready" was using. "Ready" said
+  nothing on a screen that is already showing you the page. The status chip still
+  appears everywhere it carries information (Done, recording states).
+- Long URLs are shortened to `host/first-segment/…/last-segment` and the full URL
+  stays in the tooltip.
+- Fixed a live crash from 0.7.1: `autoScan()` still read the removed Product line
+  field, so the scan screen never finished loading.
 ## 0.7.2
 
 Scores were honest but not calibrated: a line could dodge every rule, score 100,
