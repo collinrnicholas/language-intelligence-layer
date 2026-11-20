@@ -8,6 +8,11 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.6
+
+- Rank numbers are gone from the asset list. The order plus the **Start here** badge
+  already says which one to fix first; numbering the rest implied a precision the
+  ranking does not have.
 ## 0.7.5
 
 The scan header is one row again, and the address is no longer cut.

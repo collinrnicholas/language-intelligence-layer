@@ -654,7 +654,7 @@ function renderScanList(){
     ?`Start here: <b>${esc(trunc(top.text,64))}</b> — it takes ${top.prominence}% of the page’s attention and scores ${top.score} (${esc(top.band?.label||'')}), so it is the largest single gain on this page. Everything below it matters less.`
     :'';
   scanList.innerHTML=ms.map((m,i)=>`<div class="scan-row${i===0?' weak':''}" data-i="${i}" role="button" tabindex="0">`
-    +`<div class="scan-row-k">${i===0?'':`<span class="scan-idx">${i+1}</span> · `}${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
+    +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
     +`<div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
     +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Start here</span>':''}`
     +`<span class="scan-score ${scoreClass(m.score)}">${m.score}</span>`
