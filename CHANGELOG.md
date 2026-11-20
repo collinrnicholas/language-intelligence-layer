@@ -8,6 +8,20 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.4
+
+Fixes the crash on opening the panel, and stops the demo from falling into a flow
+it does not need.
+
+- `ReferenceError: scanUrlEl is not defined` — the header URL was referenced by two
+  names and the declaration was lost in an edit. It is one name now (`scanUrl`), so
+  `setUiState()` cannot run ahead of it.
+- **Record a brief is off the front door.** The scan screen's "Record a brief
+  instead" link is gone; the demo path is scan → Confirm/Optimize. The recording
+  code is untouched and still reachable through resume/old transcript, and the
+  record screen now has "Scan this page instead" so it can never be a dead end.
+- Results footer says **Scan again** instead of "Re-record brief", which is what it
+  actually does.
 ## 0.7.3
 
 The list now answers "where do I start?" instead of leaving it to the reader.

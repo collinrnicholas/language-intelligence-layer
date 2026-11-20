@@ -451,6 +451,7 @@
     .hdr-url{max-width:58%;font-family:var(--mono);font-size:11px;color:var(--text-2);
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;}
     .hdr-url[hidden]{display:none;}
+    .back-scan{align-self:flex-start;margin-bottom:6px;padding:0;font-size:12px;font-weight:600;}
     .scan-pri{font-size:12px;line-height:1.45;color:var(--text-2);margin-top:2px;}
     .scan-pri b{color:var(--text-1);font-weight:600;}
     .scan-idx{font-family:var(--mono);font-size:11px;color:var(--text-3);min-width:10px;text-align:right;}
@@ -541,7 +542,6 @@
     </div>
     <div class="scan-alt">
       <button class="btn-quiet" id="btnPick">Pick on page</button>
-      <button class="btn-quiet" id="btnRecordInstead">Record a brief instead</button>
     </div>
     <div class="privacy">Page text stays on this device until you review the results.</div>
   </div>
@@ -551,6 +551,7 @@
 <div class="panel view" id="panelConfigure">
   <div class="start-main">
     <div class="start-head">
+      <button class="btn-quiet back-scan" id="btnBackToScan">Scan this page instead</button>
       <div class="scr-title">Record your brief</div>
       <div class="scr-sub">Talk through the page and what you want it to do. Persado listens, captures the screen, and returns compliant copy scored to perform.</div>
     </div>
@@ -732,7 +733,7 @@
 <div class="panel view" id="panelResults">
   <div class="res-main">
     <div class="res-head">
-      <button class="res-back" id="btnBackScan" aria-label="Back to the page's copy">← Page</button>
+      <button class="res-back" id="btnBackScan" aria-label="Back to the copy list">Back</button>
       <div>
         <div class="res-h" id="resHeading">Variants ready</div>
         <div class="res-ctx" id="resCtx"></div>

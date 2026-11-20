@@ -45,8 +45,8 @@ const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayl
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 // Scan screen (the panel's front door).
 const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount');
-const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanUrlEl=$('scanUrl'),scanList=$('scanList'),scanDetail=$('scanDetail');
-const btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick'),btnRecordInstead=$('btnRecordInstead');
+const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanList=$('scanList'),scanDetail=$('scanDetail');
+const btnBackToScan=$('btnBackToScan'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
 
 const LISTENING='Listening — describe the problem and the audience.';
 const PAUSED_MSG='Paused — nothing is being recorded.';
@@ -138,8 +138,7 @@ function setUiState(state){
   st(s.header);
   // The scan screen knows what page it is on; "Ready" told the reader nothing, so the
   // URL takes that slot. Every other screen keeps the status chip (REC / working).
-  const sc=scanUrlEl;
-  if(sc){sc.hidden=state!=='scan';if(state==='scan')sc.title=currentUrl||'';}
+  if(scanUrl){scanUrl.hidden=state!=='scan';if(state==='scan')scanUrl.title=currentUrl||'';}
   headerStatus.style.display=state==='scan'?'none':'';
   recLive.classList.toggle('on',!!s.live);
   recRetry.style.display=s.retry?'':'none';
@@ -521,7 +520,7 @@ function shortUrl(u){
 function showUrl(u){
   currentUrl=u;
   pageUrlEl.textContent=shortUrl(u);
-  if(scanUrlEl){scanUrlEl.textContent=shortUrl(u);scanUrlEl.title=u||'';}
+  if(scanUrl){scanUrl.textContent=shortUrl(u);scanUrl.title=u||'';}
 }
 
 async function dp(){
@@ -683,7 +682,6 @@ scanList.addEventListener('keydown',(e)=>{
   if(e.key==='Enter'||e.key===' '){e.preventDefault();selectMaterial(+row.dataset.i);}
 });
 
-btnRecordInstead.addEventListener('click',()=>setUiState('ready'));
 
 // ─── Pick on page ────────────────────────────────────────────────
 // For anything the scan skipped — a phrase inside a paragraph, an icon button
@@ -1308,7 +1306,7 @@ function renderResults(){
   portalResult.style.display='none';selectedVariant=-1;
   // The scan screen hid these; the narrated flow still needs them.
   btnViewBrief.style.display='';btnSendPortal.style.display='';
-  btnNewBrief.innerHTML='<span class="re-ico" aria-hidden="true">↻</span>Re-record brief';
+  btnNewBrief.innerHTML='<span class="re-ico" aria-hidden="true">↻</span>Scan again';
   const n=recommendations?.length||0;
   const b=briefPayload||{};
   // Dynamic heading, singular at 1.
@@ -1456,6 +1454,9 @@ function resetAll(){
   chrome.runtime.sendMessage({type:MSG.CLEAR_PAGE_CONTEXT}).catch(()=>{});setActionState('ready');
   setUiState('scan');autoScan();
 }
+// Record-a-brief is retained but is no longer the front door, so it must not be a
+// one-way trip: this returns to the page scan without discarding anything.
+if(btnBackToScan)btnBackToScan.addEventListener('click',()=>{setUiState('scan');autoScan();});
 btnNew.addEventListener('click',resetAll);
 
 /** "You have an unsent brief from {time}" — shown on the start screen. */
