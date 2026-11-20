@@ -59,6 +59,15 @@
     .panel{display:none;}.panel.active{display:block;}
     #panelResults.active{display:flex;flex-direction:column;flex:1;min-height:0;}
     .res-main{flex:1;min-height:0;overflow-y:auto;}
+    .res-back{flex:none;align-self:flex-start;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text-2);
+      background:none;border:none;padding:2px 0;margin-right:2px;cursor:pointer;}
+    .res-back:hover{color:var(--ink);}
+    .stale-note{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;
+      padding:8px 10px;border:1px solid var(--border);border-radius:var(--rctl);background:var(--surface-2);
+      font-size:12px;color:var(--text-2);}
+    .stale-note[hidden]{display:none;}
+    .stale-go{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink);background:none;border:none;
+      padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
 
     .field{margin-bottom:16px;}
     .field label{display:block;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
@@ -411,6 +420,13 @@
        action. Everything uses the existing tokens; no new colours. */
     #panelScan.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;}
     .scan-top{display:flex;flex-direction:column;gap:12px;flex:none;}
+    .scan-head{flex-direction:row;align-items:flex-start;justify-content:space-between;gap:10px;}
+    .scan-refresh{flex:none;font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text-1);
+      background:var(--surface);border:1px solid var(--border);border-radius:var(--rctl);
+      padding:6px 10px;cursor:pointer;transition:border-color .15s ease;}
+    .scan-refresh:hover{border-color:#D4CCE0;}
+    .scan-refresh:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(26,17,40,.08);}
+    .scan-refresh:disabled{opacity:.5;cursor:default;}
     .scan-input{width:100%;font-family:var(--sans);font-size:13px;font-weight:600;color:var(--text-1);
       background:var(--surface);border:1px solid var(--border);border-radius:var(--rctl);padding:9px 11px;}
     .scan-input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(26,17,40,.08);}
@@ -479,20 +495,22 @@
 <!-- ═══ SCAN (front door) ═══ -->
 <div class="panel active view" id="panelScan">
   <div class="scan-top">
-    <div class="start-head">
-      <div class="scr-title">Scan this page</div>
-      <div class="scr-sub" id="scanSub">Reading the page’s copy…</div>
+    <div class="start-head scan-head">
+      <div>
+        <div class="scr-title">Scan this page</div>
+        <div class="scr-sub" id="scanSub">Reading the page’s copy…</div>
+      </div>
+      <button class="scan-refresh" id="btnRescan" title="Re-read this page" aria-label="Re-read this page">Refresh</button>
     </div>
     <div class="cap-chip">
       <span class="cap-dot"></span>
       <span class="cap-url" id="scanUrl">detecting…</span>
       <span class="cap-tag" id="scanCount">—</span>
     </div>
-    <div class="field" style="margin-bottom:0;">
-      <label for="productLine">Product line</label>
-      <input id="productLine" class="scan-input" placeholder="Detecting…" autocomplete="off" spellcheck="false">
-      <div class="help" id="productHint">Auto-filled from the page — edit it if it is wrong.</div>
-    </div>
+    <!-- The product line is still detected, it just isn't a question worth asking:
+         it only seeds the rewrite prompt, so it stays as state instead of a field. -->
+    <input id="productLine" type="hidden">
+    <span id="productHint" hidden></span>
   </div>
 
   <div class="sec-label" style="margin-top:18px;">Material on this page</div>
@@ -697,6 +715,7 @@
 <div class="panel view" id="panelResults">
   <div class="res-main">
     <div class="res-head">
+      <button class="res-back" id="btnBackScan" aria-label="Back to the page's copy">← Page</button>
       <div>
         <div class="res-h" id="resHeading">Variants ready</div>
         <div class="res-ctx" id="resCtx"></div>
@@ -705,6 +724,10 @@
         <button class="btn-quiet view-brief" id="btnViewBrief">View brief</button>
         <span class="res-status" id="resStatus"><span class="dot"></span>Done</span>
       </div>
+    </div>
+    <div class="stale-note" id="resStale" hidden>
+      <span>You moved to a different page.</span>
+      <button class="stale-go" id="btnRescanStale">Scan this page</button>
     </div>
     <div class="res-cap" id="capLine"></div>
 

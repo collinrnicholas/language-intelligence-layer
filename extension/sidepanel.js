@@ -45,7 +45,7 @@ const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayl
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 // Scan screen (the panel's front door).
 const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount');
-const productLine=$('productLine'),productHint=$('productHint'),scanList=$('scanList'),scanDetail=$('scanDetail');
+const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),productLine=$('productLine'),productHint=$('productHint'),btnRescan=$('btnRescan'),scanList=$('scanList'),scanDetail=$('scanDetail');
 const btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick'),btnRecordInstead=$('btnRecordInstead');
 
 const LISTENING='Listening — describe the problem and the audience.';
@@ -511,8 +511,26 @@ async function dp(){
   try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(t?.url)showUrl(t.url);}
   catch{pageUrlEl.textContent='current page';}
 }
-chrome.tabs.onUpdated.addListener((tabId,ci,tab)=>{if(ci.url&&tab.active)showUrl(ci.url);});
-chrome.tabs.onActivated.addListener(async(a)=>{try{const t=await chrome.tabs.get(a.tabId);if(t?.url)showUrl(t.url);}catch{}});
+// A panel that keeps showing the previous page's copy is worse than no panel, so
+// navigation is not just a URL-chip update: a different URL while the scan is on
+// screen re-runs the scan. Results are left alone — they belong to a specific
+// element on a specific page — and the "Re-scan page" action covers that case.
+let lastScanUrl=null, rescanTimer=null;
+function onTabNavigated(tab){
+  if(!tab?.url)return;
+  showUrl(tab.url);
+  if(tab.url===lastScanUrl)return;
+  if(uiState!=='scan'){
+    // Results belong to the page they came from. Don't throw them away while they
+    // are being read — say so and offer the rescan.
+    if(uiState==='results'&&resStale)resStale.hidden=false;
+    return;
+  }
+  clearTimeout(rescanTimer);
+  rescanTimer=setTimeout(()=>{if(uiState==='scan')autoScan();},350);   // coalesce redirect chains
+}
+chrome.tabs.onUpdated.addListener((tabId,ci,tab)=>{if(ci.url&&tab.active)onTabNavigated(tab);});
+chrome.tabs.onActivated.addListener(async(a)=>{try{onTabNavigated(await chrome.tabs.get(a.tabId));}catch{}});
 
 // ─── Messages ────────────────────────────────────────────────────
 
@@ -560,7 +578,7 @@ chrome.runtime.onMessage.addListener((msg)=>{
 // and itemised. No vendor score is claimed and nothing is invented.
 
 const KIND_LABEL={cta:'Call to action',headline:'Headline',body:'Body copy'};
-let scanResult=null,scanMaterial=null,scanBusy=false,scanMode='optimize';
+let resMaterialIndex=-1,scanResult=null,scanMaterial=null,scanBusy=false,scanMode='optimize';
 
 const scoreClass=(n)=>n<50?'low':n<75?'mid':'hi';
 
@@ -573,6 +591,7 @@ async function injectScanner(tabId){
 async function autoScan(){
   if(scanBusy)return;
   scanBusy=true;
+  if(btnRescan){btnRescan.disabled=true;btnRescan.textContent='Refreshing…';}
   scanSub.textContent='Reading the page’s copy…';
   scanDetail.style.display='none';
   scanList.innerHTML='<div class="scan-empty">Scanning…</div>';
@@ -581,6 +600,7 @@ async function autoScan(){
     if(!tab?.id)throw new Error('No active tab.');
     if(tab.url)showUrl(tab.url);
     scanUrl.textContent=shortUrl(tab.url||'');
+    lastScanUrl=tab.url||lastScanUrl;
     await injectScanner(tab.id);
     const r=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PAGE});
     if(!r?.ok)throw new Error(r?.error||'The page did not return a scan.');
@@ -601,7 +621,10 @@ async function autoScan(){
     scanSub.textContent='This page could not be scanned.';
     scanCount.textContent='—';
     scanList.innerHTML=`<div class="scan-empty">${esc(e?.message||'Chrome does not allow scanning this page.')} Reload the page, or record a brief instead.</div>`;
-  }finally{scanBusy=false;}
+  }finally{
+    scanBusy=false;
+    if(btnRescan){btnRescan.disabled=false;btnRescan.textContent='Refresh';}
+  }
 }
 
 function renderScanList(){
@@ -675,29 +698,36 @@ chrome.runtime.onMessage.addListener((msg)=>{
 
 // ─── Confirm / Optimize ──────────────────────────────────────────
 
-function currentProduct(){return productLine.value.trim()||scanResult?.productLine||'';}
+function currentProduct(){return (productLine?.value||'').trim()||scanResult?.productLine||'';}
 
 btnConfirm.addEventListener('click',()=>{
   if(!scanMaterial){tm('Pick a piece of copy first','err');return;}
-  const product=currentProduct();
-  if(!product){productLine.focus();tm('Add the product line first','err');return;}
-  renderSingle('confirm',{material:scanMaterial,product});
+  renderSingle('confirm',{material:scanMaterial,product:currentProduct()});
 });
 
 btnOptimize.addEventListener('click',()=>optimizeMaterial());
+if(btnRescan)btnRescan.addEventListener('click',()=>autoScan());
+// The result card is a dead end unless it can go back to the page's copy list.
+if(btnBackScan)btnBackScan.addEventListener('click',()=>{
+  if(resStale)resStale.hidden=true;
+  if(!scanResult){setUiState('scan');autoScan();return;}
+  setUiState('scan');
+  renderScanList();
+  if(resMaterialIndex>=0)selectMaterial(resMaterialIndex);
+});
+if(btnRescanStale)btnRescanStale.addEventListener('click',()=>{if(resStale)resStale.hidden=true;setUiState('scan');autoScan();});
 
 function optimizeMaterial(){
   const m=scanMaterial;
   if(!m){tm('Pick a piece of copy first','err');return;}
   const product=currentProduct();
-  if(!product){productLine.focus();tm('Add the product line first','err');return;}
 
   const host=shortUrl(scanResult?.url||currentUrl);
   // The gateway's contract is a brief + the element to rewrite. The scan replaces
   // the microphone here, so the brief is written from what was measured — the
   // element, its slot, and the product line the user confirmed.
   const narration=`Optimize the ${(KIND_LABEL[m.kind]||'copy').toLowerCase()} on ${host}. `
-    +`Current copy: “${m.text}”. Product line: ${product}. Objective: ${goalValue}. `
+    +`Current copy: “${m.text}”. ${product?`Product line: ${product}. `:''}Objective: ${goalValue}. `
     +`Rewrite that one line so it states what the reader gets, in the same slot and with the same intent.`;
   const payload={
     narration,audience:product,goal:goalValue,pageUrl:scanResult?.url||currentUrl,
@@ -729,6 +759,8 @@ function optimizeMaterial(){
 }
 
 function renderSingle(mode,sel){
+  if(resStale)resStale.hidden=true;
+  resMaterialIndex=(scanResult?.materials||[]).findIndex(x=>sel.material&&x.id===sel.material.id);
   const m=sel.material;
   scanMode=mode;
   briefPayload=sel.payload||null;

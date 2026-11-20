@@ -8,6 +8,23 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.1
+
+The panel follows the page. Before this, switching tabs left the previous page's
+copy on screen with no way to tell.
+
+- `chrome.tabs.onUpdated` / `onActivated` now re-scan when the URL changes while
+  the scan is on screen (coalesced over 350 ms so redirect chains scan once).
+- A **Refresh** button sits in the scan header; the footer "↻ Re-scan page"
+  remains. Both are the same `autoScan()`.
+- Results are *not* silently swapped out mid-read: a navigation while a result
+  card is open shows "You moved to a different page — Scan this page".
+- The result card gained **← Page**, returning to the material list with the
+  selected row and its deductions still selected.
+- **Product line field removed.** It was a question nobody wanted to answer; the
+  value is still detected and used to seed the rewrite prompt, and Confirm and
+  Optimize no longer block when none is found.
+
 ## 0.7.0
 
 The panel now opens by reading the page instead of asking the user to describe it.
