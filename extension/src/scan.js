@@ -72,6 +72,35 @@
   }
 
   /**
+   * The product's five bands. A number on its own invites the question this panel
+   * kept getting — "why is everything in the 80s?" — so the band is always shown
+   * with it, and ceilings (below) stop copy from reaching a band it has not earned.
+   */
+  const BANDS=[{min:90,key:'excellent',label:'Excellent'},{min:73,key:'strong',label:'Strong'},
+               {min:60,key:'good',label:'Good'},{min:40,key:'fair',label:'Fair'},{min:0,key:'weak',label:'Weak'}];
+  function bandFor(n){
+    const hit=BANDS.find(b=>n>=b.min)||BANDS[BANDS.length-1];
+    return {key:hit.key,label:hit.label};
+  }
+
+  /**
+   * A deduction lowers the score; a ceiling scales how far that score can travel at
+   * all. Without ceilings a line dodged every regex and scored 100 while still saying
+   * nothing — proving the checklist, not the copy. Values are the share of the top
+   * score the copy is eligible for.
+   */
+  const CEILINGS=[
+    {label:'No concrete outcome',cap:74,why:'names no number, price, time, or named benefit'},
+    {label:'Generic CTA verb',cap:49,why:'tells the reader what to click, not what they get'},
+    {label:'Meaningless label',cap:30,why:'carries no outcome at all'},
+    {label:'Abstract jargon',cap:59,why:'uses a category word where a benefit belongs'},
+    {label:'Abstract verb',cap:59,why:'promises a feeling rather than an action'},
+    {label:'Opens with a greeting',cap:59,why:'welcomes the reader instead of promising them something'},
+    {label:'No action verb first',cap:74,why:'does not open with something the reader can do'},
+    {label:'Passive construction',cap:79,why:'describes the thing, not what the reader gets'}
+  ];
+
+  /**
    * Score a piece of copy 0–100 (100 = nothing measurable working against it).
    * `kind` is 'cta' | 'headline' | 'body'. Returns every deduction that applied,
    * so the UI can say WHY rather than showing a bare number.
@@ -80,7 +109,7 @@
     const t = String(text || '').replace(/\s+/g, ' ').trim();
     const issues = [];
     const deduct = (points, label, detail) => { if (points > 0) issues.push({ points, label, detail }); };
-    if (!t) return { score: 0, issues: [{ points: 100, label: 'No copy', detail: 'The element has no readable text.' }] };
+    if (!t) return { score: 0, raw: 0, band: bandFor(0), cappedBy: null, issues: [{ points: 100, label: 'No copy', detail: 'The element has no readable text.' }] };
 
     const words = t.split(/\s+/).filter(Boolean);
     const wordCount = words.length;
@@ -118,8 +147,17 @@
       if (kind === 'cta' && box.fontSize && box.fontSize < 13) deduct(5, 'Tiny label', `${Math.round(box.fontSize)}px text.`);
     }
 
-    const score = clamp(Math.round(100 - issues.reduce((n, i) => n + i.points, 0)), 0, 100);
-    return { score, issues: issues.sort((a, b) => b.points - a.points) };
+    const raw = clamp(Math.round(100 - issues.reduce((n, i) => n + i.points, 0)), 0, 100);
+    let cap = 100, cappedBy = null;
+    for (const c of CEILINGS) {
+      if (issues.some(i => i.label === c.label) && c.cap < cap) { cap = c.cap; cappedBy = c; }
+    }
+    // The ceiling scales the checklist result rather than flat-capping it: a line that
+    // has not earned a concrete outcome cannot be scored as though it had, but two such
+    // lines still rank against each other instead of collapsing onto the same number.
+    const score = Math.round(raw * (cap / 100));
+    return { score, raw, band: bandFor(score), cappedBy,
+             issues: issues.sort((a, b) => b.points - a.points) };
   }
 
   // ── DOM scan ────────────────────────────────────────────────────
@@ -373,5 +411,6 @@
     self.__persadoScan = { listener, endPick };
   }
 
-  self.PERSADO_SCAN = { scan, scoreCopy, startPick, endPick, selectorFor };
+  self.PERSADO_SCAN = {
+    bandFor, scan, scoreCopy, startPick, endPick, selectorFor };
 })();

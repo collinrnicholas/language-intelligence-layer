@@ -580,7 +580,7 @@ chrome.runtime.onMessage.addListener((msg)=>{
 const KIND_LABEL={cta:'Call to action',headline:'Headline',body:'Body copy'};
 let resMaterialIndex=-1,scanResult=null,scanMaterial=null,scanBusy=false,scanMode='optimize';
 
-const scoreClass=(n)=>n<50?'low':n<75?'mid':'hi';
+const scoreClass=(n)=>n<60?'low':n<73?'mid':'hi';   // weak/fair · good · strong/excellent
 
 async function injectScanner(tabId){
   // messages.js rides along because scan.js reads MSG from it, exactly as the
@@ -634,7 +634,8 @@ function renderScanList(){
     +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
     +`<div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
     +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Weakest</span>':''}`
-    +`<span class="scan-score ${scoreClass(m.score)}">${m.score}</span></div></div>`).join('');
+    +`<span class="scan-score ${scoreClass(m.score)}">${m.score}</span>`
+    +`<span class="scan-band ${m.band?.key||''}">${esc(m.band?.label||'')}</span></div></div>`).join('');
   selectMaterial(0);
 }
 
@@ -649,7 +650,8 @@ function renderScanDetail(m){
   if(!m){scanDetail.style.display='none';return;}
   const issues=(m.issues||[]).slice(0,5);
   scanDetail.style.display='';
-  scanDetail.innerHTML=`<div class="scan-d-title">Scores <b>${m.score}</b>/100 · ${esc((KIND_LABEL[m.kind]||m.kind).toLowerCase())} · ${m.prominence}% of the page’s attention</div>`
+  scanDetail.innerHTML=`<div class="scan-d-title">Scores <b>${m.score}</b>/100 · ${esc(m.band?.label||'')} · ${esc((KIND_LABEL[m.kind]||m.kind).toLowerCase())} · ${m.prominence}% of the page’s attention</div>`
+    +(m.cappedBy?`<div class="scan-cap">Topped out at ${esc(m.band?.label||'')}: ${esc(m.cappedBy.why)}.</div>`:'')
     +`<div class="scan-d-copy">“${esc(m.text)}”</div>`
     +`<div class="scan-why">${issues.length
       ?issues.map(x=>`<div class="scan-why-i"><b>−${x.points}</b><span><strong>${esc(x.label)}.</strong> ${esc(x.detail)}</span></div>`).join('')
@@ -766,7 +768,7 @@ function renderSingle(mode,sel){
   briefPayload=sel.payload||null;
   recommendations=null;
   const original=m.score;
-  const scored=mode==='optimize'?sel.best.local:{score:m.score,issues:m.issues||[]};
+  const scored=mode==='optimize'?sel.best.local:{score:m.score,band:m.band,cappedBy:m.cappedBy,issues:m.issues||[]};
   const copy=mode==='optimize'?sel.best.copy:m.text;
   const fixed=mode==='optimize'?m.issues.filter(i=>!scored.issues.some(j=>j.label===i.label)):[];
 
@@ -777,23 +779,28 @@ function renderSingle(mode,sel){
   resOrigText.textContent=m.text;
   resOrig.style.display='';
 
+  const bandMove=scored.band&&m.band&&scored.band.key!==m.band.key?`${m.band.label} → ${scored.band.label}`:'';
   const remaining=(scored.issues||[]).slice(0,4);
   resultsContainer.innerHTML=`<div class="opt-card">`
     +`<div class="opt-top"><span class="opt-label">${mode==='optimize'?'Optimized':'As written'}</span>`
-    +`<span class="opt-score">score<b>${scored.score}</b></span></div>`
+    +`<span class="opt-score">score<b>${scored.score}</b><span class="opt-band ${scored.band?.key||''}">${esc(scored.band?.label||'')}</span></span></div>`
     +`<div class="opt-copy">${esc(copy)}</div>`
     +(mode==='optimize'&&sel.best.rationale?`<div class="opt-why"><div class="opt-why-i">${esc(sel.best.rationale)}</div></div>`:'')
     +(remaining.length?`<div class="opt-why">${remaining.map(x=>`<div class="opt-why-i"><strong>Still weak:</strong> ${esc(x.label)} — ${esc(x.detail)}</div>`).join('')}</div>`:'')
     +`<div class="opt-delta">${mode==='optimize'
-        ?`Scored <b>${original}</b> before and <b>${scored.score}</b> now${fixed.length?` · removed: ${esc(fixed.map(f=>f.label.toLowerCase()).join(', '))}`:''}.`
+        ?`Scored <b>${original}</b> before and <b>${scored.score}</b> now`
+          +`${bandMove?` · ${esc(bandMove)}`:''}`
+          +`${fixed.length?` · removed: ${esc(fixed.map(f=>f.label.toLowerCase()).join(', '))}`:''}.`
         :`Same copy measured against the same rules. Press Optimize to rewrite it.`}</div>`
+    +(scored.cappedBy?`<div class="opt-delta">Capped at <b>${esc((PERSADO_SCAN.bandFor(scored.cappedBy.cap)||{}).label||'')}</b>: `
+      +`${esc(scored.cappedBy.why)}.${mode==='optimize'?'':' Clear it and the score can climb.'}</div>`:'')
     +`<div class="opt-act">`
     +(mode==='confirm'?`<button class="vc-optimize" id="btnOptFromCard">Optimize this</button>`:'')
     +`<button class="vc-copybtn" id="btnCopyOpt">Copy</button>`
     +`<button class="vc-use" id="btnUseOpt">Use this</button></div>`
     +`</div>`;
 
-  resNote.textContent='Score is a local copy check — action verb, specificity, length, contrast, tap size. It is not a Motivation AI score.';
+  resNote.textContent='Score is a local copy check — action verb, specificity, length, contrast, tap size — capped by the five Persado bands. It is not a Motivation AI score.';
   resNote.style.display='';
   // Brief and Portal actions belong to the narrated flow; this screen has neither.
   btnViewBrief.style.display='none';

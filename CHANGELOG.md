@@ -8,6 +8,29 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.2
+
+Scores were honest but not calibrated: a line could dodge every rule, score 100,
+and still say nothing. The band was the missing half of the answer.
+
+- Five bands, exactly as the product names them: **Weak / Fair / Good / Strong /
+  Excellent** (0–39 / 40–59 / 60–72 / 73–89 / 90–100). The number is always shown
+  with its band, everywhere a score appears.
+- **Ceilings.** Missing proof now limits how high a line can score at all, and the
+  ceiling *scales* the checklist result instead of flat-capping it, so two weak
+  lines still rank against each other:
+  generic CTA 49, meaningless label 30, abstract jargon / abstract verb / greeting
+  opener 59, no concrete outcome / no action verb first 74, passive 79.
+- The detail panel and the result card say which ceiling applied and why
+  ("Capped at Fair: uses a category word where a benefit belongs").
+- The result card shows the band move: "Fair → Good".
+- Sample movement: "Learn more" 65 → **32 Weak**; "Unlock Your High-Yield Savings
+  Potential" 82 → **48 Fair**; "Why teams choose us" 90 → **67 Good**;
+  "Open your account in 3 minutes" 100 → **100 Excellent**.
+
+Scores remain a local rule check, not a Motivation AI score, and the disclaimer
+now says the bands are the product's.
+
 ## 0.7.1
 
 The panel follows the page. Before this, switching tabs left the previous page's

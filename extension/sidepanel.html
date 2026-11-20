@@ -445,6 +445,16 @@
       background:#FEF2F2;border:1px solid #FBD5D5;border-radius:999px;padding:2px 6px;white-space:nowrap;}
     .scan-score{font-family:var(--mono);font-size:13px;font-weight:600;min-width:24px;text-align:right;}
     .scan-score.low{color:var(--red);}.scan-score.mid{color:var(--amber-text);}.scan-score.hi{color:var(--green-text);}
+    /* The band is not decoration: it is the ceiling a line earned, so it never
+       appears without the number and vice versa. */
+    .scan-cap{font-size:11px;color:var(--text-2);margin:2px 0 6px;}
+    .scan-band{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+      padding:2px 6px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);background:var(--surface-2);white-space:nowrap;}
+    .scan-band.weak,.scan-band.fair{color:var(--red);border-color:rgba(190,40,40,.25);}
+    .scan-band.good{color:var(--amber-text);border-color:rgba(180,120,10,.25);}
+    .scan-band.strong,.scan-band.excellent{color:var(--green-text);border-color:rgba(20,120,60,.25);}
+    .opt-band{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-left:8px;
+      padding:2px 7px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);background:var(--surface-2);}
     .scan-detail{margin-top:14px;border-top:1px solid var(--border);padding-top:14px;flex:none;}
     .scan-d-title{font-size:12.5px;font-weight:600;color:var(--text-1);margin-bottom:2px;}
     .scan-d-copy{font-size:12.5px;color:var(--text-2);font-style:italic;margin-bottom:10px;}
