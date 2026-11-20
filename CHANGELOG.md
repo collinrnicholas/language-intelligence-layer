@@ -8,6 +8,17 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.7
+
+Leaving the Optimize result was a one-way door.
+
+- The header action says **Back to list** and returns to the ranked list with the
+  asset you were looking at still selected — it does not re-scan and does not throw
+  the scan away.
+- The footer action on a result card is **Back to list** too. It used to say
+  "Re-scan page", which read as destructive when all you want is the previous screen.
+- **Escape** leaves a result card. A screen you cannot exit from the keyboard is
+  still a dead end, even with a button on it.
 ## 0.7.6
 
 - Rank numbers are gone from the asset list. The order plus the **Start here** badge

@@ -732,12 +732,20 @@ btnConfirm.addEventListener('click',()=>{
 btnOptimize.addEventListener('click',()=>optimizeMaterial());
 if(btnRescan)btnRescan.addEventListener('click',()=>autoScan());
 // The result card is a dead end unless it can go back to the page's copy list.
-if(btnBackScan)btnBackScan.addEventListener('click',()=>{
+function backToList(){
   if(resStale)resStale.hidden=true;
   if(!scanResult){setUiState('scan');autoScan();return;}
   setUiState('scan');
   renderScanList();
   if(resMaterialIndex>=0)selectMaterial(resMaterialIndex);
+}
+if(btnBackScan)btnBackScan.addEventListener('click',backToList);
+// Escape leaves the result card too — the header button is small, and a screen you
+// cannot leave with the keyboard is still a dead end.
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(!pnlResults.classList.contains('active'))return;
+  e.preventDefault();backToList();
 });
 if(btnRescanStale)btnRescanStale.addEventListener('click',()=>{if(resStale)resStale.hidden=true;setUiState('scan');autoScan();});
 
@@ -827,9 +835,9 @@ function renderSingle(mode,sel){
   // Brief and Portal actions belong to the narrated flow; this screen has neither.
   btnViewBrief.style.display='none';
   btnSendPortal.style.display='none';
-  // The footer action means something different here: there is no brief to
-  // re-record, so it re-reads the page.
-  btnNewBrief.innerHTML='<span class="re-ico" aria-hidden="true">↻</span>Re-scan page';
+  // Footer is the second, more obvious exit from a result card; the header has the
+  // other one. Both return to the ranked list without throwing the scan away.
+  btnNewBrief.textContent='Back to list';
 
   const copyBtn=resultsContainer.querySelector('.vc-copybtn');
   const useBtn=resultsContainer.querySelector('.vc-use');
@@ -1314,7 +1322,6 @@ function renderResults(){
   portalResult.style.display='none';selectedVariant=-1;
   // The scan screen hid these; the narrated flow still needs them.
   btnViewBrief.style.display='';btnSendPortal.style.display='';
-  btnNewBrief.innerHTML='<span class="re-ico" aria-hidden="true">↻</span>Scan again';
   const n=recommendations?.length||0;
   const b=briefPayload||{};
   // Dynamic heading, singular at 1.
@@ -1465,7 +1472,7 @@ function resetAll(){
 // Record-a-brief is retained but is no longer the front door, so it must not be a
 // one-way trip: this returns to the page scan without discarding anything.
 if(btnBackToScan)btnBackToScan.addEventListener('click',()=>{setUiState('scan');autoScan();});
-btnNew.addEventListener('click',resetAll);
+btnNew.addEventListener('click',()=>{(scanResult&&scanMode)?backToList():resetAll();});
 
 /** "You have an unsent brief from {time}" — shown on the start screen. */
 async function offerResume(){
