@@ -41,7 +41,7 @@ The gateway holds the provider API keys. The extension never sees them.
 ```bash
 # 1. Start the gateway — required; transcription and generation both need it
 OPENAI_API_KEY=sk-... npm run gateway
-curl -s http://127.0.0.1:8787/health
+curl -s http://127.0.0.1:8788/health
 
 # 2. Load the extension
 #    chrome://extensions → Developer mode → Load unpacked → select extension/

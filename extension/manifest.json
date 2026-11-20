@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Persado Capture",
-  "version": "0.6.45",
+  "version": "0.7.0",
   "description": "Capture a structured, grounded marketing brief by narrating at the live page — the element, its current copy, the audience, the objective and your intent.",
   "permissions": [
     "storage",
@@ -13,7 +13,9 @@
   "host_permissions": [
     "<all_urls>",
     "http://127.0.0.1:8787/*",
-    "http://localhost:8787/*"
+    "http://localhost:8787/*",
+    "http://127.0.0.1:8788/*",
+    "http://localhost:8788/*"
   ],
   "background": {
     "service_worker": "src/background.js"

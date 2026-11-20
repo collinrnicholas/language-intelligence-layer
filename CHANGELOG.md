@@ -8,6 +8,33 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.0
+
+The panel now opens by reading the page instead of asking the user to describe it.
+`src/scan.js` scores every headline and button against named copy and layout rules
+(generic verb, no concrete outcome, abstract jargon, greeting opener, abstract verb,
+length, contrast, tap size) and orders them by opportunity — the attention a slot
+commands times the weakness of its copy — so the weakest material in the most
+valuable slot is first. The product line is filled from Product/Service schema,
+falling back to the og/title noun phrase.
+
+Two actions, one answer each. **Confirm current** returns the score with every
+deduction itemised and rewrites nothing. **Optimize** sends the selected element to
+the gateway, scores the returned lines on the same rules, and shows only the
+highest-scoring one with its rationale, the before/after delta, and what is still
+weak. The other variants are discarded rather than listed. "Pick on page" covers
+what the scan skips (a phrase inside a paragraph, an icon-only button, anything
+behind a hover state).
+
+The score is a local copy check and the UI says so — it is not presented as a
+Motivation AI score.
+
+Gateway: the extension now points at port 8788 and `install-launchd.sh` installs
+`dev.persado.gateway` there. Loupe's gateway already owns 8787 on this machine and
+serves no `/v1/ai/recommend`, so Optimize 404'd against it; the two gateways now
+have separate labels and ports and can coexist. `sh()` gained the scan panel, so
+switching panels can no longer leave two of them active.
+
 ## 0.6.45
 
 The proof stat now always shows on the ready screen. Dropped the first-run gate

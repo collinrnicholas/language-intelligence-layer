@@ -43,6 +43,10 @@ const capLine=$('capLine'),resultsContainer=$('resultsContainer'),btnNew=$('btnN
 const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrigText=$('resOrigText'),resNote=$('resNote');
 const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload'),portalDismiss=$('portalDismiss');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
+// Scan screen (the panel's front door).
+const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount');
+const productLine=$('productLine'),productHint=$('productHint'),scanList=$('scanList'),scanDetail=$('scanDetail');
+const btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick'),btnRecordInstead=$('btnRecordInstead');
 
 const LISTENING='Listening — describe the problem and the audience.';
 const PAUSED_MSG='Paused — nothing is being recorded.';
@@ -92,7 +96,7 @@ function tm(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(
 // PRIMITIVES — only setUiState may call these. sh() switches the active panel; st()
 // renders the header chip. Calling them directly is what let the active panel, the
 // header, and the .rec-live.on toggle drift apart (see setUiState).
-function sh(p){[pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
+function sh(p){[pnlScan,pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
 // Status chip colour follows real recorder state (§2): red RECORDING, amber
 // PAUSED/WORKING/needs-attention, green READY/complete.
 function st(t){headerText.textContent=t;headerStatus.className='hdr-st '+(/record/i.test(t)?'rec':/process|generat|error|pause|work/i.test(t)?'work':'');}
@@ -105,6 +109,7 @@ function st(t){headerText.textContent=t;headerStatus.className='hdr-st '+(/recor
 // place all three move, so they cannot desync. Every former sh()/st()/recLive
 // mutation routes through here.
 const UI_STATES={
+  scan:        {panel:pnlScan,    header:'Ready'},
   ready:       {panel:pnlConfig,  header:'Ready'},
   starting:    {panel:pnlRecord,  header:'Starting…', live:true},  // mounted, not yet confirmed live
   recording:   {panel:pnlRecord,  header:'Recording', live:true},
@@ -543,6 +548,241 @@ chrome.runtime.onMessage.addListener((msg)=>{
     renderTranscript();
   }
 });
+
+
+// ─── Page scan ───────────────────────────────────────────────────
+//
+// The panel's front door no longer asks the user to describe the page. It reads
+// the page, ranks the copy in it by opportunity (valuable slot × weak copy), and
+// offers ONE decision: confirm what is there, or optimize the selected line.
+//
+// Every score shown here comes from PERSADO_SCAN.scoreCopy — local, rule-based,
+// and itemised. No vendor score is claimed and nothing is invented.
+
+const KIND_LABEL={cta:'Call to action',headline:'Headline',body:'Body copy'};
+let scanResult=null,scanMaterial=null,scanBusy=false,scanMode='optimize';
+
+const scoreClass=(n)=>n<50?'low':n<75?'mid':'hi';
+
+async function injectScanner(tabId){
+  // messages.js rides along because scan.js reads MSG from it, exactly as the
+  // recorder does. Both files are idempotent.
+  await chrome.scripting.executeScript({target:{tabId},files:['src/messages.js','src/scan.js']});
+}
+
+async function autoScan(){
+  if(scanBusy)return;
+  scanBusy=true;
+  scanSub.textContent='Reading the page’s copy…';
+  scanDetail.style.display='none';
+  scanList.innerHTML='<div class="scan-empty">Scanning…</div>';
+  try{
+    const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
+    if(!tab?.id)throw new Error('No active tab.');
+    if(tab.url)showUrl(tab.url);
+    scanUrl.textContent=shortUrl(tab.url||'');
+    await injectScanner(tab.id);
+    const r=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PAGE});
+    if(!r?.ok)throw new Error(r?.error||'The page did not return a scan.');
+    scanResult=r;
+    if(!productLine.value.trim()){
+      productLine.value=r.productLine||'';
+      productHint.textContent=r.productSource
+        ?`Detected from the ${r.productSource} — edit it if it is wrong.`
+        :'No product or offer name found on this page — type one.';
+    }
+    const ms=r.materials||[];
+    scanCount.textContent=ms.length?`${ms.length} found`:'nothing found';
+    scanSub.textContent=ms.length
+      ?'Ranked by how much attention the slot gets against how weak the copy is. The top one is the best place to start.'
+      :'No buttons or headlines could be read here. Record a brief instead.';
+    renderScanList();
+  }catch(e){
+    scanSub.textContent='This page could not be scanned.';
+    scanCount.textContent='—';
+    scanList.innerHTML=`<div class="scan-empty">${esc(e?.message||'Chrome does not allow scanning this page.')} Reload the page, or record a brief instead.</div>`;
+  }finally{scanBusy=false;}
+}
+
+function renderScanList(){
+  const ms=scanResult?.materials||[];
+  if(!ms.length){scanDetail.style.display='none';return;}
+  scanList.innerHTML=ms.map((m,i)=>`<div class="scan-row${i===0?' weak':''}" data-i="${i}" role="button" tabindex="0">`
+    +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
+    +`<div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
+    +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Weakest</span>':''}`
+    +`<span class="scan-score ${scoreClass(m.score)}">${m.score}</span></div></div>`).join('');
+  selectMaterial(0);
+}
+
+function selectMaterial(i){
+  const ms=scanResult?.materials||[];
+  scanMaterial=ms[i]||null;
+  scanList.querySelectorAll('.scan-row').forEach(r=>r.classList.toggle('sel',+r.dataset.i===i));
+  renderScanDetail(scanMaterial);
+}
+
+function renderScanDetail(m){
+  if(!m){scanDetail.style.display='none';return;}
+  const issues=(m.issues||[]).slice(0,5);
+  scanDetail.style.display='';
+  scanDetail.innerHTML=`<div class="scan-d-title">Scores <b>${m.score}</b>/100 · ${esc((KIND_LABEL[m.kind]||m.kind).toLowerCase())} · ${m.prominence}% of the page’s attention</div>`
+    +`<div class="scan-d-copy">“${esc(m.text)}”</div>`
+    +`<div class="scan-why">${issues.length
+      ?issues.map(x=>`<div class="scan-why-i"><b>−${x.points}</b><span><strong>${esc(x.label)}.</strong> ${esc(x.detail)}</span></div>`).join('')
+      :'<div class="scan-why-i"><b>0</b><span>Nothing measurable is working against this copy — it is simply the highest-attention slot on the page.</span></div>'}</div>`;
+}
+
+scanList.addEventListener('click',(e)=>{
+  const row=e.target.closest('.scan-row');if(!row)return;
+  selectMaterial(+row.dataset.i);
+});
+scanList.addEventListener('keydown',(e)=>{
+  const row=e.target.closest('.scan-row');if(!row)return;
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();selectMaterial(+row.dataset.i);}
+});
+
+btnRecordInstead.addEventListener('click',()=>setUiState('ready'));
+
+// ─── Pick on page ────────────────────────────────────────────────
+// For anything the scan skipped — a phrase inside a paragraph, an icon button
+// with no text, an element behind a hover state. Selecting text first picks that
+// phrase instead of the whole block.
+
+btnPick.addEventListener('click',async()=>{
+  try{
+    const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
+    if(!tab?.id)throw new Error('No active tab.');
+    await injectScanner(tab.id);
+    const r=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PICK});
+    if(!r?.ok)throw new Error(r?.error||'Could not start picking.');
+    tm(r.selection?'Using your selected text':'Click the copy on the page');
+  }catch(e){tm(e?.message||'Could not start picking on this page','err');}
+});
+
+// scan.js reports the picked element from the page context.
+chrome.runtime.onMessage.addListener((msg)=>{
+  if(msg.type===MSG.SCAN_CANCELLED){tm('Picking cancelled');return;}
+  if(msg.type===MSG.SCAN_PICKED){
+    if(!msg.material)return;
+    if(!scanResult)scanResult={materials:[]};
+    scanResult.materials=[{...msg.material,id:0},...(scanResult.materials||[])];
+    renderScanList();
+    selectMaterial(0);
+    tm('Picked from the page');
+  }
+});
+
+// ─── Confirm / Optimize ──────────────────────────────────────────
+
+function currentProduct(){return productLine.value.trim()||scanResult?.productLine||'';}
+
+btnConfirm.addEventListener('click',()=>{
+  if(!scanMaterial){tm('Pick a piece of copy first','err');return;}
+  const product=currentProduct();
+  if(!product){productLine.focus();tm('Add the product line first','err');return;}
+  renderSingle('confirm',{material:scanMaterial,product});
+});
+
+btnOptimize.addEventListener('click',()=>optimizeMaterial());
+
+function optimizeMaterial(){
+  const m=scanMaterial;
+  if(!m){tm('Pick a piece of copy first','err');return;}
+  const product=currentProduct();
+  if(!product){productLine.focus();tm('Add the product line first','err');return;}
+
+  const host=shortUrl(scanResult?.url||currentUrl);
+  // The gateway's contract is a brief + the element to rewrite. The scan replaces
+  // the microphone here, so the brief is written from what was measured — the
+  // element, its slot, and the product line the user confirmed.
+  const narration=`Optimize the ${(KIND_LABEL[m.kind]||'copy').toLowerCase()} on ${host}. `
+    +`Current copy: “${m.text}”. Product line: ${product}. Objective: ${goalValue}. `
+    +`Rewrite that one line so it states what the reader gets, in the same slot and with the same intent.`;
+  const payload={
+    narration,audience:product,goal:goalValue,pageUrl:scanResult?.url||currentUrl,
+    assetType:m.kind==='cta'?'web-cta':'web-headline',
+    element:{type:m.type,text:m.text,selector:m.selector,context:m.context},
+    ...((scanResult?.materials||[]).length>1?{elements:scanResult.materials.filter(x=>x!==m).slice(0,4)
+      .map(({type,text,context,selector})=>({type,text,context,selector}))}:{}),
+  };
+
+  const label=btnOptimize.textContent;
+  btnOptimize.disabled=true;btnOptimize.textContent='Optimizing…';
+  (async()=>{
+    try{
+      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
+      const variants=(await resp.json()).variants||[];
+      if(!variants.length)throw new Error('The gateway returned no copy.');
+      // The user asked for ONE answer, so every returned line is scored on the same
+      // rules as the original and only the best is shown. The rest are discarded,
+      // not listed — a wall of variants is exactly what this screen avoids.
+      const scored=variants.map(v=>({...v,local:PERSADO_SCAN.scoreCopy(v.copy,m.kind)})).sort((a,b)=>b.local.score-a.local.score);
+      renderSingle('optimize',{material:m,best:scored[0],payload,product});
+    }catch(e){
+      tm(gatewayMessage(e.kind,e.message,e.url),'err');
+    }finally{
+      btnOptimize.disabled=false;btnOptimize.textContent=label;
+    }
+  })();
+}
+
+function renderSingle(mode,sel){
+  const m=sel.material;
+  scanMode=mode;
+  briefPayload=sel.payload||null;
+  recommendations=null;
+  const original=m.score;
+  const scored=mode==='optimize'?sel.best.local:{score:m.score,issues:m.issues||[]};
+  const copy=mode==='optimize'?sel.best.copy:m.text;
+  const fixed=mode==='optimize'?m.issues.filter(i=>!scored.issues.some(j=>j.label===i.label)):[];
+
+  resHeading.textContent=mode==='optimize'?'Optimized copy':'Current copy, scored';
+  resCtx.innerHTML=[(sel.product||'').toUpperCase(),(KIND_LABEL[m.kind]||'').toUpperCase()]
+    .filter(Boolean).map(x=>`<span class="nw">${esc(x)}</span>`).join(' · ');
+  capLine.textContent=mode==='optimize'?'One line · scored against the same rules':'Measured only — nothing rewritten';
+  resOrigText.textContent=m.text;
+  resOrig.style.display='';
+
+  const remaining=(scored.issues||[]).slice(0,4);
+  resultsContainer.innerHTML=`<div class="opt-card">`
+    +`<div class="opt-top"><span class="opt-label">${mode==='optimize'?'Optimized':'As written'}</span>`
+    +`<span class="opt-score">score<b>${scored.score}</b></span></div>`
+    +`<div class="opt-copy">${esc(copy)}</div>`
+    +(mode==='optimize'&&sel.best.rationale?`<div class="opt-why"><div class="opt-why-i">${esc(sel.best.rationale)}</div></div>`:'')
+    +(remaining.length?`<div class="opt-why">${remaining.map(x=>`<div class="opt-why-i"><strong>Still weak:</strong> ${esc(x.label)} — ${esc(x.detail)}</div>`).join('')}</div>`:'')
+    +`<div class="opt-delta">${mode==='optimize'
+        ?`Scored <b>${original}</b> before and <b>${scored.score}</b> now${fixed.length?` · removed: ${esc(fixed.map(f=>f.label.toLowerCase()).join(', '))}`:''}.`
+        :`Same copy measured against the same rules. Press Optimize to rewrite it.`}</div>`
+    +`<div class="opt-act">`
+    +(mode==='confirm'?`<button class="vc-optimize" id="btnOptFromCard">Optimize this</button>`:'')
+    +`<button class="vc-copybtn" id="btnCopyOpt">Copy</button>`
+    +`<button class="vc-use" id="btnUseOpt">Use this</button></div>`
+    +`</div>`;
+
+  resNote.textContent='Score is a local copy check — action verb, specificity, length, contrast, tap size. It is not a Motivation AI score.';
+  resNote.style.display='';
+  // Brief and Portal actions belong to the narrated flow; this screen has neither.
+  btnViewBrief.style.display='none';
+  btnSendPortal.style.display='none';
+  // The footer action means something different here: there is no brief to
+  // re-record, so it re-reads the page.
+  btnNewBrief.innerHTML='<span class="re-ico" aria-hidden="true">↻</span>Re-scan page';
+
+  const copyBtn=resultsContainer.querySelector('.vc-copybtn');
+  const useBtn=resultsContainer.querySelector('.vc-use');
+  copyBtn.onclick=()=>navigator.clipboard.writeText(copy).then(()=>{
+    const b=copyBtn;b.textContent='Copied';b.classList.add('done');
+    clearTimeout(b._t);b._t=setTimeout(()=>{b.textContent='Copy';b.classList.remove('done');},2000);
+  }).catch(()=>tm('Could not copy','err'));
+  // Confirming the copy is a decision to rewrite it next, not a dead end.
+  const optBtn=resultsContainer.querySelector('.vc-optimize');
+  if(optBtn)optBtn.onclick=()=>optimizeMaterial();
+  useBtn.onclick=()=>{navigator.clipboard.writeText(copy).then(()=>tm('Copied — paste it into the page')).catch(()=>tm('Could not copy','err'));};
+
+  setUiState('results');
+}
 
 // ─── Start screen → recording ────────────────────────────────────
 
@@ -1011,6 +1251,9 @@ function trunc(s,n){s=String(s);return s.length>n?s.slice(0,n-1).trimEnd()+'…'
 
 function renderResults(){
   portalResult.style.display='none';selectedVariant=-1;
+  // The scan screen hid these; the narrated flow still needs them.
+  btnViewBrief.style.display='';btnSendPortal.style.display='';
+  btnNewBrief.innerHTML='<span class="re-ico" aria-hidden="true">↻</span>Re-record brief';
   const n=recommendations?.length||0;
   const b=briefPayload||{};
   // Dynamic heading, singular at 1.
@@ -1156,7 +1399,7 @@ function resetAll(){
   btnPause.disabled=false;btnStopRec.disabled=false;
   chrome.storage.local.remove([KEYS.RECORDING,KEYS.TRANSCRIPT,KEYS.RECORDING_START]);
   chrome.runtime.sendMessage({type:MSG.CLEAR_PAGE_CONTEXT}).catch(()=>{});setActionState('ready');
-  setUiState('ready');
+  setUiState('scan');autoScan();
 }
 btnNew.addEventListener('click',resetAll);
 
@@ -1229,6 +1472,8 @@ async function init(){
       await generateRecommendations(narrationTranscript);return;
     }
   }catch{}
-  setUiState('ready');
+  // Nothing recorded yet: read the page and put the weakest copy in front of them.
+  setUiState('scan');
+  autoScan();
 }
 init().catch(fatal);

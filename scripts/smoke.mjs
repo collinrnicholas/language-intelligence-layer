@@ -22,6 +22,7 @@ const HTML = read('sidepanel.html');
 const PANEL = read('sidepanel.js');
 const BG = read('src/background.js');
 const CONTENT = read('src/content.js');
+const SCAN = read('src/scan.js');
 const MESSAGES = read('src/messages.js');
 const BOOT = read('src/boot.js');
 const CONFIG = read('src/config.js');
@@ -36,7 +37,7 @@ const all = (re, s) => [...s.matchAll(re)].map(m => m[1]);
 /** Strip comments so documentation prose never counts as code. */
 const code = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
+const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C = code(SCAN);
 
 // ── 1. every $('id') in the panel exists in the HTML ──────────────
 {
@@ -76,7 +77,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
 // ── 4. message contract: declared / sent / handled ────────────────
 {
   const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'/gm, MESSAGES));
-  const files = { 'sidepanel.js': PANEL_C, 'src/background.js': BG_C, 'src/content.js': CONTENT_C };
+  const files = { 'sidepanel.js': PANEL_C, 'src/background.js': BG_C, 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C };
 
   // Any MSG.X referenced anywhere must exist in messages.js.
   for (const [name, src] of Object.entries(files)) {
@@ -254,7 +255,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT);
   // unexplainable "Failed to fetch". manifest host_permissions are allowed to
   // name it (they must), so only .js sources are counted.
   const sources = { 'src/config.js': CONFIG, 'sidepanel.js': PANEL, 'src/background.js': BG,
-                    'src/content.js': CONTENT, 'src/messages.js': MESSAGES, 'src/boot.js': BOOT };
+                    'src/content.js': CONTENT, 'src/scan.js': SCAN, 'src/messages.js': MESSAGES, 'src/boot.js': BOOT };
   const hits = [];
   for (const [name, src] of Object.entries(sources)) {
     const n = (src.match(/https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/g) || []).length;

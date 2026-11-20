@@ -38,6 +38,13 @@
     CLEAR_PAGE_CONTEXT: 'CLEAR_PAGE_CONTEXT',
     SET_ACTION_STATE: 'SET_ACTION_STATE',
 
+    // ── page scan (panel → tab, handled by src/scan.js)
+    SCAN_PAGE: 'SCAN_PAGE',
+    SCAN_PICK: 'SCAN_PICK',
+    // scan.js → panel (picked element / cancelled)
+    SCAN_PICKED: 'SCAN_PICKED',
+    SCAN_CANCELLED: 'SCAN_CANCELLED',
+
     // ── worker → panel
     TRANSCRIPT_READY: 'TRANSCRIPT_READY',
     TRANSCRIPT_ERROR: 'TRANSCRIPT_ERROR',

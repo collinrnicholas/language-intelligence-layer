@@ -9,18 +9,20 @@
 #   ./gateway/install-launchd.sh          # install + load
 #   launchctl unload ~/Library/LaunchAgents/dev.loupe.gateway.plist   # stop/disable
 #
-# DELIBERATELY UNRENAMED: the launchd label and the ~/.loupe paths below. The
-# label identifies an agent that may already be installed on this machine —
-# changing it orphans the old plist and can leave two gateways contending for
-# port 8787. ~/.loupe holds live data the inherited CLI reads. See CLAUDE.md §1.
+# OWN LABEL, OWN PORT. Loupe's gateway (dev.loupe.gateway) already owns 8787 on
+# this machine and serves a different API — it has no /v1/ai/recommend, so the
+# Persado panel's Optimize call 404'd against it. Persado therefore installs as
+# dev.persado.gateway on 8788. The env file stays ~/.loupe/gateway.env on purpose:
+# it holds the provider keys both gateways read. See CLAUDE.md §1.
 #
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-LABEL="dev.loupe.gateway"
+LABEL="dev.persado.gateway"
+PORT="${PERSADO_GATEWAY_PORT:-8788}"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 ENV_FILE="$HOME/.loupe/gateway.env"
-LOG_DIR="$HOME/.loupe/logs"
+LOG_DIR="$HOME/.persado/logs"
 NODE_BIN="$(command -v node)"
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR" "$HOME/.loupe"
@@ -35,7 +37,7 @@ if [ ! -f "$ENV_FILE" ]; then
 # equivalents still work if you already have them set.
 # PERSADO_MODEL_PREMIUM=gpt-4o
 # PERSADO_MODEL_STANDARD=gpt-4o-mini
-# PERSADO_GATEWAY_PORT=8787
+# PERSADO_GATEWAY_PORT=8788
 # PERSADO_GATEWAY_HOST=127.0.0.1
 EOF
   chmod 600 "$ENV_FILE"
@@ -53,7 +55,7 @@ cat > "$PLIST" <<EOF
   <array>
     <string>/bin/bash</string>
     <string>-c</string>
-    <string>set -a; . "$ENV_FILE"; set +a; exec "$NODE_BIN" "$REPO/gateway/server.mjs"</string>
+    <string>set -a; . "$ENV_FILE"; set +a; export PERSADO_GATEWAY_PORT=$PORT; exec "$NODE_BIN" "$REPO/gateway/server.mjs"</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -68,4 +70,4 @@ launchctl load "$PLIST"
 
 echo "→ Loaded $LABEL (starts at login, auto-restarts)."
 echo "  Logs:   $LOG_DIR/gateway.{out,err}.log"
-echo "  Verify: curl -s http://127.0.0.1:8787/health"
+echo "  Verify: curl -s http://127.0.0.1:$PORT/health"

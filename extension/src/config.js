@@ -14,7 +14,10 @@
   // while a server bound only to IPv4 listens on 127.0.0.1 (or the reverse), and
   // the failure looks identical to the gateway being down. gateway/server.mjs
   // binds 127.0.0.1 explicitly to match. Both are in manifest host_permissions.
-  const GATEWAY_URL = 'http://127.0.0.1:8787';
+  // 8788, not 8787: Loupe's gateway owns 8787 on this machine and has no
+  // /v1/ai/recommend — the Optimize call would 404 against it. Persado's gateway
+  // installs as dev.persado.gateway on this port (gateway/install-launchd.sh).
+  const GATEWAY_URL = 'http://127.0.0.1:8788';
 
   const ENDPOINTS = Object.freeze({
     HEALTH: '/health',
