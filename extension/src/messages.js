@@ -68,6 +68,9 @@
     // In a managed deployment this would be an administrator/enterprise-policy
     // decision, not an end-user preference.
     CAPTURE_SCREENSHOTS: 'persado:captureScreenshots',
+    // The user's Persado API key, entered in Settings. local storage so it survives
+    // a restart; never synced, never written anywhere but this profile.
+    API_KEY: 'persado:apiKey',
   });
 
   // Field names inside the stored page-context object. The producer

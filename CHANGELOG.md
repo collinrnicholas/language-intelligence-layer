@@ -8,6 +8,23 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.9
+
+A settings screen, and somewhere to put an API key.
+
+- **Settings** sits next to Refresh on the scan screen. Back to list, or Esc, returns
+  you without losing the scan.
+- **Persado API key** field: paste, Save key, Remove key. Stored in
+  `chrome.storage.local` under `persado:apiKey`, never echoed back into the field or
+  the status line, and read fresh on every request so saving takes effect on the next
+  click.
+- The key rides on both gateway calls as `x-persado-api-key`. It is sent to the local
+  gateway only.
+- The card says plainly that this build scores with a local model, so live Persado
+  scoring is not on yet — the field is wired but the switch it feeds does not exist.
+- **Link to Persado's API page** (`persado.com/api`) for getting access. Their keys
+  are issued through sales, not a self-serve portal, so the copy says request access
+  rather than sign up.
 ## 0.7.8
 
 Pick on page now finishes somewhere, and Esc escapes.

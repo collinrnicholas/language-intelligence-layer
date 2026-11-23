@@ -63,7 +63,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
 {
   const root = parse(HTML);
   const body = root.querySelector('body');
-  const panels = ['panelConfigure', 'panelRecord', 'panelProcess', 'panelBrief', 'panelResults'];
+  const panels = ['panelConfigure', 'panelRecord', 'panelProcess', 'panelBrief', 'panelResults', 'panelSettings'];
   for (const id of panels) {
     const el = root.querySelector(`#${id}`);
     if (!el) continue;

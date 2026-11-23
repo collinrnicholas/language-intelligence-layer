@@ -46,7 +46,7 @@ const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('t
 // Scan screen (the panel's front door).
 const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount'),hdrPage=$('hdrPage');
 const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanList=$('scanList'),scanDetail=$('scanDetail');
-const btnBackToScan=$('btnBackToScan'),pickBar=$('pickBar'),btnCancelPick=$('btnCancelPick'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
+const btnBackToScan=$('btnBackToScan'),pnlSettings=$('panelSettings'),btnSettings=$('btnSettings'),btnBackFromSettings=$('btnBackFromSettings'),apiKeyInput=$('apiKeyInput'),btnSaveKey=$('btnSaveKey'),btnClearKey=$('btnClearKey'),apiKeyState=$('apiKeyState'),btnOpenOptions=$('btnOpenOptions'),pickBar=$('pickBar'),btnCancelPick=$('btnCancelPick'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
 
 const LISTENING='Listening — describe the problem and the audience.';
 const PAUSED_MSG='Paused — nothing is being recorded.';
@@ -66,6 +66,7 @@ const REG_BY_AUDIENCE={retail:'Reg DD',business:'Reg DD',wealth:'Reg DD',cards:'
 
 /** Read the stored capture setting; the config default when nothing is stored. */
 async function readStoredCapture(){
+  await loadApiKey();
   try{const v=(await chrome.storage.local.get(KEYS.CAPTURE_SCREENSHOTS))[KEYS.CAPTURE_SCREENSHOTS];
     return typeof v==='boolean'?v:CAPTURE_DEFAULT;}catch{return CAPTURE_DEFAULT;}
 }
@@ -96,7 +97,7 @@ function tm(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(
 // PRIMITIVES — only setUiState may call these. sh() switches the active panel; st()
 // renders the header chip. Calling them directly is what let the active panel, the
 // header, and the .rec-live.on toggle drift apart (see setUiState).
-function sh(p){[pnlScan,pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
+function sh(p){[pnlScan,pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults,pnlSettings].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
 // Status chip colour follows real recorder state (§2): red RECORDING, amber
 // PAUSED/WORKING/needs-attention, green READY/complete.
 function st(t){headerText.textContent=t;headerStatus.className='hdr-st '+(/record/i.test(t)?'rec':/process|generat|error|pause|work/i.test(t)?'work':'');}
@@ -119,6 +120,7 @@ const UI_STATES={
   workingError:{panel:pnlProcess, header:'Error'},                 // process panel, its own error row
   brief:       {panel:pnlBrief,   header:'Done'},
   results:     {panel:pnlResults, header:'Done'},
+  settings:    {panel:pnlSettings, header:'Settings'},
 };
 let uiState=null;
 // A panel must not be shown before its content is rendered. brief/results are
@@ -697,6 +699,55 @@ scanList.addEventListener('keydown',(e)=>{
 // with no text, an element behind a hover state. Selecting text first picks that
 // phrase instead of the whole block.
 
+// ─── API key ────────────────────────────────────────────────────
+// Stored in chrome.storage.local under KEYS.API_KEY and read fresh for each request,
+// so saving a key takes effect on the next click with no reload. The value is never
+// echoed back into the field or the state line.
+let apiKey=null;
+async function loadApiKey(){
+  try{apiKey=(await chrome.storage.local.get(KEYS.API_KEY))[KEYS.API_KEY]||null;}catch(e){apiKey=null;}
+  return apiKey;
+}
+function apiKeyHeaders(){
+  const h={'Content-Type':'application/json'};
+  if(apiKey)h['x-persado-api-key']=apiKey;
+  return h;
+}
+function renderKeyState(msg,kind){
+  if(!apiKeyState)return;
+  apiKeyState.className='set-state'+(kind?' '+kind:'');
+  apiKeyState.textContent=msg||(apiKey?'Key saved on this device.':'No key saved yet.');
+}
+function openSettings(){
+  if(apiKeyInput)apiKeyInput.value='';
+  renderKeyState();
+  setUiState('settings');
+}
+if(btnSettings)btnSettings.addEventListener('click',openSettings);
+if(btnBackFromSettings)btnBackFromSettings.addEventListener('click',()=>{
+  if(scanResult){setUiState('scan');renderScanList();if(resMaterialIndex>=0)selectMaterial(resMaterialIndex);}
+  else{setUiState('scan');autoScan();}
+});
+if(btnOpenOptions)btnOpenOptions.addEventListener('click',()=>{
+  if(chrome.runtime.openOptionsPage)chrome.runtime.openOptionsPage();
+});
+if(btnSaveKey)btnSaveKey.addEventListener('click',async()=>{
+  const v=(apiKeyInput.value||'').trim();
+  if(!v){renderKeyState('Paste a key first.','err');apiKeyInput.focus();return;}
+  try{
+    await chrome.storage.local.set({[KEYS.API_KEY]:v});
+    apiKey=v;apiKeyInput.value='';
+    renderKeyState('Saved. The next request will use it.','on');
+  }catch(e){renderKeyState('Could not save the key.','err');}
+});
+if(btnClearKey)btnClearKey.addEventListener('click',async()=>{
+  try{
+    await chrome.storage.local.remove(KEYS.API_KEY);
+    apiKey=null;if(apiKeyInput)apiKeyInput.value='';
+    renderKeyState('Key removed. Requests run without it.','');
+  }catch(e){renderKeyState('Could not remove the key.','err');}
+});
+
 let picking=false,pickTabId=null;
 function setPicking(on){
   picking=on;
@@ -768,6 +819,7 @@ if(btnBackScan)btnBackScan.addEventListener('click',backToList);
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   if(picking){e.preventDefault();cancelPick();return;}
+  if(pnlSettings.classList.contains('active')){e.preventDefault();if(scanResult){setUiState('scan');renderScanList();}else{setUiState('scan');autoScan();}return;}
   if(!pnlResults.classList.contains('active'))return;
   e.preventDefault();backToList();
 });
@@ -797,7 +849,7 @@ function optimizeMaterial(){
   btnOptimize.disabled=true;btnOptimize.textContent='Optimizing…';
   (async()=>{
     try{
-      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:apiKeyHeaders(),body:JSON.stringify(payload)});
       if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
       const variants=(await resp.json()).variants||[];
       if(!variants.length)throw new Error('The gateway returned no copy.');
@@ -1302,7 +1354,7 @@ async function generateRecommendations(narration){
       await new Promise(r=>setTimeout(r,DEMO_DELAYS.RECOMMEND_MS));
       variants=DEMO_VARIANTS.map(v=>({...v}));
     }else{
-      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(briefPayload)});
+      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:apiKeyHeaders(),body:JSON.stringify(briefPayload)});
       if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
       variants=(await resp.json()).variants||[];
     }
