@@ -8,6 +8,14 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.10
+
+The key link pointed at the marketing page.
+
+- It now goes to **https://api.persado.com/api/developers**, where a developer account
+  actually issues keys, and the link says so: "Get your API key from Persado
+  Developers".
+- Settings copy says the key comes from a developer account, not from Persado sales.
 ## 0.7.9
 
 A settings screen, and somewhere to put an API key.
@@ -22,9 +30,7 @@ A settings screen, and somewhere to put an API key.
   gateway only.
 - The card says plainly that this build scores with a local model, so live Persado
   scoring is not on yet — the field is wired but the switch it feeds does not exist.
-- **Link to Persado's API page** (`persado.com/api`) for getting access. Their keys
-  are issued through sales, not a self-serve portal, so the copy says request access
-  rather than sign up.
+- **Link to Persado's API page** for getting access.
 ## 0.7.8
 
 Pick on page now finishes somewhere, and Esc escapes.
