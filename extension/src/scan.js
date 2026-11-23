@@ -328,6 +328,7 @@
   function endPick() {
     if (!picker) return;
     picker.box.remove();
+    picker.hint.remove();
     document.removeEventListener('mousemove', picker.move, true);
     document.removeEventListener('click', picker.click, true);
     document.removeEventListener('keydown', picker.key, true);
@@ -390,7 +391,12 @@
       endPick();
       chrome.runtime.sendMessage({ type: MSG.SCAN_PICKED, material: picked }).catch(() => {});
     };
-    const key = (e) => { if (e.key === 'Escape') { endPick(); chrome.runtime.sendMessage({ type: MSG.SCAN_CANCELLED }).catch(() => {}); } };
+    const key = (e) => {
+      if (e.key !== 'Escape' && e.key !== 'Esc') return;
+      e.preventDefault(); e.stopPropagation();
+      endPick();
+      chrome.runtime.sendMessage({ type: MSG.SCAN_CANCELLED }).catch(() => {});
+    };
 
     document.addEventListener('mousemove', move, true);
     document.addEventListener('click', click, true);
@@ -404,6 +410,7 @@
   if (inPage && !self.__persadoScan) {
     const listener = (msg, _sender, sendResponse) => {
       if (msg.type === MSG.SCAN_PAGE) { try { sendResponse(scan()); } catch (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); } return false; }
+      if (msg.type === MSG.SCAN_CANCEL) { try { endPick(); sendResponse({ ok: true }); } catch (e) { sendResponse({ ok: false }); } return false; }
       if (msg.type === MSG.SCAN_PICK) { try { sendResponse(startPick()); } catch (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); } return false; }
       return false;
     };

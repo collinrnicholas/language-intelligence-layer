@@ -46,7 +46,7 @@ const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('t
 // Scan screen (the panel's front door).
 const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount'),hdrPage=$('hdrPage');
 const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanList=$('scanList'),scanDetail=$('scanDetail');
-const btnBackToScan=$('btnBackToScan'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
+const btnBackToScan=$('btnBackToScan'),pickBar=$('pickBar'),btnCancelPick=$('btnCancelPick'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
 
 const LISTENING='Listening — describe the problem and the audience.';
 const PAUSED_MSG='Paused — nothing is being recorded.';
@@ -139,6 +139,7 @@ function setUiState(state){
   // The scan screen knows what page it is on; "Ready" told the reader nothing, so the
   // URL takes that slot. Every other screen keeps the status chip (REC / working).
   if(hdrPage)hdrPage.hidden=state!=='scan';
+  if(state!=='scan'&&pickBar)pickBar.hidden=true;
   headerStatus.style.display=state==='scan'?'none':'';
   recLive.classList.toggle('on',!!s.live);
   recRetry.style.display=s.retry?'':'none';
@@ -696,6 +697,19 @@ scanList.addEventListener('keydown',(e)=>{
 // with no text, an element behind a hover state. Selecting text first picks that
 // phrase instead of the whole block.
 
+let picking=false,pickTabId=null;
+function setPicking(on){
+  picking=on;
+  if(pickBar)pickBar.hidden=!on;
+}
+async function cancelPick(quiet){
+  setPicking(false);
+  if(pickTabId){
+    try{await chrome.tabs.sendMessage(pickTabId,{type:MSG.SCAN_CANCEL});}catch(e){}
+  }
+  if(!quiet)tm('Picking cancelled');
+}
+
 btnPick.addEventListener('click',async()=>{
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
@@ -703,20 +717,29 @@ btnPick.addEventListener('click',async()=>{
     await injectScanner(tab.id);
     const r=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PICK});
     if(!r?.ok)throw new Error(r?.error||'Could not start picking.');
+    pickTabId=tab.id;
+    setPicking(true);
     tm(r.selection?'Using your selected text':'Click the copy on the page');
   }catch(e){tm(e?.message||'Could not start picking on this page','err');}
 });
 
+if(btnCancelPick)btnCancelPick.addEventListener('click',()=>cancelPick());
+
 // scan.js reports the picked element from the page context.
 chrome.runtime.onMessage.addListener((msg)=>{
-  if(msg.type===MSG.SCAN_CANCELLED){tm('Picking cancelled');return;}
+  if(msg.type===MSG.SCAN_CANCELLED){if(picking)cancelPick(true);tm('Picking cancelled');return;}
   if(msg.type===MSG.SCAN_PICKED){
     if(!msg.material)return;
+    if(picking)setPicking(false);
     if(!scanResult)scanResult={materials:[]};
-    scanResult.materials=[{...msg.material,id:0},...(scanResult.materials||[])];
+    const picked={...msg.material,id:0};
+    scanResult.materials=[picked,...(scanResult.materials||[])];
     renderScanList();
     selectMaterial(0);
     tm('Picked from the page');
+    // Picking is a way of choosing what to work on, so it ends where choosing
+    // anything else ends: the scored card for that copy.
+    renderSingle('confirm',{material:picked,product:currentProduct()});
   }
 });
 
@@ -744,6 +767,7 @@ if(btnBackScan)btnBackScan.addEventListener('click',backToList);
 // cannot leave with the keyboard is still a dead end.
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
+  if(picking){e.preventDefault();cancelPick();return;}
   if(!pnlResults.classList.contains('active'))return;
   e.preventDefault();backToList();
 });

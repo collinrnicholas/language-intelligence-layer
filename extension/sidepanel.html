@@ -456,6 +456,12 @@
       min-width:0;overflow-wrap:anywhere;text-align:right;}
     .hdr-url[hidden]{display:none;}
     .back-scan{align-self:flex-start;margin-bottom:6px;padding:0;font-size:12px;font-weight:600;}
+    .pick-bar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 10px;border-radius:8px;
+      background:rgba(220,40,40,.06);border:1px solid var(--border);}
+    .pick-bar[hidden]{display:none;}
+    .pick-t{flex:1;font-size:12px;line-height:1.35;color:var(--text-2);}
+    .pick-x{flex:none;font-family:inherit;font-size:12px;font-weight:600;color:var(--text-1);
+      background:none;border:none;cursor:pointer;text-decoration:underline;padding:2px;}
     .scan-pri{font-size:12px;line-height:1.45;color:var(--text-2);margin-top:2px;}
     .scan-pri b{color:var(--text-1);font-weight:600;}
     .scan-band{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
@@ -532,6 +538,10 @@
     <span id="productHint" hidden></span>
   </div>
 
+  <div class="pick-bar" id="pickBar" hidden>
+    <span class="pick-t">Click any copy on the page — Esc cancels</span>
+    <button class="pick-x" id="btnCancelPick">Cancel</button>
+  </div>
   <div class="scan-pri" id="scanPriority"></div>
   <div class="sec-label" style="margin-top:14px;">Material on this page</div>
   <div id="scanList" class="scan-list"></div>

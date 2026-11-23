@@ -8,6 +8,20 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.7.8
+
+Pick on page now finishes somewhere, and Esc escapes.
+
+- **Picked copy opens its card.** Choosing an element used to add a row and drop you
+  back on the list with a toast, which looked like nothing happened. It now lands on
+  the same "Current copy, scored" card that Confirm current produces, for the copy
+  you picked, with Optimize ready.
+- **The picker cleans up after itself.** The instruction pill stayed on the page
+  forever; it is removed with the selection box.
+- **Esc cancels the pick** from either side: on the page the content script cancels
+  and reports it, in the panel the key cancels instead of leaving the result card.
+- A visible **Cancel** sits in the scan panel while picking, so the mode is not
+  invisible or unexitable if the keyboard focus is in the panel.
 ## 0.7.7
 
 Leaving the Optimize result was a one-way door.

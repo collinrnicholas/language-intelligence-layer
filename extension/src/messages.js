@@ -41,6 +41,7 @@
     // ── page scan (panel → tab, handled by src/scan.js)
     SCAN_PAGE: 'SCAN_PAGE',
     SCAN_PICK: 'SCAN_PICK',
+    SCAN_CANCEL: 'SCAN_CANCEL',
     // scan.js → panel (picked element / cancelled)
     SCAN_PICKED: 'SCAN_PICKED',
     SCAN_CANCELLED: 'SCAN_CANCELLED',
