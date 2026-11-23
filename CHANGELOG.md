@@ -8,6 +8,47 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.9.0
+
+**Persado Autopilot.** The extension now calls the real Persado API, shows what it
+spends, and optimizes Mailchimp draft campaigns in place.
+
+- **Real Persado scoring and optimization.** Score and Optimize on a scanned page call
+  Persado's Martech API (`POST /v1/score`, `POST /v1/optimize`, polled through
+  `GET /v1/jobs/{id}`) with the key saved in Settings, as `Authorization: Bearer`.
+  Request and response shapes follow Persado's own client, `persado/martechapi-cli`.
+  The general-purpose model is no longer in the scoring or optimization path; the
+  local gateway is used for narration transcription only.
+- **No sample numbers.** The mock Motivation AI scores and lift figures are gone. Every
+  score, rank, band, brand-alignment and compliance value on screen is a field of a
+  Persado response, with its job id and request id; an absent field shows as absent.
+- **Usage.** A one-line bar under the header shows the connection and runs left, with
+  a thin meter; Settings shows connection, remaining, consumed, requests, score and
+  optimize runs, last success, Refresh (free catalogue call, never a paid run) and
+  Reset. Persado publishes no balance endpoint, so remaining is a labelled local
+  estimate (developer-portal quota 100, optimize 5, score assumed 1) unless Persado
+  answers `429 quota_exhausted`, which is shown as authoritative.
+- **Preview on page.** An optimized line can be swapped into the page in place and
+  restored; nothing is written to the site.
+- **Mailchimp.** Connect a Mailchimp account (API key + server prefix) in Settings. On
+  Mailchimp the side panel lists draft campaigns; **Optimize draft** reads the subject
+  line, preview text and eligible body blocks, sends them to Persado as one
+  `EMAIL_SUBJECT_BODY` optimize run, validates the rewrites, writes the safe ones back,
+  and re-reads the draft to verify. Revert restores the saved original; Send test
+  uses Mailchimp's own test send. Nothing is ever sent to an audience.
+- **Safeguards.** Merge tags, template variables, links and e-mail addresses must
+  survive unchanged; new figures (prices, percentages) are rejected; footer,
+  unsubscribe and legal copy, and anything marked `data-persado-lock` or inside
+  `<!-- persado:lock -->`, is never sent. Edits made in Mailchimp while a run is in
+  flight abort the write. An already-optimized, unchanged draft is not re-run.
+- **Mailchimp overlay.** A small status pill on Mailchimp campaign pages with Optimize
+  draft, live steps, Revert and a collapsible activity view. Hideable; never covers the
+  editor's controls.
+- **Credentials.** Only the service worker reads the Persado and Mailchimp keys and only
+  it calls either API. Page contexts cannot reach them; `npm run smoke` enforces it.
+- Unused build tooling (Vite, CRXJS, TypeScript) removed from the extension workspace;
+  `npm run build` now verifies and packages the unpacked extension.
+
 ## 0.8.0
 
 The product has a name that says what it does: **Language Intelligence Layer**.

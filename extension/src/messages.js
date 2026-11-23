@@ -46,6 +46,32 @@
     SCAN_PICKED: 'SCAN_PICKED',
     SCAN_CANCELLED: 'SCAN_CANCELLED',
 
+    // ── page preview (panel → tab, handled by src/scan.js). Temporary: the page's
+    // own copy is restored on SCAN_RESTORE, on navigation, or on reload.
+    SCAN_PREVIEW: 'SCAN_PREVIEW',
+    SCAN_RESTORE: 'SCAN_RESTORE',
+
+    // ── Persado service (panel → worker). The worker is the only context that
+    // reads the Persado key; these carry copy in and results out, never the key.
+    PERSADO_TEST: 'PERSADO_TEST',
+    PERSADO_SCORE: 'PERSADO_SCORE',
+    PERSADO_OPTIMIZE: 'PERSADO_OPTIMIZE',
+    USAGE_GET: 'USAGE_GET',
+    USAGE_RESET: 'USAGE_RESET',
+
+    // ── Mailchimp (panel or the Mailchimp overlay → worker)
+    MC_TEST: 'MC_TEST',
+    MC_DISCONNECT: 'MC_DISCONNECT',
+    MC_STATUS: 'MC_STATUS',
+    MC_DRAFTS: 'MC_DRAFTS',
+    MC_OPTIMIZE: 'MC_OPTIMIZE',
+    MC_REVERT: 'MC_REVERT',
+    MC_TEST_SEND: 'MC_TEST_SEND',
+
+    // ── worker → panel + overlay (broadcast)
+    AUTOPILOT_PROGRESS: 'AUTOPILOT_PROGRESS',
+    USAGE_UPDATED: 'USAGE_UPDATED',
+
     // ── worker → panel
     TRANSCRIPT_READY: 'TRANSCRIPT_READY',
     TRANSCRIPT_ERROR: 'TRANSCRIPT_ERROR',
@@ -71,6 +97,21 @@
     // The user's Persado API key, entered in Settings. local storage so it survives
     // a restart; never synced, never written anywhere but this profile.
     API_KEY: 'persado:apiKey',
+    // Non-secret Persado request settings: { brand, industry }. brand is sent as
+    // account.name, which Persado requires on every run.
+    PERSADO_SETTINGS: 'persado:settings',
+    // Local Persado usage ledger (src/usage.js). Holds counts and a 12-hex key
+    // fingerprint — never the key.
+    USAGE: 'persado:usage',
+    // Activity log (src/activity.js): runs, writes, verifications, reverts.
+    ACTIVITY: 'persado:activity',
+    // Mailchimp API key. local storage, read only by the service worker.
+    MC_API_KEY: 'persado:mailchimpKey',
+    // Non-secret Mailchimp settings: { serverPrefix, allowBodyOnBuilder,
+    // testEmails, accountName, dc, connectedAt }.
+    MC_SETTINGS: 'persado:mailchimp',
+    // Pre-write snapshots per campaign id, for Revert and duplicate detection.
+    MC_SNAPSHOTS: 'persado:mcSnapshots',
   });
 
   // Field names inside the stored page-context object. The producer

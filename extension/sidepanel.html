@@ -515,6 +515,61 @@
     .opt-act{display:flex;gap:8px;margin-top:14px;}
     .opt-delta{font-size:11.5px;color:var(--text-2);margin-top:8px;}
     .opt-delta b{font-family:var(--mono);color:var(--text-1);}
+
+    /* ── Persado usage bar (always visible, one line) ───────────────── */
+    .ubar{flex:none;position:relative;display:flex;align-items:center;gap:8px;padding:7px 20px 9px;border-bottom:1px solid var(--border);background:var(--surface);font-size:11.5px;}
+    .ubar-l{display:flex;align-items:center;gap:6px;border:none;background:none;padding:0;font:inherit;font-weight:600;color:var(--text-1);cursor:pointer;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ubar-l:hover{text-decoration:underline;text-decoration-color:var(--border);}
+    .ubar .dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);flex:none;}
+    .ubar .dot.ok{background:var(--green);} .ubar .dot.err{background:var(--red);} .ubar .dot.work{background:var(--amber);}
+    .ubar-r{margin-left:auto;color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums;}
+    .ubar-r b{color:var(--text-1);}
+    .ubar-m{position:absolute;left:0;right:0;bottom:0;height:2px;background:transparent;}
+    .ubar-m span{display:block;height:2px;width:0;background:var(--ink);opacity:.55;transition:width .3s;}
+    .ubar-m span.low{background:var(--red);opacity:1;}
+    /* ── Settings additions ─────────────────────────────────────────── */
+    .set-grid{display:grid;grid-template-columns:96px 1fr;gap:8px 10px;align-items:center;margin-top:12px;}
+    .set-lbl{font-size:12px;color:var(--text-2);}
+    .set-in.plain{font-family:var(--sans);font-size:12.5px;}
+    select.set-in{background:var(--surface);}
+    .set-check{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:11.5px;line-height:1.5;color:var(--text-2);cursor:pointer;}
+    .set-check input{margin-top:2px;accent-color:var(--ink);}
+    .use-dl{display:grid;grid-template-columns:110px 1fr;gap:5px 10px;font-size:12px;margin:2px 0 0;}
+    .use-dl dt{color:var(--text-2);}
+    .use-dl dd{color:var(--text-1);font-variant-numeric:tabular-nums;margin:0;}
+    .use-dl dd .est{color:var(--text-3);font-size:11px;}
+    /* ── Mailchimp panel ────────────────────────────────────────────── */
+    #panelMailchimp.active{display:flex;flex-direction:column;flex:1;min-height:0;}
+    #panelMailchimp .start-foot{padding-top:12px;}
+    #panelSettings.active{flex:1;min-height:0;overflow-y:auto;}
+    .mc-wrap{flex:1;min-height:0;overflow-y:auto;}
+    .mc-detail{margin-top:14px;}
+    .mc-steps{display:flex;flex-direction:column;gap:4px;}
+    .mc-step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);}
+    .mc-step .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;}
+    .mc-step.active{color:var(--amber-text);} .mc-step.done{color:var(--green-text);} .mc-step.err{color:var(--red);}
+    .mc-note{margin-top:12px;padding:9px 11px;border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-2);}
+    .mc-note.ok{background:var(--green-bg);color:var(--green-text);} .mc-note.warn{background:var(--amber-bg);color:var(--amber-text);} .mc-note.err{background:#FEF2F2;color:#991B1B;}
+    .mc-chg{margin-top:10px;border:1px solid var(--border);border-radius:var(--rc);padding:10px 12px;}
+    .mc-chg-f{font-size:11px;font-weight:600;color:var(--text-3);}
+    .mc-was{color:var(--text-3);font-size:12.5px;margin-top:3px;}
+    .mc-now{color:var(--text-1);font-size:13px;font-weight:600;margin-top:2px;}
+    .mc-why{color:var(--amber-text);font-size:11.5px;margin-top:3px;}
+    .mc-act{margin-top:14px;border-top:1px solid var(--border);padding-top:10px;}
+    .mc-act summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--text-2);}
+    .mc-act-i{margin-top:8px;font-size:12px;color:var(--text-2);}
+    .mc-act-i .meta{font-family:var(--mono);font-size:10.5px;color:var(--text-3);word-break:break-all;}
+    /* ── Persado result card additions ──────────────────────────────── */
+    .p-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+    .p-tag{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);background:var(--surface);}
+    .p-tag.clear{border-color:transparent;background:var(--green-bg);color:var(--green-text);}
+    .p-tag.flag{border-color:transparent;background:var(--amber-bg);color:var(--amber-text);}
+    .p-alts{margin-top:12px;}
+    .p-alts summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--text-2);}
+    .p-alt{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+    .p-alt:last-child{border-bottom:none;}
+    .p-alt b{font-family:var(--mono);}
+    .p-alt button{flex:none;}
   </style>
 </head>
 <body>
@@ -534,6 +589,13 @@
     </span>
     <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
   </div>
+</div>
+<div class="ubar" id="usageBar">
+  <button class="ubar-l" id="usageOpen" title="Persado API usage — open Settings">
+    <span class="dot" id="usageDot"></span><span id="usageConn">Persado API · Not set up</span>
+  </button>
+  <span class="ubar-r" id="usageNum"></span>
+  <span class="ubar-m" aria-hidden="true"><span id="usageFill"></span></span>
 </div>
 <div class="toast" id="toast"></div>
 <div class="fatal" id="fatalBanner" style="display:none;">
@@ -572,13 +634,13 @@
 
   <div class="start-foot" style="margin-top:auto;">
     <div class="opt-actions">
-      <button class="btn btn-outline" id="btnConfirm">Confirm current</button>
+      <button class="btn btn-outline" id="btnConfirm">Score</button>
       <button class="btn btn-primary" id="btnOptimize">Optimize</button>
     </div>
     <div class="scan-alt">
       <button class="btn-quiet" id="btnPick">Pick on page</button>
     </div>
-    <div class="privacy">Page text stays on this device until you review the results.</div>
+    <div class="privacy">Only the selected line is sent to Persado. Previews change this tab only, never the site.</div>
   </div>
 </div>
 
@@ -768,19 +830,19 @@
 <div class="panel view" id="panelSettings">
   <div class="set-wrap">
     <div class="res-head set-head">
-      <button class="res-back" id="btnBackFromSettings">Back to list</button>
+      <button class="res-back" id="btnBackFromSettings">Back</button>
       <div>
         <div class="res-h">Settings</div>
-        <div class="res-ctx">Preferences for this browser</div>
+        <div class="res-ctx">Stored in this browser profile only</div>
       </div>
     </div>
 
     <div class="set-card">
-      <h2 class="set-h">Persado API key</h2>
+      <h2 class="set-h">Persado API</h2>
       <p class="set-help">
-        Scoring and rewriting run through the gateway on this machine. Paste the key
-        from your Persado developer account. It is stored in this browser profile and
-        sent only to that gateway — it never leaves your device from here.
+        Scoring and optimization call the Persado API directly from the extension’s
+        background worker. The key is stored in this browser profile and is never
+        shown to web pages, logged or exported.
       </p>
       <div class="set-row">
         <input id="apiKeyInput" class="set-in" type="password" placeholder="Paste your Persado API key"
@@ -788,20 +850,97 @@
         <button class="btn-solid set-save" id="btnSaveKey">Save key</button>
       </div>
       <div class="set-state" id="apiKeyState">No key saved yet.</div>
-      <p class="set-note">
-        The gateway receives the key with every request. This build scores and
-        rewrites with a local model, so live Persado scoring is not on yet.
-      </p>
-      <div class="set-actions">
-        <button class="btn-quiet" id="btnClearKey">Remove key</button>
-        <a class="set-link" id="linkGetKey" href="https://api.persado.com/api/developers" target="_blank" rel="noopener noreferrer">Get your API key from Persado Developers</a>
+      <div class="set-grid">
+        <label class="set-lbl" for="brandInput">Brand name</label>
+        <input id="brandInput" class="set-in plain" type="text" placeholder="Sent to Persado as the account name" autocomplete="off">
+        <label class="set-lbl" for="industrySelect">Industry</label>
+        <select id="industrySelect" class="set-in plain" aria-label="Industry"><option value="">Not set</option></select>
       </div>
+      <div class="set-actions">
+        <button class="btn-quiet" id="btnTestPersado">Test connection</button>
+        <button class="btn-quiet" id="btnClearKey">Remove key</button>
+        <a class="set-link" id="linkGetKey" href="https://api.persado.com/api/developers" target="_blank" rel="noopener noreferrer">Get a key from Persado Developers</a>
+      </div>
+      <div class="set-state" id="persadoConnState"></div>
+    </div>
+
+    <div class="set-card">
+      <h2 class="set-h">Persado usage</h2>
+      <dl class="use-dl" id="usageDl">
+        <dt>Connection</dt><dd id="useConn">Not tested</dd>
+        <dt id="useBalLbl">Remaining</dt><dd id="useBal">—</dd>
+        <dt>Consumed</dt><dd id="useUsed">—</dd>
+        <dt>Requests</dt><dd id="useReq">—</dd>
+        <dt>Score runs</dt><dd id="useScore">—</dd>
+        <dt>Optimize runs</dt><dd id="useOpt">—</dd>
+        <dt>Last success</dt><dd id="useLast">—</dd>
+      </dl>
+      <p class="set-note" id="useNote"></p>
+      <div class="set-actions">
+        <button class="btn-quiet" id="btnRefreshUsage">Refresh usage</button>
+        <button class="btn-quiet" id="btnResetUsage">Reset local count</button>
+      </div>
+    </div>
+
+    <div class="set-card">
+      <h2 class="set-h">Mailchimp</h2>
+      <p class="set-help">
+        Connect a Mailchimp account to optimize draft campaigns in place. Use a test
+        account for this prototype. Sending always stays in Mailchimp.
+      </p>
+      <div class="set-row">
+        <input id="mcKeyInput" class="set-in" type="password" placeholder="Mailchimp API key (ends in -us21 etc.)"
+               autocomplete="off" spellcheck="false" aria-label="Mailchimp API key">
+      </div>
+      <div class="set-grid">
+        <label class="set-lbl" for="mcPrefixInput">Server prefix</label>
+        <input id="mcPrefixInput" class="set-in plain" type="text" placeholder="From the key, e.g. us21" autocomplete="off" spellcheck="false">
+        <label class="set-lbl" for="mcTestEmails">Test e-mail</label>
+        <input id="mcTestEmails" class="set-in plain" type="text" placeholder="you@company.com" autocomplete="off" spellcheck="false">
+      </div>
+      <label class="set-check"><input type="checkbox" id="mcAllowBody">
+        <span>Also rewrite body copy in campaigns built with Mailchimp’s drag-and-drop builder. Mailchimp stores the result as custom HTML, which can turn the campaign into a code-your-own e-mail.</span></label>
+      <div class="set-actions">
+        <button class="btn-solid set-save" id="btnMcConnect">Save and test</button>
+        <button class="btn-quiet" id="btnMcDisconnect">Disconnect</button>
+      </div>
+      <div class="set-state" id="mcState">Not connected.</div>
     </div>
 
     <p class="set-foot">
       Screen-capture and other administrator settings live in
       <button class="set-link as-btn" id="btnOpenOptions">the extension’s options</button>.
     </p>
+  </div>
+</div>
+
+<!-- ═══ MAILCHIMP ═══ -->
+<div class="panel view" id="panelMailchimp">
+  <div class="mc-wrap">
+    <div class="start-head scan-head">
+      <div>
+        <div class="scr-title">Mailchimp drafts</div>
+        <div class="scr-sub" id="mcSub">Checking the connection…</div>
+      </div>
+      <div class="scan-acts">
+        <button class="scan-refresh" id="btnMcRefresh" title="Reload drafts">Refresh</button>
+        <button class="scan-refresh" id="btnMcSettings" title="Settings">Settings</button>
+      </div>
+    </div>
+    <div id="mcList" class="scan-list"></div>
+    <div class="mc-detail" id="mcDetail" hidden>
+      <div class="mc-steps" id="mcSteps"></div>
+      <div id="mcResult"></div>
+      <details class="mc-act"><summary>Activity</summary><div id="mcActivity"></div></details>
+    </div>
+  </div>
+  <div class="start-foot">
+    <div class="opt-actions">
+      <button class="btn btn-outline" id="btnMcTestSend" disabled>Send test</button>
+      <button class="btn btn-primary" id="btnMcOptimize" disabled>Optimize draft</button>
+    </div>
+    <div class="scan-alt"><button class="btn-quiet" id="btnMcRevert" hidden>Revert to original</button></div>
+    <div class="privacy">Only the subject line, preview text and eligible copy blocks are sent to Persado. Links, merge tags and footer text are kept as they are.</div>
   </div>
 </div>
 

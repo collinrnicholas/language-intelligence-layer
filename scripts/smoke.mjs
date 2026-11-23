@@ -23,6 +23,7 @@ const PANEL = read('sidepanel.js');
 const BG = read('src/background.js');
 const CONTENT = read('src/content.js');
 const SCAN = read('src/scan.js');
+const OVERLAY = read('src/mc-overlay.js');
 const MESSAGES = read('src/messages.js');
 const BOOT = read('src/boot.js');
 const CONFIG = read('src/config.js');
@@ -37,7 +38,7 @@ const all = (re, s) => [...s.matchAll(re)].map(m => m[1]);
 /** Strip comments so documentation prose never counts as code. */
 const code = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C = code(SCAN);
+const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C = code(SCAN), OVERLAY_C = code(OVERLAY);
 
 // ── 1. every $('id') in the panel exists in the HTML ──────────────
 {
@@ -77,7 +78,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
 // ── 4. message contract: declared / sent / handled ────────────────
 {
   const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'/gm, MESSAGES));
-  const files = { 'sidepanel.js': PANEL_C, 'src/background.js': BG_C, 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C };
+  const files = { 'sidepanel.js': PANEL_C, 'src/background.js': BG_C, 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C };
 
   // Any MSG.X referenced anywhere must exist in messages.js.
   for (const [name, src] of Object.entries(files)) {
@@ -375,6 +376,35 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
     else if (captureAt >= 0 && guardAt > captureAt) fail('capture', 'the CAPTURE_SCREENSHOTS guard comes AFTER the capture call in capturePageContext');
     notes.push('capture: captureVisibleTab is behind a CAPTURE_SCREENSHOTS guard');
   }
+}
+
+// ── 20. credentials stay in the service worker ───────────────────
+// Only background.js may read the Persado or Mailchimp key and only it may call
+// those APIs. The panel may WRITE a key (Settings) and test presence; page
+// contexts (content, scan, overlay) may not touch either key at all.
+{
+  for (const [name, src] of Object.entries({ 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C })) {
+    if (/KEYS\.(API_KEY|MC_API_KEY)/.test(src)) fail('credentials', `${name} references a credential storage key`);
+    if (/chrome\.storage/.test(src) && name === 'src/mc-overlay.js') fail('credentials', 'the Mailchimp overlay must not read chrome.storage');
+  }
+  for (const [name, src] of Object.entries({ 'sidepanel.js': PANEL_C, 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C })) {
+    if (/api\.persado\.com\/api|api\.mailchimp\.com\/3\.0|Authorization/.test(src)) fail('credentials', `${name} calls Persado/Mailchimp directly — only the service worker may`);
+  }
+  if (/x-persado-api-key|apiKeyHeaders/.test(PANEL_C)) fail('credentials', 'sidepanel.js still forwards the Persado key');
+  // The overlay may only send what the worker lets it.
+  const allowed = (BG_C.match(/OVERLAY_ALLOWED\s*=\s*new Set\(\[([^\]]*)\]/) || [, ''])[1];
+  const allowedSet = new Set(all(/MSG\.([A-Z_]+)/g, allowed));
+  const sentByOverlay = uniq([...OVERLAY_C.matchAll(/\btype:\s*MSG\.([A-Z_]+)/g)].map(m => m[1]));
+  const extra = sentByOverlay.filter(k => !allowedSet.has(k));
+  if (extra.length) fail('overlay', `mc-overlay.js sends ${extra.join(', ')} which senderAllowed() rejects`);
+  if (/console\.(log|info|debug)\([^)]*\b(apiKey|persadoKey|mcKey|key)\b/.test(BG_C)) fail('credentials', 'background.js may be logging a key');
+  // Every content script the manifest declares must exist and stay off the key.
+  for (const cs of MANIFEST.content_scripts || []) for (const f of cs.js || []) if (!existsSync(join(EXT, f))) fail('missing asset', `content script ${f}`);
+  // No mock scores survive anywhere in the shipped extension.
+  for (const [name, src] of Object.entries({ 'sidepanel.js': PANEL_C, 'src/config.js': code(CONFIG) })) {
+    if (/MOCK_SCORES|MOCK_LIFTS|predictedLift\s*:/.test(src)) fail('fabricated scores', `${name} still carries mock scores or lift`);
+  }
+  notes.push(`credentials: worker-only; overlay sends ${sentByOverlay.join(', ')}`);
 }
 
 // ── 19. asset types used in the panel are all in config ASSET_TYPES ─

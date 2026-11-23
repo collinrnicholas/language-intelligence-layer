@@ -405,6 +405,51 @@
     return { ok: true };
   }
 
+  // ── Preview on page ────────────────────────────────────────────
+  // Shows an optimized line IN PLACE so the marketer can judge it in context.
+  // It only swaps text nodes (no markup, no attributes, no layout boxes added)
+  // and remembers the originals; SCAN_RESTORE, a reload, or leaving the page puts
+  // the site back. Nothing is saved anywhere — the source site is never modified.
+
+  const previews = new Map();   // selector → [{ node, data }], plus the element's outline
+
+  function textNodes(el) {
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const out = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.data.trim()) out.push(n);
+    return out;
+  }
+
+  function restorePreview(selector) {
+    const keys = selector ? [selector] : [...previews.keys()];
+    for (const k of keys) {
+      const p = previews.get(k);
+      if (!p) continue;
+      for (const { node, data } of p.nodes) node.data = data;
+      if (p.el) { p.el.style.outline = p.outline; p.el.style.outlineOffset = p.outlineOffset; }
+      previews.delete(k);
+    }
+    return { ok: true, restored: keys.length };
+  }
+
+  function preview(selector, text, original) {
+    restorePreview(selector);
+    let el = null;
+    try { el = document.querySelector(selector); } catch {}
+    if (!el) return { ok: false, error: 'That copy is no longer on the page. Refresh the scan.' };
+    if (original && textOf(el) !== clean(original)) return { ok: false, error: 'The page copy changed since it was scanned. Refresh the scan.' };
+    const nodes = el.tagName === 'INPUT' ? [] : textNodes(el);
+    if (!nodes.length) return { ok: false, error: 'This element has no text that can be previewed in place.' };
+    const saved = nodes.map(node => ({ node, data: node.data }));
+    const lead = /^\s*/.exec(nodes[0].data)[0], trail = /\s*$/.exec(nodes[nodes.length - 1].data)[0];
+    nodes[0].data = lead + text + (nodes.length === 1 ? trail : '');
+    for (let i = 1; i < nodes.length; i++) nodes[i].data = i === nodes.length - 1 ? trail : '';
+    previews.set(selector, { nodes: saved, el, outline: el.style.outline, outlineOffset: el.style.outlineOffset });
+    el.style.outline = '2px dashed #DC2828';
+    el.style.outlineOffset = '3px';
+    return { ok: true };
+  }
+
   // ── Wiring ──────────────────────────────────────────────────────
 
   if (inPage && !self.__persadoScan) {
@@ -412,6 +457,8 @@
       if (msg.type === MSG.SCAN_PAGE) { try { sendResponse(scan()); } catch (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); } return false; }
       if (msg.type === MSG.SCAN_CANCEL) { try { endPick(); sendResponse({ ok: true }); } catch (e) { sendResponse({ ok: false }); } return false; }
       if (msg.type === MSG.SCAN_PICK) { try { sendResponse(startPick()); } catch (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); } return false; }
+      if (msg.type === MSG.SCAN_PREVIEW) { try { sendResponse(preview(msg.selector, msg.text, msg.original)); } catch (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); } return false; }
+      if (msg.type === MSG.SCAN_RESTORE) { try { sendResponse(restorePreview(msg.selector)); } catch (e) { sendResponse({ ok: false }); } return false; }
       return false;
     };
     chrome.runtime.onMessage.addListener(listener);

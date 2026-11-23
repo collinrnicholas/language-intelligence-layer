@@ -5,7 +5,7 @@
 // this module's evaluation paints the fatal banner instead of dying silently.
 
 const { MSG, KEYS, CTX, CONTENT_VERSION } = self.PERSADO;
-const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS: CAPTURE_DEFAULT, ASSET_TYPES, MOCK_SCORES, MOCK_LIFTS, MOCK_SCORE_STYLE, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
+const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS: CAPTURE_DEFAULT, ASSET_TYPES, DEMO_MODE, DEMO_DELAYS, DEMO_VARIANTS } = self.PERSADO_CONFIG;
 // Runtime value of the screen-capture toggle (options page → chrome.storage.local),
 // falling back to the config default. A `let` so it can be refreshed; existing call
 // sites keep using the name CAPTURE_SCREENSHOTS.
@@ -47,6 +47,14 @@ const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('t
 const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount'),hdrPage=$('hdrPage');
 const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanList=$('scanList'),scanDetail=$('scanDetail');
 const btnBackToScan=$('btnBackToScan'),pnlSettings=$('panelSettings'),btnSettings=$('btnSettings'),btnBackFromSettings=$('btnBackFromSettings'),apiKeyInput=$('apiKeyInput'),btnSaveKey=$('btnSaveKey'),btnClearKey=$('btnClearKey'),apiKeyState=$('apiKeyState'),btnOpenOptions=$('btnOpenOptions'),pickBar=$('pickBar'),btnCancelPick=$('btnCancelPick'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
+
+const pnlMailchimp=$('panelMailchimp'),mcSub=$('mcSub'),mcList=$('mcList'),mcDetail=$('mcDetail'),mcSteps=$('mcSteps'),mcResult=$('mcResult'),mcActivity=$('mcActivity');
+const btnMcRefresh=$('btnMcRefresh'),btnMcSettings=$('btnMcSettings'),btnMcOptimize=$('btnMcOptimize'),btnMcTestSend=$('btnMcTestSend'),btnMcRevert=$('btnMcRevert');
+const usageDot=$('usageDot'),usageConn=$('usageConn'),usageNum=$('usageNum'),usageFill=$('usageFill'),usageOpen=$('usageOpen');
+const brandInput=$('brandInput'),industrySelect=$('industrySelect'),btnTestPersado=$('btnTestPersado'),persadoConnState=$('persadoConnState');
+const useConn=$('useConn'),useBal=$('useBal'),useBalLbl=$('useBalLbl'),useUsed=$('useUsed'),useReq=$('useReq'),useScore=$('useScore'),useOpt=$('useOpt'),useLast=$('useLast'),useNote=$('useNote');
+const btnRefreshUsage=$('btnRefreshUsage'),btnResetUsage=$('btnResetUsage');
+const mcKeyInput=$('mcKeyInput'),mcPrefixInput=$('mcPrefixInput'),mcTestEmails=$('mcTestEmails'),mcAllowBody=$('mcAllowBody'),btnMcConnect=$('btnMcConnect'),btnMcDisconnect=$('btnMcDisconnect'),mcState=$('mcState');
 
 const LISTENING='Listening — describe the problem and the audience.';
 const PAUSED_MSG='Paused — nothing is being recorded.';
@@ -97,7 +105,7 @@ function tm(m,k='ok'){toast.textContent=m;toast.className='toast '+k;setTimeout(
 // PRIMITIVES — only setUiState may call these. sh() switches the active panel; st()
 // renders the header chip. Calling them directly is what let the active panel, the
 // header, and the .rec-live.on toggle drift apart (see setUiState).
-function sh(p){[pnlScan,pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults,pnlSettings].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
+function sh(p){[pnlScan,pnlConfig,pnlRecord,pnlProcess,pnlBrief,pnlResults,pnlSettings,pnlMailchimp].forEach(x=>x.classList.remove('active'));p.classList.add('active');}
 // Status chip colour follows real recorder state (§2): red RECORDING, amber
 // PAUSED/WORKING/needs-attention, green READY/complete.
 function st(t){headerText.textContent=t;headerStatus.className='hdr-st '+(/record/i.test(t)?'rec':/process|generat|error|pause|work/i.test(t)?'work':'');}
@@ -121,6 +129,7 @@ const UI_STATES={
   brief:       {panel:pnlBrief,   header:'Done'},
   results:     {panel:pnlResults, header:'Done'},
   settings:    {panel:pnlSettings, header:'Settings'},
+  mailchimp:   {panel:pnlMailchimp, header:'Mailchimp'},
 };
 let uiState=null;
 // A panel must not be shown before its content is rendered. brief/results are
@@ -545,7 +554,15 @@ async function dp(){
 let lastScanUrl=null, rescanTimer=null;
 function onTabNavigated(tab){
   if(!tab?.url)return;
+  previewOn=null;   // navigation restores the page; there is nothing left to undo
   showUrl(tab.url);
+  // Mailchimp has its own front door. Moving between it and other sites swaps
+  // screens only from the two front doors, never from a result being read.
+  if(isMailchimpUrl(tab.url)){
+    if(uiState==='scan'||uiState==='mailchimp'){lastScanUrl=tab.url;const w=webIdOf(tab.url);if(uiState!=='mailchimp'||w!==mcTabWebId)showMailchimp();}
+    return;
+  }
+  if(uiState==='mailchimp'){lastScanUrl=null;setUiState('scan');autoScan();return;}
   if(tab.url===lastScanUrl)return;
   if(uiState!=='scan'){
     // Results belong to the page they came from. Don't throw them away while they
@@ -699,35 +716,38 @@ scanList.addEventListener('keydown',(e)=>{
 // with no text, an element behind a hover state. Selecting text first picks that
 // phrase instead of the whole block.
 
-// ─── API key ────────────────────────────────────────────────────
-// Stored in chrome.storage.local under KEYS.API_KEY and read fresh for each request,
-// so saving a key takes effect on the next click with no reload. The value is never
-// echoed back into the field or the state line.
+// ─── Settings: Persado key, brand, usage, Mailchimp ─────────────
+// The panel WRITES keys to chrome.storage.local and never reads them back into
+// the UI or into a request: every Persado and Mailchimp call is made by the
+// service worker (src/background.js), which is the only reader. `apiKey` below is
+// only a presence flag for the status line.
 let apiKey=null;
 async function loadApiKey(){
-  try{apiKey=(await chrome.storage.local.get(KEYS.API_KEY))[KEYS.API_KEY]||null;}catch(e){apiKey=null;}
+  try{apiKey=!!(await chrome.storage.local.get(KEYS.API_KEY))[KEYS.API_KEY];}catch(e){apiKey=false;}
   return apiKey;
-}
-function apiKeyHeaders(){
-  const h={'Content-Type':'application/json'};
-  if(apiKey)h['x-persado-api-key']=apiKey;
-  return h;
 }
 function renderKeyState(msg,kind){
   if(!apiKeyState)return;
   apiKeyState.className='set-state'+(kind?' '+kind:'');
   apiKeyState.textContent=msg||(apiKey?'Key saved on this device.':'No key saved yet.');
 }
-function openSettings(){
+let settingsReturn='scan';
+async function openSettings(){
+  if(uiState&&uiState!=='settings')settingsReturn=uiState==='mailchimp'?'mailchimp':'scan';
   if(apiKeyInput)apiKeyInput.value='';
-  renderKeyState();
+  await loadApiKey();renderKeyState();
+  await loadSettingsForm();
+  renderUsage(await worker({type:MSG.USAGE_GET}));
   setUiState('settings');
 }
-if(btnSettings)btnSettings.addEventListener('click',openSettings);
-if(btnBackFromSettings)btnBackFromSettings.addEventListener('click',()=>{
+function leaveSettings(){
+  if(settingsReturn==='mailchimp'){showMailchimp();return;}
   if(scanResult){setUiState('scan');renderScanList();if(resMaterialIndex>=0)selectMaterial(resMaterialIndex);}
   else{setUiState('scan');autoScan();}
-});
+}
+if(btnSettings)btnSettings.addEventListener('click',openSettings);
+if(btnBackFromSettings)btnBackFromSettings.addEventListener('click',leaveSettings);
+if(usageOpen)usageOpen.addEventListener('click',()=>{if(uiState!=='settings')openSettings();});
 if(btnOpenOptions)btnOpenOptions.addEventListener('click',()=>{
   if(chrome.runtime.openOptionsPage)chrome.runtime.openOptionsPage();
 });
@@ -736,17 +756,142 @@ if(btnSaveKey)btnSaveKey.addEventListener('click',async()=>{
   if(!v){renderKeyState('Paste a key first.','err');apiKeyInput.focus();return;}
   try{
     await chrome.storage.local.set({[KEYS.API_KEY]:v});
-    apiKey=v;apiKeyInput.value='';
-    renderKeyState('Saved. The next request will use it.','on');
+    apiKey=true;apiKeyInput.value='';
+    renderKeyState('Saved. Testing the connection…','on');
+    await testPersado();
   }catch(e){renderKeyState('Could not save the key.','err');}
 });
 if(btnClearKey)btnClearKey.addEventListener('click',async()=>{
   try{
     await chrome.storage.local.remove(KEYS.API_KEY);
-    apiKey=null;if(apiKeyInput)apiKeyInput.value='';
-    renderKeyState('Key removed. Requests run without it.','');
+    apiKey=false;if(apiKeyInput)apiKeyInput.value='';
+    renderKeyState('Key removed.','');
+    renderUsage(await worker({type:MSG.USAGE_GET}));
   }catch(e){renderKeyState('Could not remove the key.','err');}
 });
+
+/** Message the worker; a dead worker or a reloaded extension reads as an error, not a hang. */
+async function worker(msg){
+  try{return await chrome.runtime.sendMessage(msg)||{ok:false,error:'No answer from the extension.'};}
+  catch(e){return{ok:false,error:'The extension was reloaded. Close and reopen this panel.'};}
+}
+
+async function testPersado(){
+  if(btnTestPersado){btnTestPersado.disabled=true;btnTestPersado.textContent='Testing…';}
+  const r=await worker({type:MSG.PERSADO_TEST});
+  if(btnTestPersado){btnTestPersado.disabled=false;btnTestPersado.textContent='Test connection';}
+  if(persadoConnState){
+    persadoConnState.className='set-state '+(r.ok?'on':'err');
+    persadoConnState.textContent=r.ok?`Connected to Persado. ${r.channels?.length||0} channels available; this check used no runs.`:r.error;
+  }
+  if(r.usage)renderUsage(r.usage);
+  return r;
+}
+if(btnTestPersado)btnTestPersado.addEventListener('click',testPersado);
+
+// Industry values are Persado's (persado-api.js INDUSTRIES); the panel loads the
+// API module only for this list and never calls it.
+const INDUSTRY_LIST=['AUTOMOTIVE','B2B_SERVICES','CHARITIES_GOOD_WILL','CONSUMER_GOODS_SERVICES','DATING','EDUCATION','ENERGY','FASHION_APPAREL','FINANCIAL_SERVICES','GAMING_GAMBLING','HEALTHCARE','INSURANCE','INTERNET_CABLE','MEDIA_ENTERTAINMENT','OTHER','RETAIL_ECOMMERCE','TECHNOLOGY_APPS_SOFTWARE','TELECOMMUNICATIONS','TRAVEL_HOTELS'];
+if(industrySelect&&industrySelect.options.length<2){
+  for(const v of INDUSTRY_LIST){const o=document.createElement('option');o.value=v;o.textContent=v.toLowerCase().replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());industrySelect.appendChild(o);}
+}
+async function readSettings(){
+  const r=await chrome.storage.local.get([KEYS.PERSADO_SETTINGS,KEYS.MC_SETTINGS,KEYS.MC_API_KEY]).catch(()=>({}));
+  return{persado:{brand:'',industry:'',...(r[KEYS.PERSADO_SETTINGS]||{})},mc:{serverPrefix:'',allowBodyOnBuilder:false,testEmails:'',...(r[KEYS.MC_SETTINGS]||{})},mcKey:!!r[KEYS.MC_API_KEY]};
+}
+async function loadSettingsForm(){
+  const s=await readSettings();
+  brandInput.value=s.persado.brand||'';industrySelect.value=s.persado.industry||'';
+  mcPrefixInput.value=s.mc.serverPrefix||'';mcTestEmails.value=s.mc.testEmails||'';mcAllowBody.checked=!!s.mc.allowBodyOnBuilder;
+  mcKeyInput.value='';
+  renderMcState(s);
+}
+function renderMcState(s){
+  if(s.mcKey&&s.mc.connectedAt){mcState.className='set-state on';mcState.textContent=`Connected to ${s.mc.accountName||'Mailchimp'} (${s.mc.dc||s.mc.serverPrefix}).`;}
+  else if(s.mc.lastError){mcState.className='set-state err';mcState.textContent=s.mc.lastError;}
+  else if(s.mcKey){mcState.className='set-state';mcState.textContent='Key saved, not yet verified.';}
+  else{mcState.className='set-state';mcState.textContent='Not connected.';}
+}
+async function savePersadoSettings(){
+  const s=await readSettings();
+  await chrome.storage.local.set({[KEYS.PERSADO_SETTINGS]:{...s.persado,brand:brandInput.value.trim(),industry:industrySelect.value}});
+}
+brandInput.addEventListener('change',savePersadoSettings);
+industrySelect.addEventListener('change',savePersadoSettings);
+async function saveMcSettings(){
+  const s=await readSettings();
+  await chrome.storage.local.set({[KEYS.MC_SETTINGS]:{...s.mc,serverPrefix:mcPrefixInput.value.trim(),testEmails:mcTestEmails.value.trim(),allowBodyOnBuilder:mcAllowBody.checked}});
+}
+mcPrefixInput.addEventListener('change',saveMcSettings);
+mcTestEmails.addEventListener('change',saveMcSettings);
+mcAllowBody.addEventListener('change',saveMcSettings);
+btnMcConnect.addEventListener('click',async()=>{
+  const k=(mcKeyInput.value||'').trim();
+  await saveMcSettings();
+  const s=await readSettings();
+  if(!k&&!s.mcKey){mcState.className='set-state err';mcState.textContent='Paste a Mailchimp API key first.';mcKeyInput.focus();return;}
+  if(k)await chrome.storage.local.set({[KEYS.MC_API_KEY]:k});
+  mcKeyInput.value='';
+  btnMcConnect.disabled=true;btnMcConnect.textContent='Testing…';
+  const r=await worker({type:MSG.MC_TEST});
+  btnMcConnect.disabled=false;btnMcConnect.textContent='Save and test';
+  renderMcState(await readSettings());
+  if(!r.ok){mcState.className='set-state err';mcState.textContent=r.error;}
+});
+btnMcDisconnect.addEventListener('click',async()=>{
+  await worker({type:MSG.MC_DISCONNECT});
+  renderMcState(await readSettings());
+});
+
+// ─── Usage ──────────────────────────────────────────────────────
+// Every number says where it came from. Persado's API has no balance endpoint,
+// so "remaining" is a LOCAL ESTIMATE (runs started from this browser × the
+// developer portal's published costs) unless Persado itself reported the quota
+// exhausted — then it is 0, and says so.
+const fmtWhen=(t)=>t?new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'never';
+let lastUsage=null;
+function renderUsage(u){
+  if(!u||u.ok===false&&!u.quota)return;
+  lastUsage=u;
+  const conn=!u.hasKey?{cls:'',t:'Persado API · Not set up'}
+    :u.exhausted?{cls:'err',t:'Persado API · Quota used up'}
+    :u.connection?.ok===false?{cls:'err',t:'Persado API · '+(u.connection.kind==='invalid_key'?'Key rejected':'Error')}
+    :u.connection?.ok?{cls:'ok',t:'Persado API · Connected'}
+    :{cls:'',t:'Persado API · Not tested'};
+  usageDot.className='dot '+conn.cls;
+  usageConn.textContent=conn.t;
+  if(u.hasKey){
+    usageNum.innerHTML=u.exhausted?'<b>0</b> runs left · per Persado'
+      :`<b>${u.remaining}</b> / ${u.quota} runs left <span title="Local estimate">· est.</span>`;
+    usageFill.style.width=Math.round((1-u.fraction)*100)+'%';
+    usageFill.className=(u.exhausted||u.remaining<=10)?'low':'';
+  }else{usageNum.textContent='';usageFill.style.width='0';}
+  $('usageBar').title=u.hasKey?`Persado API usage. ${u.exhausted?'Persado reported this key’s quota exhausted.':`Estimated from ${u.requests} request(s) made from this browser since ${fmtWhen(u.since)}; Persado does not report a balance.`}`:'Add a Persado API key in Settings';
+  if(useConn){
+    useConn.textContent=u.connection?`${u.connection.ok?'Connected':'Failed'} · ${u.connection.message||''} · ${fmtWhen(u.connection.at)}`:(u.hasKey?'Not tested':'No key');
+    useBalLbl.textContent=u.exhausted?'Balance':'Remaining (est.)';
+    useBal.innerHTML=!u.hasKey?'—':u.exhausted?'0 — Persado reported the quota exhausted'
+      :`${u.remaining} of ${u.quota} runs <span class="est">local estimate</span>`;
+    useUsed.innerHTML=u.hasKey?`${u.used} runs <span class="est">${u.scoreRuns}×${u.costs.score} score + ${u.optimizeRuns}×${u.costs.optimize} optimize</span>`:'—';
+    useReq.textContent=u.hasKey?`${u.requests}${u.failedRequests?` (${u.failedRequests} failed)`:''}`:'—';
+    useScore.textContent=u.hasKey?String(u.scoreRuns):'—';
+    useOpt.textContent=u.hasKey?String(u.optimizeRuns):'—';
+    useLast.textContent=u.hasKey?fmtWhen(u.lastSuccessAt):'—';
+    const hdrs=u.serverReported?Object.entries(u.serverReported.headers).map(([k,v])=>`${k}: ${v}`).join(', '):'';
+    useNote.textContent=`Persado’s API does not report an account balance, so remaining runs are counted locally from requests made in this browser since ${fmtWhen(u.since)}, against the developer portal’s quota of ${u.quota}. `
+      +`Costs: optimize ${u.costs.optimize} (${u.costSource.optimize}); score ${u.costs.score} (${u.costSource.score}). Runs made elsewhere with the same key are not counted.`
+      +(hdrs?` Persado reported: ${hdrs}.`:'')
+      +(u.lastError?` Last error: ${u.lastError.message}`:'');
+  }
+}
+if(btnRefreshUsage)btnRefreshUsage.addEventListener('click',async()=>{
+  // Refresh never spends a run: re-read the ledger, and re-check the key with
+  // the free catalogue call.
+  btnRefreshUsage.disabled=true;
+  if(apiKey)await testPersado();else renderUsage(await worker({type:MSG.USAGE_GET}));
+  btnRefreshUsage.disabled=false;
+});
+if(btnResetUsage)btnResetUsage.addEventListener('click',async()=>{renderUsage(await worker({type:MSG.USAGE_RESET}));tm('Local usage count reset');});
 
 let picking=false,pickTabId=null;
 function setPicking(on){
@@ -798,15 +943,13 @@ chrome.runtime.onMessage.addListener((msg)=>{
 
 function currentProduct(){return (scanResult?.productLine||'').trim();}
 
-btnConfirm.addEventListener('click',()=>{
-  if(!scanMaterial){tm('Pick a piece of copy first','err');return;}
-  renderSingle('confirm',{material:scanMaterial,product:currentProduct()});
-});
+btnConfirm.addEventListener('click',()=>persadoRun('score'));
 
 btnOptimize.addEventListener('click',()=>optimizeMaterial());
 if(btnRescan)btnRescan.addEventListener('click',()=>autoScan());
 // The result card is a dead end unless it can go back to the page's copy list.
 function backToList(){
+  clearPreview();
   if(resStale)resStale.hidden=true;
   if(!scanResult){setUiState('scan');autoScan();return;}
   setUiState('scan');
@@ -819,113 +962,180 @@ if(btnBackScan)btnBackScan.addEventListener('click',backToList);
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
   if(picking){e.preventDefault();cancelPick();return;}
-  if(pnlSettings.classList.contains('active')){e.preventDefault();if(scanResult){setUiState('scan');renderScanList();}else{setUiState('scan');autoScan();}return;}
+  if(pnlSettings.classList.contains('active')){e.preventDefault();leaveSettings();return;}
   if(!pnlResults.classList.contains('active'))return;
   e.preventDefault();backToList();
 });
 if(btnRescanStale)btnRescanStale.addEventListener('click',()=>{if(resStale)resStale.hidden=true;setUiState('scan');autoScan();});
 
-function optimizeMaterial(){
+function optimizeMaterial(){return persadoRun('optimize');}
+
+/** Brand for account.name when Settings has none: the site's own name. */
+function brandFromPage(){
+  try{
+    const h=new URL(scanResult?.url||currentUrl).hostname.replace(/^www\./,'');
+    const parts=h.split('.');const core=parts.length>2&&parts.at(-2).length<=3?parts.at(-3):parts.at(-2)||parts[0];
+    return core?core.charAt(0).toUpperCase()+core.slice(1):'';
+  }catch{return '';}
+}
+
+let runBusy=false;
+/**
+ * Score or optimize the selected line with the real Persado API (through the
+ * worker). Score is one run; optimize is one run that returns ranked
+ * alternatives. Nothing here invents a number: every figure on the result card
+ * is a field of Persado's response, and an absent field renders as absent.
+ */
+async function persadoRun(op){
   const m=scanMaterial;
   if(!m){tm('Pick a piece of copy first','err');return;}
-  const product=currentProduct();
+  if(runBusy)return;
+  runBusy=true;
+  const btn=op==='score'?btnConfirm:btnOptimize;
+  const label=btn.textContent;
+  btn.disabled=true;btn.textContent=op==='score'?'Scoring…':'Optimizing…';
+  if(op==='optimize')tm('Persado optimize runs can take a minute or two','ok');
+  try{
+    const r=await worker({type:op==='score'?MSG.PERSADO_SCORE:MSG.PERSADO_OPTIMIZE,
+      text:m.text,kind:m.kind,pageUrl:scanResult?.url||currentUrl,brand:brandFromPage(),
+      context:[scanResult?.title?`Page: ${scanResult.title}`:'',m.context?`Nearby copy: ${m.context}`:'',`Objective: ${goalValue}`].filter(Boolean).join('\n')});
+    if(r.usage)renderUsage(r.usage);
+    if(!r.ok){tm(r.error||'Persado request failed','err');if(r.kind==='no_key'||r.kind==='invalid_key')openSettings();return;}
+    renderSingle(op,{material:m,result:r.result,touchpoint:r.touchpoint,product:currentProduct()});
+  }finally{
+    runBusy=false;btn.disabled=false;btn.textContent=label;
+  }
+}
 
-  const host=shortUrl(scanResult?.url||currentUrl);
-  // The gateway's contract is a brief + the element to rewrite. The scan replaces
-  // the microphone here, so the brief is written from what was measured — the
-  // element, its slot, and the product line the user confirmed.
-  const narration=`Optimize the ${(KIND_LABEL[m.kind]||'copy').toLowerCase()} on ${host}. `
-    +`Current copy: “${m.text}”. ${product?`Product line: ${product}. `:''}Objective: ${goalValue}. `
-    +`Rewrite that one line so it states what the reader gets, in the same slot and with the same intent.`;
-  const payload={
-    narration,audience:product,goal:goalValue,pageUrl:scanResult?.url||currentUrl,
-    assetType:m.kind==='cta'?'web-cta':'web-headline',
-    element:{type:m.type,text:m.text,selector:m.selector,context:m.context},
-    ...((scanResult?.materials||[]).length>1?{elements:scanResult.materials.filter(x=>x!==m).slice(0,4)
-      .map(({type,text,context,selector})=>({type,text,context,selector}))}:{}),
-  };
+function perfTag(v){
+  if(!v)return '';
+  const t=[];
+  if(typeof v.performance==='number')t.push(`<span class="p-tag">Persado score <b>${v.performance}</b>${v.performanceBand?` · ${esc(String(v.performanceBand).toLowerCase())}`:''}</span>`);
+  if(typeof v.brandAlignment==='number')t.push(`<span class="p-tag" title="${esc(v.brandRationale||'')}">Brand alignment ${v.brandAlignment}</span>`);
+  if(v.compliance){
+    const risk=String(v.compliance.risk||'');
+    const cls=/^(none|no|low)/i.test(risk)?'clear':/(high|medium|moderate)/i.test(risk)?'flag':'';
+    const issue=(v.compliance.issues||[]).find(i=>i.description)?.description;
+    t.push(`<span class="p-tag ${cls}" title="${esc(v.compliance.summary||issue||'')}">Compliance: ${esc([v.compliance.state,risk&&('risk '+risk.toLowerCase())].filter(Boolean).join(' · ')||'reported')}</span>`);
+  }
+  for(const e of (v.emotions||[]).slice(0,2))t.push(`<span class="p-tag">${esc(e)}</span>`);
+  return t.length?`<div class="p-meta">${t.join('')}</div>`:'';
+}
 
-  const label=btnOptimize.textContent;
-  btnOptimize.disabled=true;btnOptimize.textContent='Optimizing…';
-  (async()=>{
-    try{
-      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:apiKeyHeaders(),body:JSON.stringify(payload)});
-      if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
-      const variants=(await resp.json()).variants||[];
-      if(!variants.length)throw new Error('The gateway returned no copy.');
-      // The user asked for ONE answer, so every returned line is scored on the same
-      // rules as the original and only the best is shown. The rest are discarded,
-      // not listed — a wall of variants is exactly what this screen avoids.
-      const scored=variants.map(v=>({...v,local:PERSADO_SCAN.scoreCopy(v.copy,m.kind)})).sort((a,b)=>b.local.score-a.local.score);
-      renderSingle('optimize',{material:m,best:scored[0],payload,product});
-    }catch(e){
-      tm(gatewayMessage(e.kind,e.message,e.url),'err');
-    }finally{
-      btnOptimize.disabled=false;btnOptimize.textContent=label;
-    }
-  })();
+let previewOn=null;   // { tabId, selector } while a preview is showing on the page
+async function setPreview(on,m,text){
+  try{
+    const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
+    if(!tab?.id)throw new Error('No active tab.');
+    await injectScanner(tab.id);
+    const r=on
+      ?await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PREVIEW,selector:m.selector,text,original:m.text})
+      :await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_RESTORE,selector:m.selector});
+    if(on&&!r?.ok)throw new Error(r?.error||'Could not preview on this page.');
+    previewOn=on?{tabId:tab.id,selector:m.selector}:null;
+    return true;
+  }catch(e){tm(e?.message||'Could not preview on this page','err');return false;}
+}
+async function clearPreview(){
+  if(!previewOn)return;
+  const p=previewOn;previewOn=null;
+  try{await chrome.tabs.sendMessage(p.tabId,{type:MSG.SCAN_RESTORE,selector:p.selector});}catch{}
 }
 
 function renderSingle(mode,sel){
   if(resStale)resStale.hidden=true;
+  clearPreview();
   resMaterialIndex=(scanResult?.materials||[]).findIndex(x=>sel.material&&x.id===sel.material.id);
   const m=sel.material;
   scanMode=mode;
-  briefPayload=sel.payload||null;
-  recommendations=null;
-  const original=m.score;
-  const scored=mode==='optimize'?sel.best.local:{score:m.score,band:m.band,cappedBy:m.cappedBy,issues:m.issues||[]};
-  const copy=mode==='optimize'?sel.best.copy:m.text;
-  const fixed=mode==='optimize'?m.issues.filter(i=>!scored.issues.some(j=>j.label===i.label)):[];
+  briefPayload=null;recommendations=null;
+  const r=sel.result;
 
-  resHeading.textContent=mode==='optimize'?'Optimized copy':'Current copy, scored';
-  resCtx.innerHTML=[(sel.product||'').toUpperCase(),(KIND_LABEL[m.kind]||'').toUpperCase()]
-    .filter(Boolean).map(x=>`<span class="nw">${esc(x)}</span>`).join(' · ');
-  capLine.textContent=mode==='optimize'?'One line · scored against the same rules':'Measured only — nothing rewritten';
-  resOrigText.textContent=m.text;
+  // "confirm" = a picked line shown before any Persado call: measured locally only.
+  if(mode==='confirm'||!r){
+    resHeading.textContent='Selected copy';
+    resCtx.innerHTML=[(KIND_LABEL[m.kind]||'').toUpperCase()].filter(Boolean).map(x=>`<span class="nw">${esc(x)}</span>`).join('');
+    capLine.textContent='Not sent to Persado yet';
+    resOrig.style.display='none';
+    resultsContainer.innerHTML=`<div class="opt-card"><div class="opt-copy">${esc(m.text)}</div>`
+      +`<div class="opt-delta">Score it or optimize it with Persado.</div>`
+      +`<div class="opt-act"><button class="vc-copybtn" id="btnScoreFromCard">Score</button><button class="vc-optimize" id="btnOptFromCard">Optimize</button></div></div>`;
+    resNote.style.display='none';
+    resultsContainer.querySelector('#btnScoreFromCard').onclick=()=>persadoRun('score');
+    resultsContainer.querySelector('#btnOptFromCard').onclick=()=>persadoRun('optimize');
+    finishSingle();return;
+  }
+
+  const meta=`<div class="res-note" style="display:block;margin-top:10px;">Persado ${esc(r.kind||mode)} job <span class="mono">${esc(r.jobId||'')}</span>${r.requestId?` · request ${esc(r.requestId)}`:''}${r.source==='demo'?' · demo fixture':''}</div>`;
+  if(mode==='score'){
+    const v=r.variants[0]||null;
+    resHeading.textContent='Scored by Persado';
+    resCtx.innerHTML=[(KIND_LABEL[m.kind]||'').toUpperCase(),'WEB PAGE'].map(x=>`<span class="nw">${esc(x)}</span>`).join(' · ');
+    capLine.textContent='1 score run · nothing rewritten';
+    resOrig.style.display='none';
+    resultsContainer.innerHTML=`<div class="opt-card">`
+      +`<div class="opt-top"><span class="opt-label">As written</span>${typeof v?.performance==='number'?`<span class="opt-score">Persado<b>${v.performance}</b></span>`:''}</div>`
+      +`<div class="opt-copy">${esc(m.text)}</div>`
+      +(v?perfTag(v):'<div class="opt-delta">Persado returned no score for this copy.</div>')
+      +(typeof v?.performance!=='number'&&v?'<div class="opt-delta">Persado returned no performance score for this channel.</div>':'')
+      +`<div class="opt-act"><button class="vc-optimize" id="btnOptFromCard">Optimize this</button><button class="vc-copybtn" id="btnCopyOpt">Copy</button></div>`
+      +`</div>`+meta;
+    resNote.style.display='none';
+    resultsContainer.querySelector('#btnOptFromCard').onclick=()=>persadoRun('optimize');
+    const cb=resultsContainer.querySelector('#btnCopyOpt');
+    cb.onclick=()=>navigator.clipboard.writeText(m.text).then(()=>{cb.textContent='Copied';}).catch(()=>tm('Could not copy','err'));
+    finishSingle();return;
+  }
+
+  // optimize
+  const tp=sel.touchpoint;
+  const alts=r.alternatives||[];
+  const best=alts[0]||null;
+  const copyOf=(a)=>a?.touchpoints?.[tp]||a?.text||'';
+  resHeading.textContent=best?'Optimized by Persado':'No better version found';
+  resCtx.innerHTML=[(KIND_LABEL[m.kind]||'').toUpperCase(),'WEB PAGE'].map(x=>`<span class="nw">${esc(x)}</span>`).join(' · ');
+  capLine.textContent=`1 optimize run · ${alts.length} alternative${alts.length===1?'':'s'} ranked by Persado`;
+  resOrigText.textContent=m.text+(typeof r.control?.performance==='number'?`  ·  Persado score ${r.control.performance}`:'');
   resOrig.style.display='';
-
-  const bandMove=scored.band&&m.band&&scored.band.key!==m.band.key?`${m.band.label} → ${scored.band.label}`:'';
-  const remaining=(scored.issues||[]).slice(0,4);
+  if(!best){
+    resultsContainer.innerHTML=`<div class="opt-card"><div class="opt-delta">${esc(r.notice?.message||'Persado returned no alternatives for this copy.')}${r.notice?.code?` (${esc(r.notice.code)})`:''}</div></div>`+meta;
+    resNote.style.display='none';finishSingle();return;
+  }
+  const copy=copyOf(best);
+  const delta=typeof best.performance==='number'&&typeof r.control?.performance==='number'
+    ?`Persado score <b>${r.control.performance}</b> → <b>${best.performance}</b>`:'';
   resultsContainer.innerHTML=`<div class="opt-card">`
-    +`<div class="opt-top"><span class="opt-label">${mode==='optimize'?'Optimized':'As written'}</span>`
-    +`<span class="opt-score">score<b>${scored.score}</b><span class="opt-band ${scored.band?.key||''}">${esc(scored.band?.label||'')}</span></span></div>`
+    +`<div class="opt-top"><span class="opt-label">Rank 1</span>${typeof best.performance==='number'?`<span class="opt-score">Persado<b>${best.performance}</b></span>`:''}</div>`
     +`<div class="opt-copy">${esc(copy)}</div>`
-    +(mode==='optimize'&&sel.best.rationale?`<div class="opt-why"><div class="opt-why-i">${esc(sel.best.rationale)}</div></div>`:'')
-    +(remaining.length?`<div class="opt-why">${remaining.map(x=>`<div class="opt-why-i"><strong>Still weak:</strong> ${esc(x.label)} — ${esc(x.detail)}</div>`).join('')}</div>`:'')
-    +`<div class="opt-delta">${mode==='optimize'
-        ?`Scored <b>${original}</b> before and <b>${scored.score}</b> now`
-          +`${bandMove?` · ${esc(bandMove)}`:''}`
-          +`${fixed.length?` · removed: ${esc(fixed.map(f=>f.label.toLowerCase()).join(', '))}`:''}.`
-        :`Same copy measured against the same rules. Press Optimize to rewrite it.`}</div>`
-    +(scored.cappedBy?`<div class="opt-delta">Capped at <b>${esc((PERSADO_SCAN.bandFor(scored.cappedBy.cap)||{}).label||'')}</b>: `
-      +`${esc(scored.cappedBy.why)}.${mode==='optimize'?'':' Clear it and the score can climb.'}</div>`:'')
-    +`<div class="opt-act">`
-    +(mode==='confirm'?`<button class="vc-optimize" id="btnOptFromCard">Optimize this</button>`:'')
-    +`<button class="vc-copybtn" id="btnCopyOpt">Copy</button>`
-    +`<button class="vc-use" id="btnUseOpt">Use this</button></div>`
-    +`</div>`;
-
-  resNote.textContent='Score is a local copy check — action verb, specificity, length, contrast, tap size — capped by the five Persado bands. It is not a Motivation AI score.';
+    +perfTag(best)
+    +(delta?`<div class="opt-delta">${delta}</div>`:'')
+    +`<div class="opt-act"><button class="vc-optimize" id="btnPreview">Preview on page</button>`
+    +`<button class="vc-copybtn" id="btnCopyOpt">Copy</button></div>`
+    +(alts.length>1?`<details class="p-alts"><summary>${alts.length-1} more from Persado</summary>`
+      +alts.slice(1).map((a,i)=>`<div class="p-alt"><span>${esc(copyOf(a))}</span><span>${typeof a.performance==='number'?`<b>${a.performance}</b>`:''}</span><button class="vc-copybtn" data-alt="${i+1}">Preview</button></div>`).join('')
+      +`</details>`:'')
+    +`</div>`+meta;
+  resNote.textContent='Previews swap the text in this tab only. Reloading or leaving the page restores the site; nothing is saved to it.';
   resNote.style.display='';
-  // Brief and Portal actions belong to the narrated flow; this screen has neither.
+  const pv=resultsContainer.querySelector('#btnPreview');
+  let showing=null;
+  const show=async(text,btn)=>{
+    if(showing===text){await setPreview(false,m);showing=null;btn.textContent=btn===pv?'Preview on page':'Preview';return;}
+    if(await setPreview(true,m,text)){
+      resultsContainer.querySelectorAll('[data-alt],#btnPreview').forEach(b=>b.textContent=b===pv?'Preview on page':'Preview');
+      showing=text;btn.textContent='Restore original';
+    }
+  };
+  pv.onclick=()=>show(copy,pv);
+  resultsContainer.querySelectorAll('[data-alt]').forEach(b=>b.onclick=()=>show(copyOf(alts[+b.dataset.alt]),b));
+  const cb=resultsContainer.querySelector('#btnCopyOpt');
+  cb.onclick=()=>navigator.clipboard.writeText(copy).then(()=>{cb.textContent='Copied';cb.classList.add('done');}).catch(()=>tm('Could not copy','err'));
+  finishSingle();
+}
+function finishSingle(){
   btnViewBrief.style.display='none';
   btnSendPortal.style.display='none';
-  // Footer is the second, more obvious exit from a result card; the header has the
-  // other one. Both return to the ranked list without throwing the scan away.
   btnNewBrief.textContent='Back to list';
-
-  const copyBtn=resultsContainer.querySelector('.vc-copybtn');
-  const useBtn=resultsContainer.querySelector('.vc-use');
-  copyBtn.onclick=()=>navigator.clipboard.writeText(copy).then(()=>{
-    const b=copyBtn;b.textContent='Copied';b.classList.add('done');
-    clearTimeout(b._t);b._t=setTimeout(()=>{b.textContent='Copy';b.classList.remove('done');},2000);
-  }).catch(()=>tm('Could not copy','err'));
-  // Confirming the copy is a decision to rewrite it next, not a dead end.
-  const optBtn=resultsContainer.querySelector('.vc-optimize');
-  if(optBtn)optBtn.onclick=()=>optimizeMaterial();
-  useBtn.onclick=()=>{navigator.clipboard.writeText(copy).then(()=>tm('Copied — paste it into the page')).catch(()=>tm('Could not copy','err'));};
-
   setUiState('results');
 }
 
@@ -1348,28 +1558,33 @@ async function generateRecommendations(narration){
   try{
     let variants;
     if(DEMO_MODE){
-      // Stubs the network call only. The payload above was still assembled from a
-      // real recording, real screenshots and real extracted copy.
+      // Stubs the network call only, and every variant says so (source:'demo').
       console.warn('[persado] DEMO MODE: returning canned variants, no network call');
       await new Promise(r=>setTimeout(r,DEMO_DELAYS.RECOMMEND_MS));
-      variants=DEMO_VARIANTS.map(v=>({...v}));
+      variants=DEMO_VARIANTS.map(v=>({...v,source:'demo',performance:null}));
     }else{
-      const resp=await fetch(GATEWAY_URL+ENDPOINTS.RECOMMEND,{method:'POST',headers:apiKeyHeaders(),body:JSON.stringify(briefPayload)});
-      if(!resp.ok)throw new Error((await resp.json().catch(()=>({error:'Gateway error'}))).error||'Gateway '+resp.status);
-      variants=(await resp.json()).variants||[];
+      // Persado optimizes the page's real copy; the narration is the context.
+      if(!element?.text)throw new Error('No on-page copy was found to optimize. Pick a line on the page instead.');
+      const r=await worker({type:MSG.PERSADO_OPTIMIZE,text:element.text,kind:element.type==='cta'?'cta':'headline',
+        pageUrl:currentUrl,brand:brandFromPage(),context:`Marketer's brief (verbatim): ${narration}\nObjective: ${goalValue}`});
+      if(r.usage)renderUsage(r.usage);
+      if(!r.ok)throw new Error(r.error||'Persado request failed');
+      const tp=r.touchpoint;
+      variants=(r.result.alternatives||[]).slice(0,3).map(a=>({copy:a.touchpoints?.[tp]||a.text,rationale:a.brandRationale||'',
+        emotion:(a.emotions||[])[0]||'',performance:a.performance,performanceBand:a.performanceBand,persadoCompliance:a.compliance,
+        rank:a.rank,source:r.result.source,jobId:r.result.jobId}));
+      if(!variants.length)throw new Error(r.result.notice?.message||'Persado returned no alternatives for this copy.');
     }
-    if(!variants.length)throw new Error('The gateway returned no variants.');
+    if(!variants.length)throw new Error('No variants were returned.');
     recommendations=variants;
     setStep('stepGenerate','done');
 
     // Steps 4 and 5 are fields of the response just parsed — tick them only if
     // the fields are actually there, and never before this point.
-    const hasCompliance=variants.every(v=>typeof v.compliance==='string'&&v.compliance);
-    setStep('stepCompliance',hasCompliance?'done':'skipped',hasCompliance?'':'The response carried no compliance fields.');
-    // Always SKIPPED: no Motivation AI is wired in, so nothing scored these. The
-    // gateway still returns predictedLift (contract unchanged) — we just refuse to
-    // present a general-purpose model's guess as a score (claude-design.md §7).
-    setStep('stepScore','skipped','Motivation AI is not connected in this prototype.');
+    const hasCompliance=variants.every(v=>v.persadoCompliance);
+    setStep('stepCompliance',hasCompliance?'done':'skipped',hasCompliance?'':'Persado returned no compliance result for these variants.');
+    const hasScore=variants.some(v=>typeof v.performance==='number');
+    setStep('stepScore',hasScore?'done':'skipped',hasScore?'':(DEMO_MODE?'Demo fixture — not scored.':'Persado returned no performance score.'));
     stopCreep();disarmTimeout();setProgress(100);
 
     // Brief hold so the finished checklist and the full bar actually render before
@@ -1382,7 +1597,7 @@ async function generateRecommendations(narration){
     renderBrief();setUiState('results');
     setActionState('results',recommendations.length);
   }catch(e){
-    procFail('stepGenerate',gatewayMessage(e.kind,e.message,e.url),()=>generateRecommendations(narration));
+    procFail('stepGenerate',e.message||'Persado request failed',()=>generateRecommendations(narration));
   }
 }
 
@@ -1419,38 +1634,29 @@ function renderResults(){
   // choice (clicking Use this), not a default.
   selectedVariant=-1;
   const reg=REG_BY_AUDIENCE[b.audience||audienceSelect.value]||'Reg DD';
-  // Highest mock score gets the TOP PICK chip (deterministic; MOCK_SCORES).
-  let topIdx=0; for(let i=1;i<n;i++){ if(MOCK_SCORES[i%MOCK_SCORES.length]>MOCK_SCORES[topIdx%MOCK_SCORES.length]) topIdx=i; }
+  // Persado ranks the alternatives; rank 1 is the top pick. No local ranking.
+  const topIdx=recommendations.findIndex(v=>v.rank===1);
   resultsContainer.innerHTML=recommendations.map((v,i)=>vcard(v,i,reg,topIdx)).join('');
-  // ONE combined disclaimer above the footer, covering both caveats so neither is
-  // repeated per card (scores) nor truncated on every pill (compliance).
-  resNote.textContent='Scores are sample data. Compliance flags are illustrative.';
+  resNote.textContent=recommendations[0]?.source==='demo'
+    ?'Demo fixture: these variants are canned and were not scored by Persado.'
+    :`Scores, ranks and compliance from Persado (job ${recommendations[0]?.jobId||''}).`;
   resNote.style.display='';
 }
 
 function vcard(v,i,reg,topIdx){
   const emo=(v.emotion||'').trim();
-  const emoOk=EMOTIONS_SET.has(emo.toLowerCase());
-  // Surface a missing/invalid tag rather than swallowing it — a blank slot on the
-  // card is a symptom, and this is where to see the cause.
-  if(!emoOk)console.warn(`[persado] variant ${i+1} has no valid emotion (got ${JSON.stringify(v.emotion)}) — no pill rendered`);
-  const emoPill=emoOk?`<span class="emotion">${esc(emo)}</span>`:'<span></span>';
-  // Compliance is a model OPINION, not a pass: no checkmark. The clear pill is
-  // compact and content-width ("UDAAP · REG"); the "illustrative" caveat is stated
-  // once in the combined footnote below, not truncated on every pill. A flagged pill
-  // shows "Review: <note>" and truncates via CSS ellipsis, full text in `title`.
-  const clear=v.compliance==='clear';
-  const comp=clear
-    ? `<span class="comp clear">UDAAP · ${esc(reg)}</span>`
-    : `<span class="comp flag" title="${esc(v.complianceNote||'')}">Review: ${esc(v.complianceNote||'flagged')}</span>`;
-  // TOP PICK chip sits next to the score on the highest-scoring card; the card
-  // itself gets no special border (that is reserved for the green in-use state).
+  const emoPill=emo?`<span class="emotion">${esc(emo.toLowerCase())}</span>`:'<span></span>';
+  // Compliance is shown only as Persado reported it; with no report, no badge.
+  const pc=v.persadoCompliance;
+  const risk=String(pc?.risk||'');
+  const comp=pc
+    ? `<span class="comp ${/^(none|no|low)/i.test(risk)?'clear':'flag'}" title="${esc(pc.summary||'')}">Compliance: ${esc([pc.state,risk&&('risk '+risk.toLowerCase())].filter(Boolean).join(' · ')||'reported')}</span>`
+    : '<span></span>';
   const top=i===topIdx?'<span class="toppick">TOP PICK</span>':'';
   const sel=i===selectedVariant;
-  // Every card carries the same collapsible rationale, closed by default.
   const why=v.rationale?`<details class="vc-why"><summary>Why this works</summary><p class="vc-why-p">${esc(v.rationale)}</p></details>`:'';
   return `<div class="vcard${sel?' sel':''}" data-i="${i}">`
-    +`<div class="vc-top">${emoPill}<span class="vc-right">${top}${scoreSlot(i)}</span></div>`
+    +`<div class="vc-top">${emoPill}<span class="vc-right">${top}${scoreSlot(v)}</span></div>`
     +`<div class="vc-copy">${esc(v.copy)}</div>`
     +why
     +`<div class="vc-foot">${comp}`
@@ -1460,20 +1666,10 @@ function vcard(v,i,reg,topIdx){
       +`</span></div>`
   +`</div>`;
 }
-/**
- * Sample Motivation AI score — deterministic (MOCK_SCORES/MOCK_LIFTS in config),
- * NEVER the gateway's predictedLift. 'index' (default) reads as a neutral score;
- * 'lift' reads as a CTR-lift % per the original mockup. Marked "sample" either way.
- */
-function scoreSlot(i){
-  if(MOCK_SCORE_STYLE==='lift'){
-    const pct=MOCK_LIFTS[i%MOCK_LIFTS.length];
-    return `<span class="vc-score lift">+${pct}% CTR</span>`;
-  }
-  const val=MOCK_SCORES[i%MOCK_SCORES.length];
-  // "SCORE 87": a small mono label with a prominent figure, balancing the emotion
-  // chip opposite. The sample-data caveat is stated once in the footnote below.
-  return `<span class="vc-score"><span class="mark">SCORE</span> <b>${val}</b></span>`;
+/** Persado's performance score when it returned one; nothing otherwise. */
+function scoreSlot(v){
+  if(typeof v.performance!=='number')return '';
+  return `<span class="vc-score"><span class="mark">PERSADO</span> <b>${v.performance}</b></span>`;
 }
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
@@ -1511,7 +1707,7 @@ function portalPayloadText(){
   // Redact the stand-in model's predictedLift: it is a fabricated number and this
   // dump is shown on screen. The score is Motivation AI's job — render the same
   // seam the cards do, so no invented figure is ever visible on the results screen.
-  const variants=(recommendations||[]).map(({predictedLift,...v})=>({...v,motivationAIScore:'not connected in this prototype'}));
+  const variants=(recommendations||[]).map(({predictedLift,...v})=>v);
   return JSON.stringify({brief,variants},null,2);
 }
 // Stub: shows the exact object a real Portal integration would receive, labelled
@@ -1563,6 +1759,147 @@ async function offerResume(){
   }catch{return false;}
 }
 
+// ─── Mailchimp ──────────────────────────────────────────────────
+// When the active tab is Mailchimp, the panel's front door is the account's
+// draft campaigns instead of a page scan (scanning Mailchimp's own UI would
+// only find Mailchimp's buttons). The run itself happens in the worker; this
+// screen draws its steps, the original-versus-optimized result, and Revert /
+// Send test. Sending to an audience is never offered here.
+
+const MC_HOST=/^https:\/\/[^/]*\.admin\.mailchimp\.com\//i;
+const isMailchimpUrl=(u)=>MC_HOST.test(u||'');
+const webIdOf=(u)=>{try{const x=new URL(u);const id=x.searchParams.get('id');return /\/campaigns\//.test(x.pathname)&&/^\d+$/.test(id||'')?Number(id):null;}catch{return null;}};
+const MC_STEPS=[['read','Reading campaign'],['optimize','Optimizing with Persado'],['write','Updating Mailchimp draft'],['verify','Verifying saved draft']];
+const MC_FIELD={subject_line:'Subject line',preview_text:'Preview text'};
+const mcFieldLabel=(c)=>MC_FIELD[c.field]||({headline:'Headline',subheadline:'Subheadline',body:'Body',cta:'Button'}[c.touchpoint])||c.field;
+let mcDrafts=[],mcSel=null,mcRun={running:false,step:null,error:null,result:null},mcTabWebId=null;
+
+async function showMailchimp(){
+  setUiState('mailchimp');
+  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});mcTabWebId=webIdOf(t?.url);}catch{}
+  await loadDrafts();
+}
+
+async function loadDrafts(){
+  mcSub.textContent='Loading drafts…';
+  const st=await worker({type:MSG.MC_STATUS,webId:mcTabWebId});
+  if(st.usage)renderUsage(st.usage);
+  if(!st.persadoKey){mcSub.textContent='Add your Persado API key in Settings to optimize drafts.';mcList.innerHTML='';mcDetail.hidden=true;mcButtons();return;}
+  if(!st.connected){mcSub.textContent='Connect your Mailchimp account in Settings.';mcList.innerHTML='';mcDetail.hidden=true;mcButtons();return;}
+  const r=await worker({type:MSG.MC_DRAFTS});
+  if(!r.ok){mcSub.textContent=r.error;mcList.innerHTML='';mcButtons();return;}
+  mcDrafts=r.drafts||[];
+  mcSub.textContent=mcDrafts.length?`${st.accountName||'Mailchimp'} · ${mcDrafts.length} draft${mcDrafts.length===1?'':'s'}`:`${st.accountName||'Mailchimp'} · no draft campaigns`;
+  // Pre-select the campaign open in the editor, else keep the selection, else the newest.
+  const pick=mcDrafts.find(d=>mcTabWebId&&Number(d.webId)===mcTabWebId)||mcDrafts.find(d=>d.id===mcSel?.id)||mcDrafts[0]||null;
+  mcSelect(pick?.id);
+}
+
+function mcSelect(id){
+  const changed=id!==mcSel?.id;
+  mcSel=mcDrafts.find(d=>d.id===id)||null;
+  if(changed&&!mcRun.running)mcRun={running:false,step:null,error:null,result:null};
+  mcList.innerHTML=mcDrafts.map(d=>`<div class="scan-row${d.id===mcSel?.id?' sel':''}" data-id="${esc(d.id)}" role="button" tabindex="0">`
+    +`<div class="scan-row-k">${esc(d.contentType==='html'?'Custom HTML':d.contentType==='multichannel'?'New builder':'Drag-and-drop')}${mcTabWebId&&Number(d.webId)===mcTabWebId?' · open in editor':''}</div>`
+    +`<div class="scan-row-t">${esc(d.title||d.subject||'(untitled draft)')}</div>`
+    +`<div class="scan-row-s"></div></div>`).join('')||'<div class="scan-empty">Create a draft campaign in Mailchimp, then Refresh.</div>';
+  renderMcDetail();
+}
+mcList.addEventListener('click',e=>{const r=e.target.closest('.scan-row');if(r)mcSelect(r.dataset.id);});
+mcList.addEventListener('keydown',e=>{const r=e.target.closest('.scan-row');if(r&&(e.key==='Enter'||e.key===' ')){e.preventDefault();mcSelect(r.dataset.id);}});
+
+function mcButtons(){
+  btnMcOptimize.disabled=!mcSel||mcRun.running;
+  btnMcOptimize.textContent=mcRun.running?'Optimizing…':'Optimize draft';
+  btnMcTestSend.disabled=!mcSel||mcRun.running;
+}
+
+async function renderMcDetail(){
+  mcButtons();
+  if(!mcSel){mcDetail.hidden=true;btnMcRevert.hidden=true;return;}
+  mcDetail.hidden=false;
+  // Steps: only those that actually started are marked.
+  const at=MC_STEPS.findIndex(([k])=>k===mcRun.step);
+  const failed=!!mcRun.error;
+  mcSteps.innerHTML=mcRun.step||mcRun.result?MC_STEPS.map(([k,l],i)=>{
+    const cls=mcRun.step==='done'||(mcRun.result&&!failed)?'done':i<at?'done':i===at?(failed?'err':'active'):'';
+    return `<div class="mc-step ${cls}"><span class="dot"></span>${esc(l)}</div>`;}).join(''):'';
+  let html=`<div class="mc-chg"><div class="mc-chg-f">Subject line</div><div class="mc-now">${esc(mcSel.subject||'(none)')}</div>`
+    +`<div class="mc-chg-f" style="margin-top:6px;">Preview text</div><div class="mc-now">${esc(mcSel.previewText||'(none)')}</div></div>`;
+  if(mcRun.error)html=`<div class="mc-note err">${esc(mcRun.error)}</div>`+(mcRun.errorKind==='already_optimized'?`<div class="scan-alt"><button class="btn-quiet" id="btnMcForce">Run again anyway</button></div>`:'')+html;
+  const r=mcRun.result;
+  if(r){
+    const applied=(r.changes||[]).filter(c=>c.applied);
+    const perf=r.persado?.controlPerformance!=null&&r.alternative?.performance!=null?` Persado score ${r.persado.controlPerformance} → ${r.alternative.performance} (rank ${r.alternative.rank??'–'}).`:'';
+    const msg=r.status==='nothing_eligible'?'Nothing in this draft is eligible to optimize.'
+      :r.status==='no_change'?(r.message||'Persado returned nothing that passed the safeguards. The draft is unchanged.')
+      :r.status==='unverified'?'Written, but Mailchimp did not read every change back. Check the draft, or Revert.'
+      :`${applied.length} field${applied.length===1?'':'s'} updated and verified in Mailchimp.${perf} Reload the Mailchimp editor to see them.`;
+    html=`<div class="mc-note ${r.status==='ok'?'ok':r.status==='partial'?'ok':'warn'}">${esc(msg)}</div>`
+      +(r.changes||[]).map(c=>`<div class="mc-chg"><div class="mc-chg-f">${esc(mcFieldLabel(c))}${c.applied?'':' · kept'}</div>`
+        +(c.applied?`<div class="mc-was">${esc(c.original)}</div><div class="mc-now">${esc(c.optimized)}</div>`
+          :`<div class="mc-now">${esc(c.original)}</div>${c.reasons?.length?`<div class="mc-why">${esc(c.reasons[0])}</div>`:''}`)+`</div>`).join('')
+      +((r.skipped||[]).filter(x=>x.text||x.field==='body').length?`<div class="mc-note">Not sent: ${esc((r.skipped||[]).filter(x=>x.text||x.field==='body').map(x=>`${x.field==='body'?'body':x.text.slice(0,40)} (${x.reason})`).join('; '))}</div>`:'')
+      +(r.persado?.jobId?`<div class="mc-act-i"><span class="meta">Persado job ${esc(r.persado.jobId)}${r.persado.requestId?' · request '+esc(r.persado.requestId):''}</span></div>`:'');
+  }
+  mcResult.innerHTML=html;
+  const f=mcResult.querySelector('#btnMcForce');if(f)f.onclick=()=>mcOptimize(true);
+  const st=await worker({type:MSG.MC_STATUS,webId:mcSel.webId});
+  btnMcRevert.hidden=!st.canRevert||mcRun.running;
+  const acts=st.activity||[];
+  mcActivity.innerHTML=acts.length?acts.map(a=>`<div class="mc-act-i"><b>${esc(a.action)}</b> · ${esc(a.status)} · ${esc(fmtWhen(a.at))}${a.source==='demo'?' · demo fixture':''}`
+    +(a.message?`<div>${esc(a.message)}</div>`:'')+(a.error?`<div class="mc-why">${esc(a.error.message)}</div>`:'')
+    +(a.persado?.jobId?`<div class="meta">job ${esc(a.persado.jobId)}</div>`:'')+`</div>`).join(''):'<div class="mc-act-i">No activity for this draft yet.</div>';
+}
+
+async function mcOptimize(force){
+  if(!mcSel||mcRun.running)return;
+  mcRun={running:true,step:'read',error:null,result:null};
+  renderMcDetail();
+  const r=await worker({type:MSG.MC_OPTIMIZE,campaignId:mcSel.id,force:!!force});
+  if(r.usage)renderUsage(r.usage);
+  mcRun={running:false,step:r.ok?'done':mcRun.step,error:r.ok?null:r.error,errorKind:r.ok?null:r.kind,result:r.ok?r:null};
+  // Pick up the new subject/preview for the list.
+  if(r.ok&&(r.status==='ok'||r.status==='partial'||r.status==='unverified')){
+    const d=await worker({type:MSG.MC_DRAFTS});
+    if(d.ok){mcDrafts=d.drafts;mcSel=mcDrafts.find(x=>x.id===mcSel.id)||mcSel;}
+  }
+  renderMcDetail();
+}
+btnMcOptimize.addEventListener('click',()=>mcOptimize(false));
+btnMcRefresh.addEventListener('click',loadDrafts);
+btnMcSettings.addEventListener('click',openSettings);
+btnMcRevert.addEventListener('click',async()=>{
+  if(!mcSel)return;
+  btnMcRevert.disabled=true;
+  const r=await worker({type:MSG.MC_REVERT,campaignId:mcSel.id});
+  btnMcRevert.disabled=false;
+  if(!r.ok){tm(r.error,'err');return;}
+  tm('Original restored in Mailchimp');
+  mcRun={running:false,step:null,error:null,result:null};
+  await loadDrafts();
+});
+btnMcTestSend.addEventListener('click',async()=>{
+  if(!mcSel)return;
+  btnMcTestSend.disabled=true;
+  const r=await worker({type:MSG.MC_TEST_SEND,campaignId:mcSel.id});
+  btnMcTestSend.disabled=false;
+  if(!r.ok){tm(r.error,'err');if(/test e-mail address/i.test(r.error||''))openSettings();return;}
+  tm(`Mailchimp sent a test to ${r.sentTo} address${r.sentTo===1?'':'es'}`);
+  renderMcDetail();
+});
+
+chrome.runtime.onMessage.addListener((msg)=>{
+  if(msg.type===MSG.USAGE_UPDATED){renderUsage(msg.usage);return;}
+  if(msg.type===MSG.AUTOPILOT_PROGRESS){
+    if(!mcSel||msg.campaignId!==mcSel.id)return;
+    if(msg.step==='reverted'){if(uiState==='mailchimp')loadDrafts();return;}
+    if(msg.step==='error'){mcRun.error=msg.label;}
+    else if(msg.step!=='done')mcRun.step=msg.step;
+    if(uiState==='mailchimp')renderMcDetail();
+  }
+});
+
 async function init(){
   syncCtxSummary();
   // Screen capture is opt-in (options page). Reflect the stored setting across the
@@ -1571,10 +1908,11 @@ async function init(){
   // Impossible to mistake a canned run for a live one.
   if(DEMO_MODE)$('demoFlag').style.display='';
   await dp();
+  worker({type:MSG.USAGE_GET}).then(renderUsage);
   // The [Persado] wordmark was removed (Chrome's native side-panel bar already shows
   // the mark); keep the version discoverable on hover via the header status chip and
   // the results Done status, both of which persist.
-  const ver='Language Intelligence Layer v'+chrome.runtime.getManifest().version;
+  const ver='Persado Autopilot v'+chrome.runtime.getManifest().version;
   try{$('headerStatus').title=ver;}catch{}
   try{$('resStatus').title=ver;}catch{}
   refreshOfflineHint();
@@ -1619,7 +1957,10 @@ async function init(){
       await generateRecommendations(narrationTranscript);return;
     }
   }catch{}
-  // Nothing recorded yet: read the page and put the weakest copy in front of them.
+  // Nothing recorded yet. On Mailchimp, show the drafts; anywhere else, read the
+  // page and put the weakest copy in front of them.
+  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});
+    if(isMailchimpUrl(t?.url)){lastScanUrl=t.url;await showMailchimp();return;}}catch{}
   setUiState('scan');
   autoScan();
 }

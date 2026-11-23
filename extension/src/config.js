@@ -19,10 +19,11 @@
   // installs as dev.persado.gateway on this port (gateway/install-launchd.sh).
   const GATEWAY_URL = 'http://127.0.0.1:8788';
 
+  // Only transcription still uses the local gateway. Scoring and optimization go
+  // to the Persado API from the service worker (src/persado-api.js).
   const ENDPOINTS = Object.freeze({
     HEALTH: '/health',
     TRANSCRIBE: '/v1/ai/transcribe',
-    RECOMMEND: '/v1/ai/recommend',
   });
 
   const TIMEOUTS = Object.freeze({
@@ -67,25 +68,16 @@
     'web-headline', 'web-cta', 'email-subject', 'push', 'sms', 'banner', 'social',
   ]);
 
-  // ── Mock Motivation AI score ───────────────────────────────────
+  // ── Scores ─────────────────────────────────────────────────────
   //
-  // Deterministic sample values assigned in order to the returned variants, so the
-  // demo is identical on every run — never randomised. Shown on the results card
-  // where Persado's real Motivation AI score would go, clearly marked "sample".
-  const MOCK_SCORES = [87, 79, 74];   // index/score form (default)
-  const MOCK_LIFTS  = [38, 31, 24];   // CTR-lift form, matching the original mockup
-
-  // 'index' (default) shows a neutral score like "Motivation AI  87  ·  sample" —
-  // an index, not a percentage. 'lift' shows "+38% CTR" in green, matching the
-  // mockup. Default MUST stay 'index': a lift figure is a PERFORMANCE CLAIM this
-  // prototype cannot support — the numbers are sample data, not model output. Flip
-  // to 'lift' only when a viewer explicitly wants the mockup's framing.
-  const MOCK_SCORE_STYLE = 'index';
+  // The mock Motivation AI scores and lifts that used to live here are gone.
+  // Every score in the UI is now a field of a real Persado API response
+  // (src/persado-api.js); an absent field renders as absent, never as a sample.
 
   // ── Demo mode ──────────────────────────────────────────────────
   //
-  // OFF BY DEFAULT. When true, ONLY the two network calls (transcribe, recommend)
-  // return canned responses after a realistic delay. Everything that makes the
+  // OFF BY DEFAULT. When true, ONLY the narrated flow's two network calls
+  // (transcribe, and the Persado optimize of the brief) return canned responses after a realistic delay. Everything that makes the
   // demo worth watching still runs for real: microphone, waveform, screenshots,
   // element extraction, the coverage check. This exists so a dead gateway, a slow
   // API or a hotel network cannot end a presentation — not to fake the product.
@@ -106,19 +98,17 @@
   const DEMO_VARIANTS = Object.freeze([
     { copy: 'Open your account in 3 minutes',
       rationale: 'Replaces a generic instruction with a concrete time cost, which reduces perceived friction at the decision point.',
-      compliance: 'clear', complianceNote: '', predictedLift: '+8–14%' },
+      compliance: 'clear', complianceNote: '' },
     { copy: 'Start earning 4.30% APY today',
       rationale: 'Leads with the rate to anchor value before the ask; requires the APY qualifier to stay compliant.',
-      compliance: 'flag', complianceNote: 'Reg DD — APY stated without its compounding basis or qualifying conditions',
-      predictedLift: '+12–20%' },
+      compliance: 'flag', complianceNote: 'Reg DD — APY stated without its compounding basis or qualifying conditions' },
     { copy: 'Join 40,000 professionals banking smarter',
       rationale: 'Social proof reframes the action as joining an existing group rather than starting a transaction.',
-      compliance: 'clear', complianceNote: '', predictedLift: '+9–15%' },
+      compliance: 'clear', complianceNote: '' },
   ]);
 
   root.PERSADO_CONFIG = Object.freeze({
     GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS, ASSET_TYPES,
-    MOCK_SCORES, MOCK_LIFTS, MOCK_SCORE_STYLE,
     DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT, DEMO_VARIANTS,
   });
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -1,24 +1,14 @@
 {
-  "name": "spotter-extension",
-  "version": "2.0.0",
-  "description": "Spotter browser extension — UX session recorder",
+  "name": "persado-autopilot-extension",
+  "version": "0.9.0",
+  "description": "Persado Autopilot Chrome extension (MV3, loaded unpacked; no build step)",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "build": "node ../scripts/package-extension.mjs",
+    "typecheck": "for f in src/*.js src/adapters/*.js sidepanel.js options.js; do node --check \"$f\" || exit 1; done",
     "test": "node --test test/*.test.mjs"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@crxjs/vite-plugin": "^2.6.1",
-    "vite": "^8.0.16"
-  },
-  "devDependencies": {
-    "@types/chrome": "^0.1.43",
-    "typescript": "^6.0.3"
-  }
+  "license": "ISC"
 }
