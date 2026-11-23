@@ -18,7 +18,7 @@
 //   PUT   /campaigns/{id}/content { html }        body
 //   POST  /campaigns/{id}/actions/test            test send (Mailchimp's own flow)
 //
-// What the API can and cannot do (documented in docs/AUTOPILOT.md):
+// What the API can and cannot do (docs/AUTOPILOT.md §3):
 //   • There is no pre-send hook or webhook for "campaign saved/about to send", so
 //     optimization cannot intercept a send. It runs on an explicit action.
 //   • Only campaigns in status "save" (draft) are touched — never scheduled,

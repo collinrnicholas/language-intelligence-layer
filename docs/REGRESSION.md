@@ -13,8 +13,10 @@ vision path that quietly sent no image, and an action row pushed off-screen.
 - [ ] **Hard-reload the test page** (⇧⌘R) — an already-open tab keeps running the
       PREVIOUS build's content script. This is the known failure mode; the
       PING/version handshake now detects it, but test the real path anyway.
-- [ ] Gateway running: `OPENAI_API_KEY=… node gateway/server.mjs` → `/health` returns ok
-- [ ] `npm run smoke` passes
+- [ ] Gateway running (recorded briefs only): `OPENAI_API_KEY=… npm run gateway` → `127.0.0.1:8788/health` returns ok
+- [ ] `npm run smoke` passes; `npm --workspace extension test` passes
+- [ ] A Persado developer key is saved in Settings (live sections 8–11). For Mailchimp, a
+      **test** account with at least one draft campaign — never a production audience
 
 ## 1 — Panel and start screen (1a)
 
@@ -60,20 +62,23 @@ vision path that quietly sent no image, and an action row pushed off-screen.
 - [ ] Compliance step cites Reg DD for retail/business/wealth, Reg Z for cards/mortgage
 - [ ] `YOUR BRIEF` card shows a real summary · page · product line
 - [ ] Toolbar badge amber during, green with the variant count after
+- [ ] "Writing variants" is a Persado optimize run (usage bar drops by 5 est.); the score
+      and compliance steps tick only if Persado returned those fields
 
 ## 5 — Results and reset
 
-- [ ] Variants render with copy, rationale, compliance badge and lift estimate
+- [ ] Variants render with copy, Persado score (when returned) and Persado's compliance
+      result — no lift figure, no sample score anywhere
 - [ ] **Export PDF** opens the print view with the brief and variants
 - [ ] **New brief** returns to the start screen, toolbar badge clears to Ready
 - [ ] Start a second recording immediately after — it must work (no stale recorder)
 
 ## 6 — Grounding actually happened (easy to fake, so check it)
 
-- [ ] Panel console: `[persado] grounding →` shows `framesCaptured` > 0 and
-      `imagesSent` > 0
-- [ ] Gateway log: `recommend → gpt-4o (vision, N images)` — **not** `text-only`
-- [ ] `element` in the request is the page's ACTUAL current copy
+- [ ] Panel console: `[persado] grounding →` names the page's ACTUAL current copy
+- [ ] Service-worker Network: the `POST /v1/optimize` body's `variant` is that copy and
+      `context` carries the narration — and no request goes to the gateway's
+      `/v1/ai/recommend`
 - [ ] Variants read as rewrites of that real copy, not invented marketing lines
 
 ## 7 — Failure paths
@@ -89,6 +94,52 @@ vision path that quietly sent no image, and an action row pushed off-screen.
       "not available on this page"
 - [ ] Page console is clean of uncaught errors; panel console likewise
 
+## 8 — Persado connection and usage (live)
+
+- [ ] Settings → paste a wrong key → Save key: "Persado rejected the API key"; usage bar
+      dot red. Paste the real key → "Connected to Persado … this check used no runs"
+- [ ] Key field is empty after saving; the key never appears in the panel, the page, the
+      service-worker console, or Settings
+- [ ] Usage bar: `Persado API · Connected` and `N / 100 runs left · est.`; Settings shows
+      Remaining (est.), Consumed, Requests, Score/Optimize runs, Last success
+- [ ] Refresh usage → service-worker Network shows only `GET /v1/catalogue` (no paid run)
+
+## 9 — Website scoring and optimization (live)
+
+- [ ] Open a real marketing page → scan lists CTAs/headlines (local check, labelled)
+- [ ] **Score** → "Scored by Persado", a real Persado score and compliance tag, the job id;
+      usage −1
+- [ ] **Optimize** → original with Persado's control score, rank-1 alternative with its
+      score, "N more from Persado"; usage −5
+- [ ] **Preview on page** swaps the text on the page (dashed red outline); **Restore
+      original** puts it back; reload restores it too
+- [ ] Remove the key → Score: plain "No Persado API key is saved" and Settings opens
+
+## 10 — Mailchimp (live, TEST account)
+
+- [ ] Settings → Mailchimp key → Save and test: "Connected to <account> (usNN)"
+- [ ] Open `*.admin.mailchimp.com`: panel switches to **Mailchimp drafts**; the open
+      campaign is marked "open in editor"
+- [ ] Optimize draft: steps advance Reading → Optimizing → Updating → Verifying; result
+      shows original → optimized per field and "verified in Mailchimp"; usage −5
+- [ ] In Mailchimp, reload the campaign: subject line / preview text (and body, for a
+      custom-HTML campaign) show the new copy; links, merge tags, footer unchanged
+- [ ] A drag-and-drop campaign: body is listed as not sent ("builder … write-back is off")
+- [ ] Optimize again with no edits → "already optimized" and no second Persado run
+- [ ] **Send test** → test e-mail arrives at the Settings address; nothing else is sent
+- [ ] **Revert to original** → reload in Mailchimp shows the original copy
+- [ ] Disconnect → key removed; panel says "Connect your Mailchimp account"
+
+## 11 — Mailchimp overlay
+
+- [ ] On a campaign page, a small `[P] Persado · Connected / Campaign optimization
+      available` pill sits bottom-left and covers none of Mailchimp's controls
+- [ ] Click → card with Optimize draft, steps, result, Revert, collapsible Activity
+      (job id, original vs optimized, errors). × hides it for the page
+- [ ] Editing in Mailchimp during a run → the write is refused ("edited … nothing was
+      written")
+- [ ] Not a campaign page → no pill. Not connected → pill says what to set up
+
 ## Result template
 
 ```
@@ -100,6 +151,10 @@ vision path that quietly sent no image, and an action row pushed off-screen.
 5 results/reset      ✓
 6 grounding          ✓  frames=4 imagesSent=4 model=gpt-4o(vision)
 7 failure paths      ✓
+8 persado + usage    ✓
+9 web score/optimize ✓
+10 mailchimp         ✓
+11 overlay           ✓
 ```
 
 ---

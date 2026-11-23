@@ -142,4 +142,7 @@ test('sender gating: a Mailchimp page may ask for status, a random page may not,
   assert.equal(r.ok, false);
   r = await send({ type: MSG.PERSADO_OPTIMIZE, text: 'x' }, { id: 'other-extension' });
   assert.equal(r.ok, false);
+  // The side panel opened as a tab is still our own page.
+  r = await send({ type: MSG.USAGE_GET }, { id: EXT_ID, tab: { id: 2, url: `chrome-extension://${EXT_ID}/sidepanel.html` }, url: `chrome-extension://${EXT_ID}/sidepanel.html` });
+  assert.equal(typeof r.quota, 'number');
 });

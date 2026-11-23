@@ -8,6 +8,19 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.9.1
+
+Fixes from the first in-browser run of 0.9.0.
+
+- The side panel was refused by its own worker when opened as a tab ("Not allowed
+  from this context"). Our own extension pages are now always trusted; content scripts
+  are still limited to the Mailchimp overlay's three messages.
+- A run started from the Mailchimp overlay now finishes in the side panel too (its last
+  step no longer stays amber), and the panel re-reads the drafts when it ends.
+- Settings › Back goes to the screen for the tab that is active now (Mailchimp drafts or
+  the page scan).
+- The page scan shows its band label again ("scores 30 ()" lost the band in scan()).
+
 ## 0.9.0
 
 **Persado Autopilot.** The extension now calls the real Persado API, shows what it

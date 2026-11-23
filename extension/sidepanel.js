@@ -740,8 +740,12 @@ async function openSettings(){
   renderUsage(await worker({type:MSG.USAGE_GET}));
   setUiState('settings');
 }
-function leaveSettings(){
-  if(settingsReturn==='mailchimp'){showMailchimp();return;}
+async function leaveSettings(){
+  // Back goes to the front door for the tab that is active NOW (it may have
+  // changed to or from Mailchimp while Settings was open).
+  let onMc=settingsReturn==='mailchimp';
+  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(t?.url)onMc=isMailchimpUrl(t.url);}catch{}
+  if(onMc){showMailchimp();return;}
   if(scanResult){setUiState('scan');renderScanList();if(resMaterialIndex>=0)selectMaterial(resMaterialIndex);}
   else{setUiState('scan');autoScan();}
 }
@@ -1844,6 +1848,8 @@ async function renderMcDetail(){
   }
   mcResult.innerHTML=html;
   const f=mcResult.querySelector('#btnMcForce');if(f)f.onclick=()=>mcOptimize(true);
+  // Status (revert + activity) is re-read only between runs, not on every step.
+  if(mcRun.running){btnMcRevert.hidden=true;return;}
   const st=await worker({type:MSG.MC_STATUS,webId:mcSel.webId});
   btnMcRevert.hidden=!st.canRevert||mcRun.running;
   const acts=st.activity||[];
@@ -1894,8 +1900,11 @@ chrome.runtime.onMessage.addListener((msg)=>{
   if(msg.type===MSG.AUTOPILOT_PROGRESS){
     if(!mcSel||msg.campaignId!==mcSel.id)return;
     if(msg.step==='reverted'){if(uiState==='mailchimp')loadDrafts();return;}
+    // A run started from the Mailchimp overlay reports here too; when it ends,
+    // re-read the drafts so the panel shows the saved copy.
+    if(msg.step==='done'){mcRun.step='done';if(!mcRun.running&&uiState==='mailchimp')loadDrafts();return;}
     if(msg.step==='error'){mcRun.error=msg.label;}
-    else if(msg.step!=='done')mcRun.step=msg.step;
+    else mcRun.step=msg.step;
     if(uiState==='mailchimp')renderMcDetail();
   }
 });

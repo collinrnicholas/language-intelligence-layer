@@ -267,7 +267,7 @@
         fontSize: parseFloat(s.fontSize) || 12,
         contrast: contrastOf(el),
       };
-      const { score, issues } = scoreCopy(text, kind, box);
+      const { score, issues, band, cappedBy } = scoreCopy(text, kind, box);
       const prom = prominence(el, rect, maxFont, docHeight);
       found.push({
         id: found.length,
@@ -278,6 +278,8 @@
         selector: selectorFor(el),
         context: nearby(el),
         score,
+        band,
+        cappedBy,
         prominence: prom,
         // Opportunity = valuable slot × weak copy. This is what ranks the list:
         // a slightly weak CTA above the fold beats a terrible line in the footer.

@@ -788,7 +788,10 @@ async function mcTestSend(msg) {
 const OVERLAY_ALLOWED = new Set([MSG.MC_STATUS, MSG.MC_OPTIMIZE, MSG.MC_REVERT]);
 function senderAllowed(msg, sender) {
   if (sender.id !== chrome.runtime.id) return false;
-  if (!sender.tab) return true;   // extension pages: the side panel / options
+  // Our own pages (side panel, options — even when opened in a tab) are trusted.
+  // Content scripts report the PAGE's URL, so they never match this origin.
+  const own = `chrome-extension://${chrome.runtime.id}/`;
+  if (!sender.tab || String(sender.url || '').startsWith(own) || sender.origin === own.slice(0, -1)) return true;
   let host = '';
   try { host = new URL(sender.url || sender.tab.url || '').hostname; } catch {}
   return OVERLAY_ALLOWED.has(msg.type) && /(^|\.)admin\.mailchimp\.com$/i.test(host);
