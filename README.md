@@ -56,8 +56,18 @@ gateway (Whisper), and the variants now come from Persado's optimize run.
 
 ## Running it
 
+From a fork, clone the repo and work on the feature branch:
+
 ```bash
+git clone https://github.com/collinrnicholas/language-intelligence-layer.git
+cd language-intelligence-layer
+git checkout feature/persado-autopilot
 npm install
+```
+
+Then build it:
+
+```bash
 npm run build        # verifies, then writes extension/dist/unpacked (+ a zip if `zip` exists)
 ```
 
