@@ -1,4 +1,4 @@
-// ─── Persado Capture — Side Panel ────────────────────────────────
+// ─── Language Intelligence Layer — Side Panel ────────────────────────────────
 //
 // src/messages.js and src/boot.js are loaded as classic scripts BEFORE this
 // module (see sidepanel.html) so the shared contract exists and any throw during
@@ -1574,7 +1574,7 @@ async function init(){
   // The [Persado] wordmark was removed (Chrome's native side-panel bar already shows
   // the mark); keep the version discoverable on hover via the header status chip and
   // the results Done status, both of which persist.
-  const ver='Persado Capture v'+chrome.runtime.getManifest().version;
+  const ver='Language Intelligence Layer v'+chrome.runtime.getManifest().version;
   try{$('headerStatus').title=ver;}catch{}
   try{$('resStatus').title=ver;}catch{}
   refreshOfflineHint();

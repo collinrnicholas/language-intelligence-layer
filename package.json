@@ -1,8 +1,8 @@
 {
-  "name": "loupe",
-  "version": "2.0.0",
+  "name": "language-intelligence-layer",
+  "version": "0.8.0",
   "private": true,
-  "description": "A second set of eyes for your product. The designer's precision magnifier — inspect the details no one else catches.",
+  "description": "A second set of eyes for your product. The designer's precision magnifier \u2014 inspect the details no one else catches.",
   "type": "module",
   "scripts": {
     "dev": "npm --workspace extension run dev",

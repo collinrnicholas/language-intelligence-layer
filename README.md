@@ -1,4 +1,4 @@
-# Persado Capture
+# Language Intelligence Layer
 
 **A front door for Motivation AI.** A marketer stands on the page they're worried
 about, talks for a minute, and Persado receives a structured, grounded brief — the
@@ -13,7 +13,7 @@ hypothesis, what would prove it wrong, and how to test it cheaply.
 
 This project is built on [Loupe](docs/loupe/VISION.md), the author's own prior
 project, and reuses Loupe's capture, vision and gateway infrastructure. The
-Persado Capture extension in `extension/` is the new work; `agent/`, `analyzer/` and
+Language Intelligence Layer extension in `extension/` is the new work; `agent/`, `analyzer/` and
 the surrounding research and spec directories are inherited Loupe code, kept
 under their original names. Loupe's product docs live in `docs/loupe/`.
 
@@ -80,7 +80,7 @@ profile keeps working. See the header of `gateway/server.mjs`.
 
 | Path | What it is |
 |---|---|
-| `extension/` | **The Persado Capture extension** — the new work in this repo. |
+| `extension/` | **The Language Intelligence Layer extension** — the new work in this repo. |
 | `gateway/` | Local AI gateway; the only place provider keys live. |
 | `scripts/` | `smoke.mjs` static contract checks, version and hygiene tooling. |
 | `docs/` | `REGRESSION.md` is the manual test checklist; `docs/loupe/` holds inherited Loupe docs. |

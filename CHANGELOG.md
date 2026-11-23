@@ -8,6 +8,17 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.8.0
+
+The product has a name that says what it does: **Language Intelligence Layer**.
+
+- Extension name, panel bar, page titles, options page wordmark, package name and the
+  repo itself now use it. Chrome's extension list and side-panel header follow the
+  manifest, so those change on reload.
+- Persado stays where Persado is the vendor: the API key field, the developer link and
+  the error text that used to say Persado now names the panel instead.
+- Nothing behavioural moved. Same storage key, same extension ID (still pinned by the
+  manifest key), so an existing install keeps its saved key and settings.
 ## 0.7.10
 
 The key link pointed at the marketing page.

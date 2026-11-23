@@ -1,4 +1,4 @@
-// ─── Persado Capture — shared cross-context contract ─────────────
+// ─── Language Intelligence Layer — shared cross-context contract ─────────────
 //
 // Single source of truth for every message type and storage key that crosses
 // between the side panel, the service worker and the content script. A typo now
@@ -86,10 +86,10 @@
   // Bumped whenever src/content.js changes. The panel refuses to drive a content
   // script whose version does not match, and injects a fresh copy instead.
   // smoke.mjs hashes content.js and fails if it changed without a bump.
-  const CONTENT_VERSION = 4;
+  const CONTENT_VERSION = 6;
   // sha256(src/content.js), first 12 hex. smoke.mjs fails if content.js changed
   // without bumping the version above; it prints the value to paste in.
-  const CONTENT_HASH = 'd98c18aa1b2a';
+  const CONTENT_HASH = '4accd3244656';
 
   root.PERSADO = Object.freeze({ MSG, KEYS, CTX, CONTENT_VERSION });
 })(typeof self !== 'undefined' ? self : globalThis);

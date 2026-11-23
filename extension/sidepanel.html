@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Persado Capture</title>
+  <title>Language Intelligence Layer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -521,7 +521,7 @@
 
 <div class="hdr">
   <!-- The in-panel [Persado] wordmark was removed: Chrome's native side-panel bar
-       already shows the [P] Persado Capture mark, so it was a duplicate. The status
+       already shows the [P] Language Intelligence Layer mark, so it was a duplicate. The status
        chip stays for non-results screens (Recording/Working); on the results screen
        this whole bar is hidden and the Done status is shown inline on the results
        heading row instead (see .res-status / body:has(#panelResults.active) .hdr). -->
@@ -537,7 +537,7 @@
 </div>
 <div class="toast" id="toast"></div>
 <div class="fatal" id="fatalBanner" style="display:none;">
-  <div class="fatal-t">Persado hit an error and stopped</div>
+  <div class="fatal-t">The panel hit an error and stopped</div>
   <div class="fatal-m" id="fatalMsg"></div>
   <button class="btn btn-sm" id="fatalReload">Reload panel</button>
 </div>
@@ -588,7 +588,7 @@
     <div class="start-head">
       <button class="btn-quiet back-scan" id="btnBackToScan">Scan this page instead</button>
       <div class="scr-title">Record your brief</div>
-      <div class="scr-sub">Talk through the page and what you want it to do. Persado listens, captures the screen, and returns compliant copy scored to perform.</div>
+      <div class="scr-sub">Talk through the page and what you want it to do. It listens, captures the screen, and returns compliant copy scored to perform.</div>
     </div>
 
     <div class="resume" id="resumeCard" style="display:none;">
@@ -682,7 +682,7 @@
   <!-- Shown only if the mic could not be started; keeps a retry path. -->
   <div class="rec-retry" id="recRetry" style="display:none;">
     <div class="scr-title">Microphone needed</div>
-    <div class="scr-sub" id="recRetryMsg">Persado needs microphone access to hear your brief.</div>
+    <div class="scr-sub" id="recRetryMsg">The panel needs microphone access to hear your brief.</div>
     <button class="btn btn-primary btn-block" id="btnRecord" style="margin-top:20px;">Try again</button>
   </div>
 

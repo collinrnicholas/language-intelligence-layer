@@ -1,4 +1,4 @@
-// ─── Persado Capture — Page scan ─────────────────────────────────
+// ─── Language Intelligence Layer — Page scan ─────────────────────────────────
 //
 // Scans the page the user is already looking at and ranks its marketing copy by
 // how badly it is likely to perform, so the panel can point at ONE element worth

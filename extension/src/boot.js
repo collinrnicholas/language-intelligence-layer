@@ -1,4 +1,4 @@
-// ─── Persado Capture — panel boot guard ──────────────────────────
+// ─── Language Intelligence Layer — panel boot guard ──────────────────────────
 //
 // Loaded as a CLASSIC script BEFORE sidepanel.js (a module). That ordering is the
 // whole point: a top-level throw while a module evaluates silently prevents every

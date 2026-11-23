@@ -1,4 +1,4 @@
-// ─── Persado Capture — Background Worker ─────────────────────────
+// ─── Language Intelligence Layer — Background Worker ─────────────────────────
 //
 // Relays messages between content script and sidepanel.
 // Transcribes audio via gateway Whisper.

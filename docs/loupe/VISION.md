@@ -2,9 +2,9 @@
 
 > **Inherited document.** This is the product vision/principles of **Loupe**, the
 > author's prior project that this repository was forked from. It is kept for
-> reference and attribution — it describes Loupe, *not* Persado Capture (the
+> reference and attribution — it describes Loupe, *not* Language Intelligence Layer (the
 > extension in `extension/`). See the Provenance section of the root `README.md`.
-> Persado Capture's own vision document is `VISION.md` at the repo root.
+> Language Intelligence Layer's own vision document is `VISION.md` at the repo root.
 
 > **Loupe is an AI Product Design Partner that observes how software is built, identifies opportunities for improvement, teaches the reasoning behind those opportunities, and generates implementation-ready work for AI coding agents.**
 

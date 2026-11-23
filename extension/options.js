@@ -1,4 +1,4 @@
-// ─── Persado Capture — options page ──────────────────────────────
+// ─── Language Intelligence Layer — options page ──────────────────────────────
 //
 // One administrator-facing setting: the screen-capture toggle. Persisted to
 // chrome.storage.local under KEYS.CAPTURE_SCREENSHOTS. Absent → the config default

@@ -1,4 +1,4 @@
-// ─── Persado Capture — Content Script ────────────────────────────
+// ─── Language Intelligence Layer — Content Script ────────────────────────────
 //
 // getUserMedia runs here (page context = proper mic prompt). No UI — the side
 // panel controls start/stop/pause. Also owns the audio analyser, because the

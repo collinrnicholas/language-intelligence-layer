@@ -1,4 +1,4 @@
-# Contributing to Persado Capture
+# Contributing to Language Intelligence Layer
 
 Conventions that keep this repo reviewable. They apply to humans and — with
 extra emphasis — to AI coding agents (Claude Code, Codex, etc.) working here.
