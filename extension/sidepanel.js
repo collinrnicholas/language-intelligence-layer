@@ -628,8 +628,9 @@ const scoreClass=(n)=>n<60?'low':n<73?'mid':'hi';   // weak/fair · good · stro
 
 async function injectScanner(tabId){
   // messages.js rides along because scan.js reads MSG from it, exactly as the
-  // recorder does. Both files are idempotent.
-  await chrome.scripting.executeScript({target:{tabId},files:['src/messages.js','src/scan.js']});
+  // recorder does; page-noise.js supplies the cookie/language/chat filter. All
+  // three are idempotent.
+  await chrome.scripting.executeScript({target:{tabId},files:['src/messages.js','src/page-noise.js','src/scan.js']});
 }
 
 async function autoScan(){

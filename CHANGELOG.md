@@ -8,6 +8,30 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.9.2
+
+Stop scoring the page's furniture as marketing copy.
+
+- **Cookie furniture is out.** "Cookie settings", "Accept all", "Manage preferences",
+  "Privacy Policy", "Terms of Use" and the consent vendors' containers (OneTrust,
+  Cookiebot, Osano, Usercentrics, Didomi, Quantcast, TrustArc) never become assets.
+- **Language switchers are out.** "English", "Español", "EN/ES" and anything inside a
+  `lang-switch` / `language-select` / `locale-select` block — which is what produced the
+  "Cookie settings scores 53, start here" card.
+- **Site utilities are out.** Skip links, menu, search, close/dismiss, log in, cart,
+  checkout, region/currency pickers, share/copy-link/print, "Powered by …".
+- **Widgets are out.** Intercom, Drift, Crisp and Zendesk chat bubbles — a "Chat with
+  us" button is not a surface the page owner writes copy for.
+- **Form controls are out.** Selects, comboboxes, listboxes, text inputs and textareas
+  are controls, not calls to action.
+- **Headlines are judged differently:** a headline is only dropped when it sits inside
+  banner or widget furniture, because "Privacy, without the fine print" is a real
+  headline on a privacy product. The text rules apply to buttons only.
+- `primaryCta` uses the same filter, so a cookie button can no longer be reported as the
+  page's main action.
+- Rules live in `src/page-noise.js` as pure predicates, unit-tested against consent,
+  language, utility and widget strings plus a table of real CTAs that must survive.
+
 ## 0.9.1
 
 Fixes from the first in-browser run of 0.9.0.

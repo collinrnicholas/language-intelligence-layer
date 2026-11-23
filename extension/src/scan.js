@@ -246,6 +246,33 @@
     return out;
   }
 
+  // ── Page chrome vs page copy ────────────────────────────────────
+  // Buttons come bundled with the cookie banner, language menu, currency picker
+  // and chat bubble. Those are controls, not copy, so they never become a
+  // "start here" recommendation. The rules live in page-noise.js.
+
+  const NOISE = self.PERSADO_NOISE;
+
+  function containerHint(el) {
+    const parts = [];
+    let n = el;
+    for (let depth = 0; n && n.nodeType === 1 && depth < 7; depth++, n = n.parentElement) {
+      parts.push(n.id || '', typeof n.className === 'string' ? n.className : '',
+        n.getAttribute('role') || '', n.getAttribute('aria-label') || '', n.tagName);
+      if (n.tagName === 'BODY') break;
+    }
+    return parts.join(' ');
+  }
+
+  function isControl(el) {
+    return !!el.closest('select, option, [role="combobox"], [role="listbox"], input:not([type="submit"]):not([type="button"]), textarea');
+  }
+
+  function isNoise(el, text, kind) {
+    if (!NOISE) return false;
+    return NOISE.isNoise({ text, hint: containerHint(el), control: isControl(el), kind });
+  }
+
   function scan() {
     const maxFont = Math.max(16, ...[...document.querySelectorAll('h1,h2,h3,button,a')]
       .slice(0, 400).map(el => parseFloat(getComputedStyle(el).fontSize) || 0));
@@ -257,6 +284,7 @@
       if (!el || el.nodeType !== 1 || !isVisible(el)) return;
       const text = textOf(el);
       if (!text || text.length < 2 || text.length > 220) return;
+      if (isNoise(el, text, kind)) return;
       const key = kind + ':' + text.toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
@@ -307,6 +335,7 @@
 
     const product = productLineFor();
     const cta = [...document.querySelectorAll('button, [role="button"], a')]
+      .filter(el => !isNoise(el, textOf(el), 'cta'))
       .map(el => textOf(el)).find(t => t && t.length <= 40 && ACTION_VERB.test(t)) || '';
     return {
       ok: true,
