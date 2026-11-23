@@ -23,6 +23,8 @@
     // Language switchers
     /^(english|espa[nñ]ol|spanish|fran[cç]ais|deutsch|italiano|portugu[eê]s|nederlands|[nñ]ihongo|日本語|中文|한국어|русский|العربية|t[uü]rk[cç]e|polski|svenska|dansk|norsk|suomi|[cč]e[cš]tina|magyar|rom[aâ]n[aă]|ελληνικ[αά]|עברית|हिन्दी|ไทย|ti[eế]ng vi[eệ]t|bahasa indonesia|bahasa melayu)(\s*\(.*\))?$/i,
     /^([a-z]{2})(\s*[\/|·,;-]\s*[a-z]{2})+$/i,
+    // Ad slots. "Sponsored Results" is a label the page owner does not write.
+    /^(sponsored( results| links| content| stories)?|advertisement|ad|ads)$/i,
     // Site utilities that sit next to real CTAs
     /^(skip to (main )?content|back to top|back to search|main menu|open menu|close menu|menu|search|search this site|log ?in|sign ?in|my account|view cart|cart|checkout|currency|region|country|language|change language|select language|choose (your )?(region|country|language)|english \(us\))\b/i,
     /^(share( this| on .+)?|tweet|pin it|copy link|print|email this|copy)$/i,
@@ -40,6 +42,8 @@
     'chat-widget', 'chatbot', 'lang-switch', 'langswitch', 'language-select',
     'language-switcher', 'locale-select', 'locale-switch', 'translation-banner',
     'skip-link', 'screen-reader', 'sr-only',
+    'sponsored', 'adsbygoogle', 'ad-slot', 'adunit', 'ad-unit', 'google-ads',
+    'outbrain', 'taboola',
   ];
 
   function isNoiseText(text) {
@@ -57,9 +61,14 @@
   // kind 'cta' gets the text rules; a headline only loses its place when it sits
   // inside a cookie banner or a widget, because "Privacy, without the fine print"
   // is a legitimate headline on a privacy product.
+  // Ad labels are never copy, whatever the element is: a headline that says
+  // "Sponsored Results" is a slot marker, not a promise to the reader.
+  const ALWAYS_NOISE = /^(sponsored( results| links| content| stories)?|advertisement|ad|ads)$/i;
+
   function isNoise({ text, hint, control, kind } = {}) {
     if (control) return true;
     if (isNoiseContainer(hint)) return true;
+    if (ALWAYS_NOISE.test(t(text))) return true;
     if (kind === 'cta') return isNoiseText(text);
     return false;
   }

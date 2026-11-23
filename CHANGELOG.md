@@ -8,6 +8,25 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.9.3
+
+The header names the page again instead of pasting fifteen lines of tracking.
+
+- **Campaign parameters are dropped** before display: `utm_*`, `gclid`, `gbraid`,
+  `ds_*`, `iga*`, `gad_*`, `fbclid`, `mc_cid`, and friends. Two visitors who arrived
+  from different ads were always on the same page.
+- **One line, not twelve.** Host and path, plus up to two query parameters that change
+  what you see. Anything past 64 characters is ellipsised; the full address is still in
+  the tooltip.
+- **Ad slots are out of the scan.** "Sponsored Results", `adsbygoogle`, ad-unit and
+  Taboola/Outbrain containers no longer become assets, so an ad label can't take the
+  start-here card.
+- **One quiet retry when a scan finds nothing.** A scan that lands mid-paint used to
+  say "No buttons or headlines could be read here" until you hit Refresh; it now asks
+  the page once more after 700ms before saying that.
+- URL rules live in `src/url-display.js` and are unit-tested against the Mailchimp
+  landing URL that caused this, plus tracking, cap, ellipsis and non-web cases.
+
 ## 0.9.2
 
 Stop scoring the page's furniture as marketing copy.

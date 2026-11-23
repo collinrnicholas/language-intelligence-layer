@@ -529,14 +529,9 @@ function shortUrl(u){
     return `${host}/${segs[0]}/…/${segs[segs.length-1]}`;
   }catch{return u;}
 }
-/** The header shows the whole address — only the scheme and "www." are dropped, so a
- *  deep link is still readable in full. It wraps rather than being ellipsised. */
-function displayUrl(u){
-  if(!u)return '';
-  // Whole address, no ellipsis. Only the scheme and "www." are dropped so it still
-  // fits a 400px panel; the text stays clean for copying.
-  return u.replace(/^[a-z]+:\/\//i,'').replace(/^www\./i,'').replace(/\/$/,'');
-}
+/** Host and path, campaign parameters dropped (src/url-display.js). The full
+ *  address stays in the tooltip. */
+const displayUrl=(u)=>(window.PERSADO_URL?window.PERSADO_URL.displayUrl(u):(u||'').replace(/^[a-z]+:\/\//i,''));
 function showUrl(u){
   currentUrl=u;
   pageUrlEl.textContent=shortUrl(u);
@@ -646,8 +641,17 @@ async function autoScan(){
     if(tab.url)showUrl(tab.url);
     lastScanUrl=tab.url||lastScanUrl;
     await injectScanner(tab.id);
-    const r=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PAGE});
+    let r=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PAGE});
     if(!r?.ok)throw new Error(r?.error||'The page did not return a scan.');
+    // A scan can land while the page is still painting and honestly find nothing.
+    // One quiet retry beats telling the reader the page has no copy on it.
+    if(!(r.materials||[]).length){
+      await new Promise(res=>setTimeout(res,700));
+      try{
+        const again=await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_PAGE});
+        if(again?.ok&&(again.materials||[]).length)r=again;
+      }catch{}
+    }
     scanResult=r;
     // The product line is no longer a question on the scan screen; the scanner's
     // detection still travels with the result and seeds the rewrite prompt.
