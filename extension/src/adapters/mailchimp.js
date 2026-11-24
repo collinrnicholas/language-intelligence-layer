@@ -127,8 +127,16 @@
     }
 
     async function getCampaign(id) {
-      return call('GET', `/campaigns/${encodeURIComponent(id)}?fields=id,web_id,type,status,content_type,settings`);
+      return call('GET', `/campaigns/${encodeURIComponent(id)}?fields=id,web_id,type,status,content_type,settings,recipients,emails_sent,send_time,tracking`);
     }
+    async function listSentCampaigns(listId) {
+      const query=new URLSearchParams({status:'sent',type:'regular',list_id:listId,count:'30',sort_field:'send_time',sort_dir:'DESC',
+        fields:'campaigns.id,campaigns.type,campaigns.status,campaigns.recipients,campaigns.settings.title,campaigns.settings.folder_id,campaigns.tracking,campaigns.send_time'});
+      return (await call('GET','/campaigns?'+query))?.campaigns||[];
+    }
+    const REPORT_FIELDS='id,campaign_title,type,list_id,send_time,emails_sent,clicks,ecommerce';
+    async function listReports(){return (await call('GET','/reports?count=30&fields='+REPORT_FIELDS.split(',').map(f=>'reports.'+f).join(',')))?.reports||[];}
+    async function getReport(id){return call('GET',`/reports/${encodeURIComponent(id)}?fields=${REPORT_FIELDS}`);}
     async function getContent(id) {
       return call('GET', `/campaigns/${encodeURIComponent(id)}/content?fields=html,plain_text`);
     }
@@ -198,6 +206,7 @@
         platform: 'mailchimp',
         ref: { id: c.id, webId: c.web_id, title: s.title || '' },
         contentType: c.content_type,
+        campaignMetadata: c,
         settings: { subject_line: s.subject_line || '', preview_text: s.preview_text || '', title: s.title || '', from_name: s.from_name || '', reply_to: s.reply_to || '' },
         html,
         fields, skipped,
@@ -280,7 +289,8 @@
       return { ok: true, sentTo: list };
     }
 
-    return { id: 'mailchimp', label: 'Mailchimp', dc, channel: 'EMAIL_SUBJECT_BODY', test, listDrafts, findByWebId, read, write, verify, restore, sendTest, updateSetting };
+    return { id: 'mailchimp', label: 'Mailchimp', dc, channel: 'EMAIL_SUBJECT_BODY', test, listDrafts, findByWebId, read, write, verify, restore, sendTest, updateSetting,
+      getCampaign, listSentCampaigns, listReports, getReport };
   }
 
   root.PERSADO_ADAPTERS = Object.freeze({ ...(root.PERSADO_ADAPTERS || {}),

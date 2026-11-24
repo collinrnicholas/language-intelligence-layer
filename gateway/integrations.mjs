@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import {createCampaignIntelligence,impact} from './campaign-intelligence.mjs';
 
 const ctx = vm.createContext({ URL, URLSearchParams, AbortController, TextEncoder, crypto: globalThis.crypto,
   fetch, btoa, setTimeout, clearTimeout, console });
@@ -30,6 +31,14 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
   const busy = new Set(), inflight = new Map();
   let mcConnection = null;
   const adapter = () => MC.create({ apiKey: mkey, serverPrefix: env.MAILCHIMP_SERVER_PREFIX, fetchImpl });
+  const reporting=createCampaignIntelligence({adapter});
+  state.outcomes ||= [];
+  function recordOutcome(entry){
+    state.outcomes.push({id:randomUUID(),campaignId:entry.campaignId,field:entry.field,original:entry.original,optimized:null,
+      persadoJobId:null,persadoVariantId:null,variantIndex:null,scoredAt:null,optimizedAt:null,appliedAt:null,undoneAt:null,
+      experimentalAssignment:null,postSendMetrics:null,verifiedIncrementalOutcome:null,...entry});
+    save();
+  }
   const usage = () => ({ hasKey: !!pkey, ...U.summarize(state.usage), costs: API.COSTS, costSource: API.COST_SOURCE });
   const record = ev => { state.usage = U.record(state.usage, { at: Date.now(), ...ev }); save(); };
   const account = msg => ({ accountName: String(msg.settings?.brand || msg.brand || mcConnection?.accountName || '').trim(),
@@ -119,11 +128,25 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
     return score?.result||null;
   }
 
+  async function enrichExistingJobs(id){
+    const entries=Object.values(state.cache).filter(c=>c.scope==='mailchimp'&&c.campaignIds?.includes(id)&&c.result?.jobId&&c.result.schemaVersion!==2&&!c.enrichmentAttempted);
+    let updated=false;
+    await Promise.all(entries.map(async c=>{
+      c.enrichmentAttempted=true;
+      try{
+        const r=await API.request({key:pkey,method:'GET',path:'/v1/jobs/'+encodeURIComponent(c.result.jobId),fetchImpl});
+        if(r.body?.status==='completed'&&r.body.result){c.result=API.normalizeResult(r.body,{kind:c.result.kind});updated=true;}
+      }catch{} // Expired/unavailable jobs keep their original known result.
+    }));
+    if(entries.length)save();return updated;
+  }
+
   function view(draft, msg) {
     const acct = account(msg);
     return { id: draft.ref.id, webId: draft.ref.webId, title: draft.ref.title,
       subject: draft.settings.subject_line, previewText: draft.settings.preview_text,
       fingerprint: draft.fingerprint, contentType: draft.contentType,
+      status:draft.campaignMetadata?.status||'save',reach:impact.reach(draft.campaignMetadata||{}),
       fields: draft.fields.map(f => {
         const score=scoreForField(f,acct,draft.ref.id);
         const key = runKey('optimize', f, acct, 'mailchimp');
@@ -178,6 +201,14 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
       if (!verification.ok) fail('unverified','Mailchimp accepted the update, but read-back did not match. Refresh the draft before retrying. The original value is retained for undo.');
       if (undo) receipt.reverted=true;
       else state.undo[undoId].pending=false;
+      if(undo){for(const o of state.outcomes)if(o.undoId===undoId&&!o.undoneAt)o.undoneAt=Date.now();}
+      else if(!verification.duplicate){
+        const cached=state.cache[msg.cacheId],variant=cached.result.alternatives[msg.alternativeIndex??0];
+        recordOutcome({campaignId:id,field,original,optimized:text,persadoJobId:cached.result.jobId,
+          variantIndex:variant.index??msg.alternativeIndex??0,originalScore:cached.result.control?.performance??null,
+          scoredAt:state.cache[runKey('score',{field,touchpoint:cached.touchpoint,text:original,maxLength:cached.maxLength},account(msg),'mailchimp')]?.at??null,
+          optimizedScore:variant.performance??null,optimizedAt:cached.at,appliedAt:Date.now(),undoId});
+      }
       save();
       const c=verification.campaign;
       const prediction=scoreForField({field,text:c.settings?.[field]||'',touchpoint:field==='subject_line'?'subject_line':'preheader',maxLength:150},account(msg),id);
@@ -209,6 +240,25 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
         case 'MC_TEST': mcConnection = await adapter().test(); return { ...mcConnection, connected: true };
         case 'MC_DISCONNECT': mcConnection = null; return { ok: true };
         case 'MC_DRAFTS': return { ok: true, drafts: await adapter().listDrafts(100) };
+        case 'MC_INSIGHTS': {
+          if(!msg.campaignId)fail('selection_required','Select a campaign first.');
+          const c=await adapter().getCampaign(msg.campaignId);
+          if(msg.webId!=null&&Number(c.web_id)!==Number(msg.webId))fail('not_found','The URL does not match the selected campaign.');
+          const languageUpdated=await enrichExistingJobs(c.id);
+          const projection=Object.entries(state.cache).filter(([key,x])=>x.scope==='mailchimp'&&x.campaignIds?.includes(c.id)
+              &&key===runKey('score',{text:x.original,touchpoint:x.touchpoint,maxLength:x.maxLength},account(msg),'mailchimp'))
+            .flatMap(([,x])=>(x.result?.variants||[]).map(v=>({field:x.field,text:x.original,potential:v.potential})))
+            .filter(x=>x.potential&&(x.field==='subject_line'?x.text===c.settings?.subject_line:x.field==='preview_text'&&x.text===c.settings?.preview_text))
+            .map(({field,potential})=>({field,potential,calibrationAvailable:false}));
+          try{return {ok:true,...await reporting.insights(c),languageUpdated,modelOutputs:projection};}
+          catch(e){return {ok:true,status:c.status,reach:impact.reach(c),baseline:{available:false,clickRate:null,campaignCount:0,samples:[]},history:[],forecast:null,reportingUnavailable:true,languageUpdated,modelOutputs:projection};}
+        }
+        case 'MC_REPORT': {
+          if(!msg.campaignId)fail('selection_required','Select a sent campaign first.');
+          const report=await reporting.report(msg.campaignId);
+          for(const o of state.outcomes)if(o.campaignId===msg.campaignId)o.postSendMetrics=report;
+          save();return {ok:true,report};
+        }
         case 'MC_STATUS': {
           if (!mkey) return { ok: true, connected: false, persadoKey: !!pkey, usage: usage() };
           if (!mcConnection) mcConnection = await adapter().test();
@@ -226,6 +276,9 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
           const out = await paid(op, field, acct, 'mailchimp');
           const key = runKey(op, field, acct, 'mailchimp');
           state.cache[key].campaignIds = [...new Set([...(state.cache[key].campaignIds || []), id])]; save();
+          if(!out.cached)recordOutcome({campaignId:id,field:field.field,original:field.text,persadoJobId:out.result.jobId,
+            ...(op==='score'?{scoredAt:out.at,originalScore:out.result.variants[0]?.performance??null}:{optimizedAt:out.at,
+              variants:out.result.alternatives.map(v=>({index:v.index,rank:v.rank,text:v.touchpoints?.[field.touchpoint]||v.text,score:v.performance}))})});
           return { ok: true, ...out, cacheId: key, usage: usage() };
         }
         case 'MC_APPLY': return await apply(msg);

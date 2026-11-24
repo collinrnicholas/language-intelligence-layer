@@ -1,7 +1,7 @@
 // Provider fixtures exercise contracts only. Live verification is reported separately.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import http from 'node:http';
@@ -22,6 +22,7 @@ function setup(opts = {}) {
       if (opts.exhausted) return json(429, { error: { code: 'quota_exhausted' } });
       if (opts.transport) throw new Error('socket lost');
       if (u.pathname.endsWith('/catalogue')) return json(200, { channels: [{ key: 'EMAIL_SUBJECT_BODY' }] });
+      if(u.pathname.endsWith('/jobs/job_score'))return json(200,{id:'job_score',kind:'score',status:'completed',result:{variants:[{performance:63,performanceBand:'fair',performanceWhy:'Clarify the benefit.',potential:{clicks:{total:3.1}}}]}});
       if (opts.delay) await new Promise(r => setTimeout(r, 15));
       if (u.pathname.endsWith('/score')) return json(200, { id: 'job_score', kind: 'score', status: 'completed', result: {
         variants: [{ performance: 63, touchpoints: body.variants[0] }] } });
@@ -71,6 +72,45 @@ test('detects actual draft content without spending credits; builder blocks excl
   assert.equal(s.calls.filter(c => c.url.includes('api.persado')).length, 0);
   assert.equal((await s.send({ type: 'MC_STATUS', webId: 99 })).kind, 'not_found');
   assert.equal((await s.send({ type: 'MC_STATUS', campaignId: 'wrong', webId: 42 })).kind, 'not_found');
+});
+
+test('campaign intelligence preserves unknown and zero reach, reports failures softly, and spends no Persado credits',async()=>{
+ const s=setup();
+ let r=await s.send({type:'MC_INSIGHTS',campaignId:'abc',webId:42});
+ assert.equal(r.ok,true);assert.equal(r.reach.count,null);assert.equal(r.baseline.available,false);assert.equal(r.forecast,null);
+ s.c.recipients={recipient_count:0};r=await s.send({type:'MC_INSIGHTS',campaignId:'abc',webId:42});assert.equal(r.reach.count,0);
+ assert.equal((await s.send({type:'MC_INSIGHTS',campaignId:'abc',webId:99})).kind,'not_found');
+ assert.equal(s.calls.filter(c=>c.url.includes('api.persado')).length,0);
+ assert.ok(s.calls.every(c=>c.method==='GET'));assert.equal((await s.send({type:'USAGE_GET'})).requests,0);
+});
+
+test('private outcome records connect real jobs, copy, application and Undo without claiming attribution',async()=>{
+ const s=setup({performance:80}),optimized=await optimize(s);
+ const applied=await s.send({type:'MC_APPLY',campaignId:'abc',cacheId:optimized.cacheId});
+ let outcomes=JSON.parse(readFileSync(s.path,'utf8')).outcomes;
+ const a=outcomes.find(o=>o.undoId===applied.undoId);
+ assert.equal(a.persadoJobId,'job_optimize');assert.equal(a.optimized,'Explore fresh spring favourites');assert.equal(a.optimizedScore,80);
+ assert.ok(a.appliedAt&&a.optimizedAt);assert.equal(a.experimentalAssignment,null);assert.equal(a.verifiedIncrementalOutcome,null);
+ await s.send({type:'MC_REVERT',campaignId:'abc',undoId:applied.undoId});
+ outcomes=JSON.parse(readFileSync(s.path,'utf8')).outcomes;assert.ok(outcomes.find(o=>o.id===a.id).undoneAt);
+ assert.ok(outcomes.some(o=>o.scoredAt));
+});
+
+test('older paid results recover richer fields with a read-only job GET, never a replacement paid request',async()=>{
+ const s=setup();await s.send(s.field('MC_SCORE'));
+ const saved=JSON.parse(readFileSync(s.path,'utf8'));
+ for(const c of Object.values(saved.cache))delete c.result.schemaVersion;
+ writeFileSync(s.path,JSON.stringify(saved));
+ const next=createIntegrations({env:s.env,fetchImpl:s.f,statePath:s.path});
+ const before=s.calls.length;
+ const insights=await next.dispatch({type:'MC_INSIGHTS',campaignId:'abc',settings:s.settings});
+ assert.equal(insights.languageUpdated,true);assert.equal(insights.modelOutputs[0].potential.clicks.total,3.1);
+ assert.equal(insights.forecast,null);assert.ok(s.calls.slice(before).every(c=>c.method==='GET'));
+ assert.equal((await next.dispatch({type:'USAGE_GET'})).requests,1);
+ const view=await next.dispatch({type:'MC_STATUS',campaignId:'abc',settings:s.settings});
+ assert.equal(view.campaign.fields[0].score.variants[0].performanceWhy,'Clarify the benefit.');
+ const other=await next.dispatch({type:'MC_INSIGHTS',campaignId:'abc',settings:{brand:'Another brand'}});
+ assert.deepEqual(other.modelOutputs,[]);
 });
 
 test('ambiguous identifiers never select a draft', async () => {

@@ -27,15 +27,15 @@
   // The developer portal (api.persado.com/api/developers) publishes
   //   meta-devkey-run-quota     100
   //   meta-devkey-optimize-cost 5
-  // It publishes no score cost, so a score run is counted as 1 — an ASSUMPTION,
-  // labelled as such in the UI. Neither value is an account balance: the API has
+  // The developer playground also labels Score as 1 unit (verified 2026-11-24).
+  // Neither value is an account balance: the API has
   // no documented balance endpoint, so any remaining figure is a local estimate.
   const RUN_QUOTA = 100;
   const COSTS = Object.freeze({ score: 1, optimize: 5 });
   const COST_SOURCE = Object.freeze({
     quota: 'Persado developer portal (run quota)',
     optimize: 'Persado developer portal (optimize cost)',
-    score: 'assumed — the portal publishes no score cost',
+    score: 'Persado developer playground (score cost)',
   });
 
   // ── Spec constants (validate.go) ───────────────────────────────
@@ -287,6 +287,12 @@
       touchpoints: v.touchpoints || {},
       performance: typeof v.performance === 'number' ? v.performance : null,
       performanceBand: v.performanceBand ?? null,
+      // Also verified against live job JSON and the developer playground.
+      // These are provider outputs, not a score-to-lift conversion.
+      performanceWhy: typeof v.performanceWhy==='string'?v.performanceWhy:null,
+      conversionUplift: typeof v.conversionUplift==='number'&&Number.isFinite(v.conversionUplift)?v.conversionUplift:null,
+      performanceDeltaPoints: typeof v.performanceDeltaPoints==='number'&&Number.isFinite(v.performanceDeltaPoints)?v.performanceDeltaPoints:null,
+      potential: normPotential(v.potential),
       brandAlignment: typeof v.brandAlignment === 'number' ? v.brandAlignment : null,
       brandRationale: v.brandRationale ?? null,
       compliance: v.compliance ? {
@@ -299,12 +305,21 @@
     };
   }
 
+  function normPotential(p){
+    if(!p||typeof p!=='object')return null;
+    const n=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
+    const category=c=>c&&typeof c==='object'?{vsIndustryToday:n(c.vsIndustryToday),vsIndustryProjected:n(c.vsIndustryProjected),total:n(c.total)}:null;
+    return {current:n(p.current),projected:n(p.projected),headroomPoints:n(p.headroomPoints),industryBenchmark:n(p.industryBenchmark),
+      state:typeof p.state==='string'?p.state:null,clicks:category(p.clicks),conversions:category(p.conversions)};
+  }
+
   function normalizeResult(job, meta = {}) {
     const r = job.result || {};
     const alternatives = (r.alternatives || []).map(normVariant)
       .sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
     return {
       source: 'live',
+      schemaVersion: 2,
       jobId: job.id,
       kind: job.kind || meta.kind || null,
       requestId: meta.requestId || null,

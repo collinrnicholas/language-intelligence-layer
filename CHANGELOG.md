@@ -8,6 +8,13 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.11.0
+
+- Simplified Mailchimp rows to element name, returned band and score, with lower-score-first review, one primary action, compact unscored content, and a maximum of three selectable alternatives sharing one Apply control. Removed meters, repeated scores/disclaimers, brand ratings and language tags.
+- Added actual campaign reach, bounded/cached Mailchimp history, comparable-audience/segment weighted click baselines, observed post-send reports, and a reusable impact calculator with explicitly selected scenario assumptions. Missing values stay unavailable; no audience-size substitute or score-to-conversion formula is used.
+- Preserve richer live Persado fields including performance explanations and optimization potential. Older cached jobs can recover these via read-only job GETs. Provider potential appears only in optional details with its calibration limits; it does not become an assumed campaign forecast.
+- Added private outcome records connecting campaign IDs, real jobs/variant indices, original/optimized copy, operation timestamps and post-send metrics. Experimental assignment and verified incremental outcomes remain absent without evidence. No sending, automatic experiment creation or additional paid Persado call was added.
+
 ## 0.10.3
 
 - Added actionable scoring with real API scores/bands, neutral prediction meters, Persado brand feedback, language characteristics, contextual next actions, and separate unscored content. No local thresholds, model explanations, confidence, lift or ROI are fabricated.

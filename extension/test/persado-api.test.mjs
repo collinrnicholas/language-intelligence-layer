@@ -72,3 +72,12 @@ test('usage-like response headers are passed through verbatim, nothing else', as
   const r = await API.testConnection({ key: 'k', fetchImpl: f });
   assert.deepEqual(r.usageHeaders, { 'x-quota-remaining': '42' });
 });
+
+test('richer live result fields retain provenance and never turn score differences into conversion uplift',()=>{
+ const r=API.normalizeResult({id:'job_rich',kind:'optimize',result:{control:{performance:51,potential:{current:51,projected:70,clicks:{total:8.2,vsIndustryToday:.9,vsIndustryProjected:8.5}}},alternatives:[{rank:1,performance:87,performanceWhy:'The wording is clear.',conversionUplift:7.8,performanceDeltaPoints:9}]}});
+ assert.equal(r.schemaVersion,2);assert.equal(r.control.potential.clicks.total,8.2);
+ assert.equal(r.alternatives[0].performanceWhy,'The wording is clear.');assert.equal(r.alternatives[0].conversionUplift,7.8);
+ assert.equal(r.control.conversionUplift,null);assert.equal(r.control.potential.conversions,null);
+ const bare=API.normalizeResult({result:{alternatives:[{performance:87}]}});
+ assert.equal(bare.alternatives[0].conversionUplift,null);assert.equal(bare.alternatives[0].potential,null);
+});

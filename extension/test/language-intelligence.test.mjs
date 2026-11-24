@@ -2,39 +2,41 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {load} from './helpers.mjs';
 await load('language-intelligence.js');
-const {describe,prioritize}=globalThis.PERSADO_INTELLIGENCE;
+const {describe,prioritize,comparison}=globalThis.PERSADO_INTELLIGENCE;
 const field=(n,extra={})=>({field:'preview_text',text:'Saved preview',score:{kind:'score',variants:[{performance:n,...extra}]}});
-
-test('score-only response remains neutral, with an action and no fabricated model reason or band',()=>{
- const r=describe(field(51));assert.equal(r.score,51);assert.equal(r.band,'');
- assert.equal(r.status,'Evaluated');assert.equal(r.explanationUnavailable,true);
- assert.equal(r.rationale,'');assert.match(r.recommendation,/optimized alternative/);
+test('numeric-only score remains neutral without a fabricated band, reason or lift',()=>{
+ const r=describe(field(51));assert.equal(r.score,51);assert.equal(r.band,'');assert.equal(r.guidance,null);
  assert.doesNotMatch(JSON.stringify(r),/poor|weak|ROI|confidence|lift|fair/);
 });
-test('band and brand rationale retain their API provenance, including linguistic tags',()=>{
- const r=describe(field(51,{performanceBand:'fair',brandRationale:'The wording is generic for this brand.',brandAlignment:3,emotions:['CURIOSITY'],descriptors:['BRAND_MENTION']}));
- assert.equal(r.bandLabel,'Fair');assert.equal(r.rationale,'The wording is generic for this brand.');
- assert.equal(r.brandFit,3);assert.deepEqual(r.emotions,['Curiosity']);assert.deepEqual(r.descriptors,['Brand mention']);
- assert.equal(r.source,'score');assert.match(r.recommendation,/brand feedback/);
+test('band labels come from the response rather than local thresholds',()=>{
+ assert.equal(describe(field(51,{performanceBand:'fair'})).bandLabel,'Fair');
+ assert.equal(describe(field(51,{performanceBand:'excellent'})).bandLabel,'Excellent');
+ assert.equal(describe(field(87)).bandLabel,'');
 });
-test('optimization control scores are real evaluations without requiring another scoring call',()=>{
- const r=describe({optimization:{result:{control:{performance:78,performanceBand:'strong'}}}});
- assert.equal(r.score,78);assert.equal(r.source,'optimize');assert.equal(r.bandLabel,'Strong');
+test('short brand guidance quotes only an actual action clause, without ratings or emotional claims',()=>{
+ const r=describe(field(51,{brandRationale:'Clear wording. To reflect the brand, tighten the phrasing.',brandAlignment:3,emotions:['CURIOSITY']}));
+ assert.deepEqual(r.guidance,{text:'tighten the phrasing.',source:'Persado brand guidance'});
+ assert.ok(!('brandFit' in r));assert.ok(!('emotions' in r));
+ assert.equal(describe(field(51,{brandRationale:'It lacks a strong brand voice.'})).guidance,null);
+ assert.equal(describe(field(51,{brandRationale:'Add '+ 'details '.repeat(30)})).guidance,null);
 });
-test('review order comes from returned numbers and keeps unscored content separate',()=>{
- const subject={...field(87),field:'subject_line'},preview=field(51),missing={field:'body:b0'};
- const result=prioritize([subject,missing,preview]);assert.equal(result.next,preview);
- assert.deepEqual(result.scored,[preview,subject]);assert.deepEqual(result.unscored,[missing]);
- assert.equal(describe(missing).status,'Not yet evaluated');
+test('real performance feedback is distinguished from brand guidance without generating an explanation',()=>{
+ const why='The message creates curiosity. A minor weakness is that the value is implied, so readers need context.';
+ const g=describe(field(51,{performanceWhy:why,brandRationale:'Add urgency.'})).guidance;
+ assert.deepEqual(g,{text:'A minor weakness is that the value is implied…',source:'Persado feedback'});
 });
-test('no score thresholds or guesses at absent/invalid scores; zero is a real score',()=>{
- assert.equal(describe(field(0)).inRange,true);assert.equal(describe(field(null)).score,null);
- assert.equal(describe(field(NaN)).score,null);assert.equal(describe(field(150)).inRange,false);
- assert.equal(describe({score:{variants:[]}}).status,'Score unavailable');
- assert.equal(prioritize([field(150)]).next,null);
+test('optimization control gives a genuine score without another scoring call',()=>{
+ assert.equal(describe({optimization:{result:{control:{performance:78,performanceBand:'strong'}}}}).score,78);
 });
-test('compliance issues guide the next action only when returned',()=>{
- const r=describe(field(65,{compliance:{summary:'Review this claim.',issues:[{description:'An unsupported rate claim.'}]}}));
- assert.deepEqual(r.issues,['An unsupported rate claim.']);assert.match(r.recommendation,/flagged wording/);
- assert.equal(r.explanationUnavailable,false);
+test('review order separates unscored content and preserves zero',()=>{
+ const a=field(87),b=field(51),missing={field:'body:b0'},zero=field(0);
+ assert.deepEqual(prioritize([a,missing,b,zero]).scored,[zero,b,a]);
+ assert.deepEqual(prioritize([a,missing]).unscored,[missing]);
+ assert.equal(prioritize([field(150)]).next,null);assert.equal(describe(field(NaN)).score,null);
+});
+test('comparison caps choices at three, uses actual predictions and does not infer absent scores',()=>{
+ const f={touchpoint:'preheader',optimization:{result:{alternatives:[{performance:71,touchpoints:{preheader:'First'}},{text:'Second'},{performance:0,text:'Third'},{performance:99,text:'Fourth'}]}}};
+ assert.equal(comparison(f).text,'First');assert.equal(comparison(f).alternatives.length,3);
+ assert.equal(comparison(f,1).score,null);assert.equal(comparison(f,2).score,0);assert.equal(comparison(f,3).index,0);
+ assert.ok(!('uplift' in comparison(f)));
 });
