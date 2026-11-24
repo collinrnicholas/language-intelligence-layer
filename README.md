@@ -35,7 +35,7 @@ docs live in `docs/loupe/`.
 1. Open a regular campaign draft. The sidebar matches its URL to an API-verified campaign and displays actual subject, preview, and eligible body/CTA copy without spending credits.
 2. See actual estimated campaign reach and, when comparable sent history exists, an email-volume-weighted click baseline. Optional details provide source campaigns and observed post-send reports.
 3. Score individual fields explicitly (1 credit). Scored fields appear in lower-score-first review order with compact returned bands/scores; unscored copy is separate. Scoring and optimization are independent actions.
-4. Optimize a selected field (5 credits), then compare original copy with up to three selectable real Persado alternatives. Scores are predictions, not measured conversion lift. No changes are saved automatically.
+4. Optimize a selected field (5 credits). The highest comparable returned score is selected first, with its predicted score-point improvement. Up to three scored choices and Compare original stay compact. Scores are predictions, not measured conversion lift. No changes are saved automatically.
 5. Apply an alternative to subject or preview. The gateway patches only the selected setting, checks draft status and verifies by re-reading. Undo restores that field if no later edit conflicts.
 6. Explore impact with an explicitly labelled scenario calculator. User-selected assumptions are distinct from Persado model output and observed results. No score difference is converted to revenue.
 7. Body Apply is disabled to preserve the email structure. No send action is available.

@@ -23,15 +23,27 @@
       status:n!==null?(band?label(band):'Scored'):field.score?'Score unavailable':'Not yet evaluated',
       guidance:guidance(variant),source:explicit?field.score.kind||'score':control?'optimize':null};
   }
-  function comparison(field,index=0){
-    const alternatives=(field.optimization?.result?.alternatives||[]).slice(0,3);
-    const choice=Number.isInteger(index)&&index>=0&&index<alternatives.length?index:0;
-    const variant=alternatives[choice];
-    return {alternatives,index:choice,variant:variant||null,score:score(variant?.performance),band:label(variant?.performanceBand),
+  function comparison(field,index){
+    const result=field.optimization?.result||{},control=result.control;
+    const context=v=>JSON.stringify(v?.scoringContext??null);
+    const sameJob=!!(result.jobId&&result.channel);
+    const valid=n=>n!==null&&n>=0&&n<=100;
+    const options=(result.alternatives||[]).map((variant,index)=>({variant,index,score:score(variant.performance),
+      comparable:sameJob&&context(variant)===context(control)}));
+    options.sort((a,b)=>{
+      const x=a.comparable&&valid(a.score),y=b.comparable&&valid(b.score);
+      return x&&y?b.score-a.score||(a.variant.rank??a.index)-(b.variant.rank??b.index):x?-1:y?1:(a.variant.rank??a.index)-(b.variant.rank??b.index);
+    });
+    const limited=options.slice(0,3),chosen=limited.find(x=>x.index===index)||limited[0];
+    const variant=chosen?.variant,originalScore=score(control?.performance);
+    const delta=chosen?.comparable&&valid(chosen.score)&&valid(originalScore)?chosen.score-originalScore:null;
+    return {alternatives:limited.map(x=>x.variant),options:limited,index:chosen?.index??0,variant:variant||null,
+      top:!!(chosen&&chosen===limited[0]&&chosen.comparable&&valid(chosen.score)),
+      originalScore,delta,score:chosen?.score??null,band:label(variant?.performanceBand),
       guidance:guidance(variant),text:variant?.touchpoints?.[field.touchpoint]||variant?.text||''};
   }
   function prioritize(fields){
-    const scored=fields.filter(f=>describe(f).inRange).sort((a,b)=>describe(a).score-describe(b).score);
+    const scored=fields.filter(f=>describe(f).inRange).sort((a,b)=>Number(!!a.templateDefault)-Number(!!b.templateDefault)||describe(a).score-describe(b).score);
     return {scored,unscored:fields.filter(f=>!describe(f).inRange),next:scored[0]||null};
   }
   root.PERSADO_INTELLIGENCE=Object.freeze({describe,prioritize,comparison,label});

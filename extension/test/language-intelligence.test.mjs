@@ -40,3 +40,21 @@ test('comparison caps choices at three, uses actual predictions and does not inf
  assert.equal(comparison(f,1).score,null);assert.equal(comparison(f,2).score,0);assert.equal(comparison(f,3).index,0);
  assert.ok(!('uplift' in comparison(f)));
 });
+
+test('highest comparable actual score is selected before the three-option cap, with original provider indices retained',()=>{
+ const f={touchpoint:'preheader',score:{variants:[{performance:99}]},optimization:{result:{jobId:'job_a',channel:'EMAIL_SUBJECT_BODY',control:{performance:51},alternatives:[{rank:1,text:'First',performance:65},{rank:2,text:'Second',performance:69},{rank:3,text:'Third'},{rank:4,text:'Fourth',performance:67}]}}};
+ const top=comparison(f);assert.equal(top.index,1);assert.equal(top.text,'Second');assert.equal(top.delta,18);assert.equal(top.top,true);
+ assert.deepEqual(top.options.map(o=>o.index),[1,3,0]);
+ const manual=comparison(f,0);assert.equal(manual.text,'First');assert.equal(manual.delta,14);assert.equal(manual.top,false);
+ assert.equal(comparison(f,manual.index).index,0);
+});
+test('separate score jobs, missing scores and differing scoring contexts cannot manufacture an improvement',()=>{
+ const result={jobId:'job_b',channel:'EMAIL_SUBJECT_BODY',control:{performance:51,scoringContext:'model-a'},alternatives:[{performance:80,scoringContext:'model-b',text:'Different context'},{performance:69,scoringContext:'model-a',text:'Comparable'},{text:'No score'}]};
+ const f={score:{variants:[{performance:20}]},optimization:{result}};
+ assert.equal(comparison(f).text,'Comparable');assert.equal(comparison(f).delta,18);
+ assert.equal(comparison(f,0).delta,null);assert.equal(comparison(f,2).delta,null);
+ delete result.control;assert.equal(comparison(f).delta,null);
+});
+test('template defaults do not displace marketer-authored opportunities merely because their score is lower',()=>{
+ const custom=field(51),template={...field(12),templateDefault:true};assert.equal(prioritize([template,custom]).next,custom);
+});

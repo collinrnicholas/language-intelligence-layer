@@ -219,6 +219,8 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   if(PANEL.includes('PERSADO_INTELLIGENCE')&&(iIntelligence<0||iIntelligence>iMod)) fail('score presentation','language-intelligence.js must load before the panel module');
   const iImpact=HTML.indexOf('src/campaign-impact.js');
   if(PANEL.includes('PERSADO_IMPACT')&&(iImpact<0||iImpact>iMod)) fail('campaign impact','campaign-impact.js must load before the panel module');
+  const iMotion=HTML.indexOf('src/interactions.js');
+  if(PANEL.includes('PERSADO_MOTION')&&(iMotion<0||iMotion>iMod)) fail('interactions','interactions.js must load before the panel module');
   if (iMsg < 0 || iBoot < 0) fail('boot guard', 'sidepanel.html must load src/messages.js and src/boot.js');
   else if (!(iMsg < iMod && iBoot < iMod)) fail('boot guard', 'messages.js and boot.js must load BEFORE the module, or a module throw stays silent');
   for (const id of ['fatalBanner', 'fatalMsg', 'fatalReload']) {

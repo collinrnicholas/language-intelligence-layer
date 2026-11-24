@@ -8,6 +8,12 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.11.1
+
+- Lead optimization results with the highest comparable returned copy, its predicted score-point improvement, and Apply. Compare original and scored alternative selection use progressive disclosure; selections retain the server index and remain stable across view changes. No conversion-lift or theoretical-optimum claim is inferred.
+- Keep the primary opportunity prominent, other scored content collapsed, and template defaults subordinate to marketer copy. Trivial reach and unavailable metrics move into campaign details. Verified applications retain their score change with contextual Undo; older receipts remain accessible in details.
+- Added shared 150/200/240ms motion tokens, hover/press/focus/disabled states, interruptible native disclosure transitions, real request feedback, result reveals, keyed priority transitions, and reduced-motion support. No dependency, API integration, paid operation or gateway capability was added.
+
 ## 0.11.0
 
 - Simplified Mailchimp rows to element name, returned band and score, with lower-score-first review, one primary action, compact unscored content, and a maximum of three selectable alternatives sharing one Apply control. Removed meters, repeated scores/disclaimers, brand ratings and language tags.
