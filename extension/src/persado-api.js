@@ -348,8 +348,8 @@
   /** Plain-language message for a failure kind. */
   function describeError(e) {
     const k = e?.kind;
-    if (k === KIND.NO_KEY) return 'No Persado API key is saved. Add one in Settings.';
-    if (k === KIND.INVALID_KEY) return 'Persado rejected the API key. Check it in Settings.';
+    if (k === KIND.NO_KEY) return 'Set PERSADO_API_KEY in the local gateway environment, then restart the gateway.';
+    if (k === KIND.INVALID_KEY) return 'Persado rejected the API key. Check the gateway credential in your secret manager.';
     if (k === KIND.QUOTA) return 'Persado reports this key has used its run quota. No further runs will succeed until it is raised.';
     if (k === KIND.RATE_LIMITED) return 'Persado is rate-limiting this key. Wait a moment and try again.';
     if (k === KIND.UNAVAILABLE) return 'Persado is temporarily unavailable. Try again shortly.';

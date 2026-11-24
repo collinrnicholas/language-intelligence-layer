@@ -94,6 +94,15 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   }
 
   const sent = new Set(), handled = new Set();
+  // The worker's explicit relay allowlist must also have a real gateway case.
+  const integrationSource = readFileSync(join(ROOT, 'gateway/integrations.mjs'), 'utf8');
+  const relayed = (BG_C.match(/INTEGRATION_MESSAGES\s*=\s*new Set\(\[([\s\S]*?)\]/) || [, ''])[1];
+  for (const k of all(/MSG\.([A-Z_]+)/g, relayed)) {
+    // Legacy messages explicitly rejected by the gateway have no UI producer.
+    if (k === 'MC_TEST_SEND' || k === 'MC_DISCONNECT' || k === 'USAGE_RESET') continue;
+    if (!integrationSource.includes(`case '${k}':`)) fail('gateway relay', `gateway has no handler for ${k}`);
+    handled.add(k);
+  }
   for (const src of Object.values(files)) {
     // { type: MSG.X   /  { type: cond ? MSG.A : MSG.B
     for (const m of src.matchAll(/\btype:\s*([^,}\n]+)/g)) {
@@ -378,10 +387,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   }
 }
 
-// ── 20. credentials stay in the service worker ───────────────────
-// Only background.js may read the Persado or Mailchimp key and only it may call
-// those APIs. The panel may WRITE a key (Settings) and test presence; page
-// contexts (content, scan, overlay) may not touch either key at all.
+// ── 20. provider credentials stay in the local gateway ──────────
 {
   for (const [name, src] of Object.entries({ 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C })) {
     if (/KEYS\.(API_KEY|MC_API_KEY)/.test(src)) fail('credentials', `${name} references a credential storage key`);
@@ -391,6 +397,9 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
     if (/api\.persado\.com\/api|api\.mailchimp\.com\/3\.0|Authorization/.test(src)) fail('credentials', `${name} calls Persado/Mailchimp directly — only the service worker may`);
   }
   if (/x-persado-api-key|apiKeyHeaders/.test(PANEL_C)) fail('credentials', 'sidepanel.js still forwards the Persado key');
+  if (/KEYS\.(API_KEY|MC_API_KEY)/.test(PANEL_C)) fail('credentials', 'panel must not read or write provider keys');
+  if (/importScripts\([^;]*(?:persado-api|adapters\/mailchimp)/.test(BG_C)) fail('credentials', 'worker still loads direct provider clients');
+  if (!/X-Persado-Token/.test(BG_C)) fail('credentials', 'integration relay has no pairing authentication');
   // The overlay may only send what the worker lets it.
   const allowed = (BG_C.match(/OVERLAY_ALLOWED\s*=\s*new Set\(\[([^\]]*)\]/) || [, ''])[1];
   const allowedSet = new Set(all(/MSG\.([A-Z_]+)/g, allowed));
@@ -404,7 +413,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   for (const [name, src] of Object.entries({ 'sidepanel.js': PANEL_C, 'src/config.js': code(CONFIG) })) {
     if (/MOCK_SCORES|MOCK_LIFTS|predictedLift\s*:/.test(src)) fail('fabricated scores', `${name} still carries mock scores or lift`);
   }
-  notes.push(`credentials: worker-only; overlay sends ${sentByOverlay.join(', ')}`);
+  notes.push(`credentials: gateway-only; overlay sends ${sentByOverlay.join(', ')}`);
 }
 
 // ── 19. asset types used in the panel are all in config ASSET_TYPES ─

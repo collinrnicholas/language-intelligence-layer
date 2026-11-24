@@ -7,6 +7,10 @@ extension/dist/
 
 # ─── Secrets / local config ──────────────────────────────────────
 .env
+.env.*
+!.env.example
+gateway/.integration-state.json
+gateway/.integration-state.json.tmp
 gateway.env
 *.local
 

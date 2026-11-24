@@ -1,204 +1,74 @@
-# Persado Autopilot — architecture
+# Persado Autopilot — native Mailchimp integration
 
-Persado Autopilot runs Persado inside the tools marketers already use. This repo's
-Chrome extension is the first surface and the development environment for it. It
-scores and optimizes copy on any web page, and it optimizes Mailchimp draft
-campaigns in place.
+Version 0.10.0. The existing extension remains the UI; no standalone editor is added.
 
-Status: working prototype, version 0.9.1. Read "Verification status" before you rely
-on any live behaviour.
+## Architecture
 
----
+`sidepanel.html` / `sidepanel.js` → runtime messages → `src/background.js` → authenticated loopback `POST /v1/integrations` → `gateway/integrations.mjs`.
 
-## 1. Layers
+The gateway reuses `extension/src/persado-api.js`, `guard.js`, `usage.js`, and `adapters/mailchimp.js` in an isolated Node VM. The worker no longer loads provider clients or reads provider keys. The legacy optimizer remains covered by regression tests but is not invoked by the current UI or proxy. The Mailchimp overlay is read-only; paid actions and writes are restricted to extension pages.
 
-```
- Extension UI ─────────────────────────────────────────────────────────────
-   sidepanel.html/.js   usage bar · page scan · Persado result · Mailchimp drafts · Settings
-   src/mc-overlay.js    status pill + activity view on *.admin.mailchimp.com
-        │  chrome.runtime messages (MSG.* in src/messages.js). Copy in, results out, never a key
-        ▼
- Service worker (src/background.js) ──────────────────────────── only reader of keys
-   ├─ Persado service      src/persado-api.js   auth · score · optimize · job polling · errors
-   ├─ Usage tracking       src/usage.js         per-key ledger, estimate vs. authoritative
-   ├─ Activity tracking    src/activity.js      runs, writes, verifies, reverts (ring buffer)
-   ├─ Content safeguards   src/guard.js         eligibility · protected tokens · HTML blocks
-   ├─ Optimizer            src/optimizer.js     platform-neutral read → optimize → validate → write → verify
-   └─ Platform adapters    src/adapters/mailchimp.js   (next: gohighlevel.js, textedly.js …)
-        │ HTTPS, straight from the worker (manifest host_permissions)
-        ▼
-   api.persado.com/api          <dc>.api.mailchimp.com/3.0
+Public website scanning, scoring, optimization, preview, recording, and transcription keep their existing UI. Website scoring and optimization also use the authenticated gateway. No live-mode fixture responses exist in this route.
+
+## Setup and loading
+
+Inject secrets from Keydeck, scoped to this project (do not print values or export them into source):
+
+```sh
+cd /Users/test/dev/Persado
+lokalite run --project language-intelligence-layer --keys MAILCHIMP_API_KEY,PERSADO_API_KEY,PERSADO_PROXY_TOKEN -- npm run gateway
 ```
 
-Each layer owns one job:
+`PERSADO_PROXY_TOKEN` must be a random value of at least 32 characters. It grants access to local paid operations, so treat it as a local capability. `MAILCHIMP_SERVER_PREFIX` optionally overrides the key suffix. `.env.example` documents placeholder names; a local `.env` is also supported and ignored. No shared provider key is embedded in the extension. Preserve the existing OPENAI_API_KEY environment when restarting if narrated-brief transcription is needed. The integration-only verification process did not test audio transcription.
 
-| Layer | Owns | Never does |
-|---|---|---|
-| Platform adapter | Reading a draft from its platform, choosing eligible fields, writing results back, verifying them, restoring a snapshot, sending a platform-native test | Calling Persado, or deciding whether a rewrite is safe |
-| Persado service | Building and validating requests, Bearer auth, retries, job polling, normalising results, typed errors | Knowing about any platform |
-| Content safeguards | What may be sent, and whether a rewrite may be written | Network I/O |
-| Activity tracking | An audit record of every run and write, with real ids | Storing credentials |
-| Extension UI | Status, controls, results, credit consumption | Reading keys, calling Persado or Mailchimp |
+1. If an older gateway already owns port 8788, stop/restart that exact gateway yourself before starting the updated one. Do not terminate unrelated processes.
+2. Run `npm run build` or `npm --workspace extension run build`.
+3. In Chrome, open `chrome://extensions`, enable Developer mode, and load `/Users/test/dev/Persado/extension/dist/unpacked` (or reload the existing unpacked extension).
+4. Open the Persado side panel → Settings. Enter only the local gateway pairing token, then **Pair gateway**. Set your brand and industry. Use **Test Mailchimp connection**.
+5. Hard-reload the Mailchimp page after reloading the extension; existing content scripts otherwise remain stale.
+6. Open a regular draft URL such as `https://us5.admin.mailchimp.com/campaigns/show/?id=<web_id>`. The subject, preview and eligible body blocks should appear automatically.
+7. Score the subject (configured estimate: 1 credit), then Optimize (5 credits). Compare current and alternative copy. Apply saves only that selected field and reads it back. Refresh Mailchimp to observe persistence. Undo restores the previous field if no later edit conflicts.
 
-To add a platform, write one file shaped like `adapters/mailchimp.js`. It exposes
-`{ id, label, channel, read, write, verify, restore, sendTest }` and its `read()`
-returns `{ ref, fields:[{field, touchpoint, text, maxLength, location}], skipped, fingerprint }`.
-`optimizer.optimizeDraft()` stays as it is. An SMS tool such as Textedly would use
-channel `SMS_EMS` with touchpoint `text`. A GoHighLevel e-mail would reuse
-`EMAIL_SUBJECT_BODY`.
+Successful connection tests remove the corresponding legacy provider key from browser storage. Until tested, any old stored key remains a local security risk. Provider credentials should be rotated if they were ever exposed; removing a key from HEAD does not remove it from history.
 
-## 2. Persado API — what is used and where it comes from
+## API contracts and limits
 
-Every request shape, path, header and response field comes from Persado's own
-published client, [`persado/martechapi-cli`](https://github.com/persado/martechapi-cli)
-(`src/pkg/api/{client,endpoints,models,validate}.go`). Nothing in this list is
-guessed.
+Verified against [Persado's official client](https://github.com/persado/martechapi-cli/tree/develop/src/pkg/api): Bearer authentication, `POST /v1/score?wait=50`, `POST /v1/optimize?wait=50`, `GET /v1/jobs/{id}`, and free `GET /v1/catalogue`. Requests use `account.name`, channel `EMAIL_SUBJECT_BODY` or `WEB_PAGE`, and documented touchpoint keys. `performance` is displayed only when returned. An absent revised score stays absent; scores are not measured financial ROI.
 
-| Call | Use |
-|---|---|
-| `GET /v1/catalogue` | Connection test. It validates the key and starts no run, so it costs nothing. |
-| `POST /v1/score?wait=50` | Score on a page. Sends one variant of the selected line, channel `WEB_PAGE`. |
-| `POST /v1/optimize?wait=50` | Optimize on a page (`WEB_PAGE`), and Mailchimp drafts (`EMAIL_SUBJECT_BODY`, one run per draft). |
-| `GET /v1/jobs/{id}` | Polled every 2 s until the job is `completed` or `failed`. |
+Verified against Mailchimp's official [campaign schema](https://mailchimp.com/developer/marketing/api/campaigns/list/), [settings PATCH](https://mailchimp.com/developer/marketing/api/campaigns/update/), and [content GET](https://mailchimp.com/developer/marketing/api/campaigns/get-content/). URL `id` is a web application `web_id`, not the API campaign ID. Matching paginates drafts, rejects ambiguous results and checks the ID pair before operations. Missing/unsupported routes require explicit selection; no newest-draft fallback exists.
 
-- **Auth:** `Authorization: Bearer <key>`.
-- **Errors:** errors arrive as `{ error: { code, message, requestId, details, categories, retryAfterSeconds } }`.
-  - `429 rate_limited` and `503` are retried up to 3 times, honouring `Retry-After`.
-  - `429 quota_exhausted` is not retried.
-  - `401`/`403` means the key is invalid.
-  - `categories` means the API found personal data.
-- **Displayed results:** `control`, `variants[]` and `alternatives[]` (ranked), each
-  with `performance`, `performanceBand`, `brandAlignment`, `compliance {risk, state,
-  summary, issues}` and `emotions`. Only fields that are present are shown. The job
-  id and `X-Request-Id` are shown and logged.
+Only regular campaigns with `status: save` may be read for optimization or updated. Scheduled, sending, sent, variate and automation campaigns are refused. The service patches **only** `settings.subject_line` or **only** `settings.preview_text`; unrelated settings are not resubmitted. Status and the expected field are re-read immediately before PATCH, then the saved value is read back. Mailchimp does not provide an atomic compare-and-swap contract here: a concurrent editor autosave or status transition between the preflight and PATCH remains a race. Refresh the Mailchimp editor after Apply to prevent its stale in-memory text from overwriting the API result.
 
-### Usage and credits
+Body copy is extracted conservatively as plain-text blocks. Nested markup, locked/footer/legal regions and undecodable entities are excluded. Eligible CTA labels are recognized by the existing parser. Body scoring and optimization are available, but **Body Apply is always disabled**, including custom HTML campaigns. No content PUT or email-send operation is reachable through the proxy. The existing adapter's legacy body/test-send methods are retained only for compatibility and regression tests.
 
-- **Balance:** Persado's API documents **no balance or usage endpoint**. The developer
-  portal (`api.persado.com/api/developers`) publishes `run-quota 100` and
-  `optimize-cost 5`. It publishes no score cost.
-- **Estimate:** the extension therefore keeps a local, per-key ledger:
-  - optimize counts as 5 runs (portal value)
-  - score counts as 1 run (an assumption, and labelled as one)
-  - remaining = 100 − counted runs
+## Credits, caching and undo
 
-  Every screen that shows it says it is an estimate.
-- **Authoritative override:** a `429 quota_exhausted` from Persado sets remaining
-  to 0, and that figure is shown as Persado's.
-- **Server headers:** if Persado ever returns quota-like response headers, they are
-  shown verbatim.
-- **No paid polling:** Refresh uses the free catalogue call. Nothing polls in the
-  background.
-- **Not counted:** runs made outside this browser with the same key.
+No documented Persado account-balance endpoint was found. The UI shows **balance unavailable**, plus gateway-tracked usage and response usage headers when available. Costs are configured estimates: Score 1, Optimize 5. The portal's 100-run allowance is internal ledger metadata, never presented as a verified current balance. A real `quota_exhausted` response blocks further paid requests.
 
-## 3. Mailchimp — what the API can and cannot automate
+The gateway stores result cache, accepted-job markers, credit ledger and field undo receipts in ignored `gateway/.integration-state.json`, written atomically with mode 0600. This file contains campaign copy and must stay private. Cache keys include provider/account identity, request brand/industry, channel, operation, touchpoint, text and limits. Unchanged scoring is cached across panel closes, worker eviction and gateway restarts. Concurrent identical requests share one job. Failed/uncertain accepted requests retain a marker rather than silently spending credits again; investigate the stored job ID with Persado before manually recovering state. Do not delete the ledger to retry uncertain jobs.
 
-Endpoints used: `GET /ping`, `GET /`, `GET /campaigns?status=save`,
-`GET /campaigns/{id}`, `GET|PUT /campaigns/{id}/content`, `PATCH /campaigns/{id}`,
-`POST /campaigns/{id}/actions/test`. Auth is HTTP Basic, with the API key as the
-password. The data centre comes from the key suffix (`-us21`) or from Settings.
+Optimize never writes. Apply uses the chosen server-cached alternative and validates merge tags, links, numbers, markup and length again. Results must have been reviewed for the target campaign. A single gateway process serializes campaign writes; duplicate Apply returns the existing verified receipt. Undo changes only the affected field and refuses to overwrite a later edit. Undo receipts are saved before PATCH, including when save verification fails. Run only one gateway process for a given state file.
 
-- **No pre-send interception.** The Marketing API has no hook that fires before a
-  campaign is sent or when a draft is saved. Zero-click optimization cannot be done
-  by intercepting a send, so milestone 1 uses an explicit **Optimize draft** action.
-  After that one click, everything runs without per-suggestion approval: read,
-  optimize, validate, write back, verify.
-- **Background optimization (not built).** A safe future design is a scheduled or
-  on-open job that optimizes drafts once, marked by the snapshot fingerprint. It
-  needs a server (an MV3 worker cannot run unattended), OAuth instead of a pasted
-  key, and a rule for when a draft is "done enough" to optimize.
-- **Drafts only.** Only `status: "save"` regular campaigns are read or written. This
-  code never calls `/actions/send`, schedules anything, or touches audiences.
-  **Send test** uses Mailchimp's own test send to the addresses in Settings.
-- **Builder campaigns.** `PUT /content {html}` stores custom HTML. On a campaign
-  built with the drag-and-drop or new builder, that can turn it into a
-  code-your-own campaign. For those campaigns, body write-back is **off by default**:
-  only the subject line and preview text change. Settings has an explicit opt-in.
-- **Editor autosave.** The Mailchimp editor can save its in-memory copy over an API
-  write. The overlay asks you to save before optimizing and to reload after. A
-  fingerprint check aborts the write if the draft changed during the run.
+Automatic scoring/optimization is off. The explicit paid-operation boundary is the place for future opt-in budgets; no unattended credit consumption occurs now. Public OAuth should replace the environment key through the adapter credential boundary; the local proxy is an internal proof of concept, not a multi-tenant service.
 
-### What is sent and written
+## Security
 
-- **Fields:** at most one value per Persado touchpoint: `subject_line`, `preheader`
-  (preview text), `headline`, `subheadline`, `body`, `cta`. Each value is the plain
-  text of one HTML block whose content is only text.
-- **Never sent:** the full HTML, recipient data, footer, unsubscribe or legal copy, or
-  anything locked.
-- **Validation before writing:** each rewrite must keep every merge tag, template
-  variable, URL and e-mail address exactly. It may not add a figure, add markup, or
-  exceed a length limit. A field that fails keeps its original. If no field passes,
-  nothing is written.
-- **Write order:**
-  1. Save a snapshot of the original.
-  2. PATCH settings.
-  3. PUT content. If the PUT fails, the settings PATCH is rolled back.
-  4. Re-read the draft and confirm each change.
-- **Revert:** restores the snapshot. An already-optimized, unchanged draft is not
-  re-run, which would waste 5 runs, unless you choose "Run again anyway".
-- **Locking copy:** authors can lock copy with `data-persado-lock`, with
-  `<!-- persado:lock --> … <!-- /persado:lock -->`, or with footer regions
-  (`mc:edit="footer"`, `templateFooter`, `.mcnFooter*`).
+The integration route requires a pairing token, a loopback peer and Host, JSON POST, and rejects ordinary web origins. Optional `PERSADO_EXTENSION_IDS` restricts browser extension origins. No permissive CORS headers are added. There is no arbitrary URL/method forwarding or provider-key response. Provider errors redact configured keys; campaign content and keys are not logged. Existing transcription/model routes retain their prior behavior; this authentication boundary covers the integration route.
 
-## 4. Credentials
+`.env*` and runtime state are ignored; `.env.example` contains placeholders only. The public Git history was scanned for common provider-key patterns (112 commits) with no matches. That pattern scan is not proof that every possible secret format is absent.
 
-- **Storage:** both keys are in `chrome.storage.local` in this browser profile only.
-  They are not synced, not exported and not logged.
-- **Who reads them:** only the service worker reads them, and only it calls Persado
-  or Mailchimp, directly over HTTPS. The local gateway never sees either key.
-  `npm run smoke` fails if a page context or the panel references a credential key
-  or calls either API.
-- **Overlay limits:** the Mailchimp overlay can only ask for status, optimize and
-  revert, and only from `*.admin.mailchimp.com`. It runs in a closed shadow root.
-- **Trade-off:** a key in browser storage can be read by anyone with access to this
-  Chrome profile, or by a compromised extension build. That is acceptable for an
-  internal prototype using test accounts. A public version should move both keys to
-  a backend proxy and replace the Mailchimp key with OAuth. The adapter takes its
-  credential as one constructor argument, so that change is local.
+## Verification status
 
-## 5. Experiment and feedback loop (metadata only)
+Verified on November 24, 2026:
 
-The activity log records the following for every run, so future outcome tracking can
-join platform results to Persado output:
+- `npm run smoke`, `npm run lint` (typecheck), `npm run build`, `npm run repo:check`, `npm run version:check`, and `git diff --check` passed. `npm test`: 118 agent tests plus 54 extension tests passed. A broken local TypeScript executable link was repaired with `npm rebuild typescript`; no application source workaround was added.
+- Real Mailchimp `/ping`, account metadata, draft list, draft settings and content reads succeeded using Keydeck credentials. The draft API ID `6e04c9077b` matched URL web_id `4750548`.
+- Real Persado catalogue, subject scoring (78), optimization (five alternatives; top score 84), cached duplicate Score, subject Apply, independent read-back, and Undo succeeded. The original subject was restored and verified. Score and Optimize used an estimated six credits total; duplicate scoring submitted no additional paid job.
+- Preview text: real scoring (51), optimization (five alternatives), Apply, independent read-back, and Undo succeeded. Subject remained unchanged by preview Apply. The original preview was restored and verified. Estimated six further credits.
+- Deliberately invalid credentials were rejected by both live APIs and surfaced as `invalid_key`.
+- Headless Chromium loaded the real unpacked extension. Using an isolated gateway on port 8789, it displayed real Mailchimp data and cached live Persado results, applied a subject alternative through panel controls, and undid it through the visible Saved changes controls. Mailchimp URL navigation, unknown-draft selection, returning to the known draft, public-site content-script scanning, 390px and landscape layouts passed with no panel page errors. The test Mailchimp page supplied only the editor URL identity; the signed-in Mailchimp application was not exercised. No browser fixture replaced a live provider response. The temporary test gateway was stopped afterward; the existing gateway on 8788 was left running.
+- Exact current Persado key, Mailchimp key and pairing-token comparisons found no matches in 219 nonignored source files, the extension ZIP, or Git patch history. A separate scan of 112 commits found no common provider-key patterns. Local `.env` and gateway state files are ignored and mode 0600.
 
-- platform, campaign id and `web_id`, field
-- original and optimized text
-- Persado `jobId`, `X-Request-Id`, chosen rank and performance
-- timestamp, status
-- source (`live` or a labelled `demo` fixture)
+Still unverified: the user's installed Chrome build/native docked side panel against the signed-in Mailchimp UI; its editor autosave behavior; microphone permission/recording/transcription; live body-block scoring and optimization; and live insufficient-credit behavior (quota errors are covered by automated fixtures). Public website provider request/response handling is tested with fixtures; public website scanning is checked in Chromium. Body Apply and all sending remain intentionally unavailable.
 
-No experiment ids are invented.
-
-To close the loop for Mailchimp later:
-
-1. After send, read `GET /reports/{campaign_id}` (opens, clicks) for campaigns in
-   the log.
-2. Join on campaign id.
-3. Send outcomes to Persado if and when Persado publishes an endpoint for it. None
-   exists in the published spec today.
-
-A/B testing original against optimized would use Mailchimp's variate campaigns
-(`variate_settings`, `variate_contents`). This adapter refuses variate campaigns
-today.
-
-## 6. Verification status
-
-**Verified:**
-- 31 unit and integration tests (`npm --workspace extension test`) against fakes with
-  the documented Persado and Mailchimp shapes. One of them drives the real
-  `background.js` in a simulated `chrome.*`.
-- A browser run: the unpacked extension loaded in Chromium, with both APIs replaced
-  by route mocks. It covered key rejection and acceptance, score, optimize,
-  preview and restore on a page, Mailchimp connect, overlay optimize, write-back,
-  verify, the duplicate guard, test send, revert, and usage counts.
-
-**Not yet verified against the live services:**
-- Neither the Persado production API nor a real Mailchimp account has been called.
-  The development environment's network blocks both hosts.
-- Treat these as unconfirmed until a live run:
-  - field values Persado actually returns (for example compliance `risk`/`state`
-    enums and `performanceBand` labels)
-  - whether Mailchimp normalises HTML on PUT
-  - the builder-campaign conversion behaviour
-
-`docs/REGRESSION.md` §8–§11 is the live checklist.
+Before testing in the user's Chrome, reload/load the final 0.10.0 extension, hard-reload Mailchimp, pair the local gateway and run the checklist above. Restart the existing gateway yourself if it predates the final files; only one gateway should use the state file at a time.

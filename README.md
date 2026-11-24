@@ -32,24 +32,13 @@ docs live in `docs/loupe/`.
    restores it. Nothing is saved to the site.
 
 **In Mailchimp:**
-1. Connect a test account (API key and server prefix) in Settings.
-2. On `*.admin.mailchimp.com` the panel lists your draft campaigns, and a small
-   overlay appears on the campaign editor.
-3. **Optimize draft** runs everything after that one click:
-   1. Reads the subject line, preview text and eligible body copy.
-   2. Sends them to Persado as one `EMAIL_SUBJECT_BODY` optimize run.
-   3. Rejects any rewrite that breaks a merge tag, link or footer, or adds a figure.
-   4. Writes the safe rewrites back to the draft.
-   5. Re-reads the draft to verify.
-4. **Revert** restores the original. **Send test** uses Mailchimp's own test send.
-   Nothing is ever sent to an audience.
+1. Open a regular campaign draft. The sidebar matches its URL to an API-verified campaign and displays actual subject, preview, and eligible body/CTA copy without spending credits.
+2. Score individual fields explicitly (1 credit estimate). Subject optimization requires scoring first.
+3. Optimize a selected field (5 credits estimate), then review the real Persado alternatives. No changes are saved automatically.
+4. Apply an alternative to subject or preview. The gateway patches only the selected setting, checks draft status and verifies by re-reading. Undo restores that field if no later edit conflicts.
+5. Body Apply is disabled to preserve the email structure. No send action is available.
 
-**Usage** is always visible:
-- A one-line bar under the header shows the connection and runs left.
-- Settings shows the full ledger.
-- Persado's API has no balance endpoint, so remaining is a labelled local estimate
-  (portal quota 100, optimize 5, score 1). The exception is when Persado reports
-  `quota_exhausted`; that is shown as authoritative.
+**Usage:** the header shows gateway-tracked credits used (estimate). Account balance is unavailable; no assumed 100-credit balance is shown. Cached scoring of unchanged text avoids another paid request. See [architecture and limits](docs/AUTOPILOT.md).
 
 Recording a narrated brief still works. Narration is transcribed by the local
 gateway (Whisper), and the variants now come from Persado's optimize run.
@@ -71,51 +60,20 @@ Then build it:
 npm run build        # verifies, then writes extension/dist/unpacked (+ a zip if `zip` exists)
 ```
 
-1. Open `chrome://extensions`, turn on Developer mode, click **Load unpacked** and
-   select `extension/`, or the `extension/dist/unpacked` folder from the build.
-2. Click the toolbar icon to open the side panel, then **Settings**:
-   - **Persado API.** Paste the key from
-     [Persado Developers](https://api.persado.com/api/developers), then **Save key**.
-     Saving tests the connection with the free catalogue call. Set **Brand name**:
-     Persado requires an account name on every run. Without it, a page's domain is
-     used.
-   - **Mailchimp** (optional). Paste an API key (Mailchimp: Profile, Extras, API
-     keys). The server prefix is read from the key's `-usNN` suffix. Add a test
-     e-mail address, then **Save and test**.
-3. Open any page and press **Score** or **Optimize**. Or open a Mailchimp draft and
-   press **Optimize draft**.
+Start the local gateway with provider credentials injected from your secret manager:
 
-Keys stay in this Chrome profile and are read only by the extension's service
-worker. See docs/AUTOPILOT.md §4.
-
-### Gateway (only for recorded briefs)
-
-The local gateway now does one job: transcribing narration.
-
-```bash
-OPENAI_API_KEY=sk-... npm run gateway     # listens on 127.0.0.1:8788
-curl -s http://127.0.0.1:8788/health
+```sh
+lokalite run --project language-intelligence-layer --keys MAILCHIMP_API_KEY,PERSADO_API_KEY,PERSADO_PROXY_TOKEN -- npm run gateway
 ```
 
-### Environment
+Provider keys stay in the gateway environment. The placeholder-only `.env.example` documents the configuration. Stop/restart an older gateway on port 8788 yourself if needed.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `OPENAI_API_KEY` | — | Whisper transcription of recorded briefs. |
-| `ANTHROPIC_API_KEY` | — | Optional, for `claude-*` models (gateway `/v1/ai/complete`, used by the inherited Loupe agent). |
-| `PERSADO_GATEWAY_PORT` | `8787` (`npm run gateway` sets `8788`) | Gateway port. The extension calls 8788. |
-| `PERSADO_GATEWAY_HOST` | `127.0.0.1` | Gateway bind address. |
-| `PERSADO_GATEWAY_FFMPEG` | off | Set `1` to normalise audio to wav before Whisper. |
+1. In `chrome://extensions`, enable Developer mode and load `extension/dist/unpacked` or `extension/`.
+2. Open Persado Settings, enter the local **gateway pairing token** (not a provider key), then Pair gateway. Set Brand name and test Mailchimp.
+3. Hard-reload the Mailchimp page after an extension reload. Open a regular draft, then Score → Optimize → Apply.
+4. Refresh Mailchimp to confirm persistence; use Undo in Persado to restore a previous value.
 
-The equivalent `LOUPE_*` names are still read as a fallback. See the header of
-`gateway/server.mjs`.
-
-### Keep the gateway running at login (macOS)
-
-```bash
-# add your provider key to ~/.loupe/gateway.env, then:
-./gateway/install-launchd.sh
-```
+Complete setup, API limitations, security, and verification details: [docs/AUTOPILOT.md](docs/AUTOPILOT.md).
 
 ## Repo layout
 

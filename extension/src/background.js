@@ -9,7 +9,7 @@
 // Classic (non-module) service worker so the shared message/key contract can be
 // importScripts'd — content scripts cannot be ES modules, so messages.js has to
 // be a classic script and this is the only way all three contexts share one copy.
-importScripts('messages.js', 'config.js', 'guard.js', 'persado-api.js', 'usage.js', 'activity.js', 'adapters/mailchimp.js', 'optimizer.js');
+importScripts('messages.js', 'config.js');
 const { MSG, KEYS, CTX } = self.PERSADO;
 const { GATEWAY_URL, ENDPOINTS, TIMEOUTS, ERR, CAPTURE_SCREENSHOTS: CAPTURE_DEFAULT, DEMO_MODE, DEMO_DELAYS, DEMO_TRANSCRIPT } = self.PERSADO_CONFIG;
 
@@ -527,294 +527,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 
-// ═══ Persado Autopilot ═══════════════════════════════════════════
-//
-// The service worker is the ONLY context that reads the Persado and Mailchimp
-// keys. The side panel and the Mailchimp overlay send copy or a campaign id in
-// and get results out; no response below ever contains a key, and nothing here
-// logs one. Calls go straight from the worker to api.persado.com and
-// <dc>.api.mailchimp.com over HTTPS (manifest host_permissions) — there is no
-// proxy in between, so the keys never touch the local gateway either.
-
-const API = self.PERSADO_API;
-const MC = self.PERSADO_ADAPTERS.mailchimp;
-const local = chrome.storage.local;
-const usageStore = self.PERSADO_USAGE.makeStore({ storageKey: KEYS.USAGE, quota: API.RUN_QUOTA, storage: local });
-const activity = self.PERSADO_ACTIVITY.makeLog({ storageKey: KEYS.ACTIVITY, storage: local });
-
-async function readLocal(key, dflt = null) {
-  try { const v = (await local.get(key))[key]; return v === undefined ? dflt : v; } catch { return dflt; }
-}
-async function persadoKey() { return (await readLocal(KEYS.API_KEY, '')) || ''; }
-async function persadoSettings() { return { brand: '', industry: '', ...(await readLocal(KEYS.PERSADO_SETTINGS, {})) }; }
-async function mcSettings() { return { serverPrefix: '', allowBodyOnBuilder: false, testEmails: '', ...(await readLocal(KEYS.MC_SETTINGS, {})) }; }
-
-async function currentFingerprint() { return self.PERSADO_USAGE.fingerprint(await persadoKey()); }
-
-/** Usage snapshot for the UI, with the provenance of every number. */
-async function usageView() {
-  const key = await persadoKey();
-  const fp = await self.PERSADO_USAGE.fingerprint(key);
-  const s = await usageStore.get(fp);
-  return { hasKey: !!key, ...s, costs: API.COSTS, costSource: API.COST_SOURCE };
-}
-
-async function recordUsage(ev) {
-  const fp = await currentFingerprint();
-  const s = await usageStore.record(fp, { at: Date.now(), ...ev });
-  const view = { hasKey: true, ...s, costs: API.COSTS, costSource: API.COST_SOURCE };
-  broadcast({ type: MSG.USAGE_UPDATED, usage: view });
-  return view;
-}
-
-/** To the panel (runtime) and to any open Mailchimp tab (overlay). */
-function broadcast(msg) {
-  chrome.runtime.sendMessage(msg).catch(() => {});
-  chrome.tabs.query({ url: 'https://*.admin.mailchimp.com/*' })
-    .then(tabs => tabs.forEach(t => chrome.tabs.sendMessage(t.id, msg).catch(() => {})))
-    .catch(() => {});
-}
-
-/** Plain-language text for any failure; Persado's own kinds get Persado's wording. */
-function explain(e) { return e instanceof API.PersadoError ? API.describeError(e) : (e?.message || String(e)); }
-function errOut(e) {
-  return { ok: false, kind: e?.kind || 'error', error: explain(e), requestId: e?.requestId || null, jobId: e?.jobId || null };
-}
-
-// ── Persado: connection, score, optimize (website flow) ──────────
-
-async function persadoTest() {
-  const key = await persadoKey();
-  try {
-    const r = await API.testConnection({ key });
-    await recordUsage({ type: 'connection', ok: true, message: 'Connected', usageHeaders: r.usageHeaders });
-    return { ok: true, channels: r.channels, limits: r.limits, usage: await usageView() };
-  } catch (e) {
-    if (key) await recordUsage({ type: 'connection', ok: false, kind: e.kind, message: API.describeError(e), usageHeaders: e.usageHeaders });
-    return { ...errOut(e), usage: await usageView() };
-  }
-}
-
-/** Brand sent as account.name: Settings value, else what the caller derived. */
-async function accountFor(fallbackName) {
-  const s = await persadoSettings();
-  return { accountName: (s.brand || fallbackName || '').trim(), industry: s.industry || undefined };
-}
-
-const WEB_TOUCHPOINT = { cta: 'cta', headline: 'headline', body: 'body' };
-
-async function persadoWeb(op, msg) {
-  const key = await persadoKey();
-  const touchpoint = WEB_TOUCHPOINT[msg.kind] || 'headline';
-  const account = await accountFor(msg.brand);
-  const base = { platform: 'web', pageUrl: msg.pageUrl || null };
-  const cost = API.COSTS[op];
-  try {
-    if (!account.accountName) throw new API.PersadoError(API.KIND.INVALID_REQUEST, 'Persado needs a brand name. Add it in Settings.');
-    const common = { key, channel: 'WEB_PAGE', ...account };
-    const out = op === 'score'
-      ? await API.score({ ...common, variants: [{ [touchpoint]: msg.text }] })
-      : await API.optimize({ ...common, variant: { [touchpoint]: msg.text },
-          alwaysUse: self.PERSADO_GUARD.protectedTokens(msg.text).filter(t => t.length <= API.LIMITS.MAX_ALWAYS_USE_LENGTH).slice(0, API.LIMITS.MAX_ALWAYS_USE),
-          context: msg.context ? String(msg.context).slice(0, 2000) : undefined });
-    const r = out.result;
-    await recordUsage({ type: 'run', op, ok: true, cost, usageHeaders: out.usageHeaders });
-    const scored = op === 'score' ? r.variants[0] : r.control;
-    const top = r.alternatives[0] || null;
-    await activity.add({ ...base, action: op, status: op === 'optimize' && !top ? 'no_change' : 'ok', source: r.source,
-      persado: { jobId: r.jobId, requestId: r.requestId, kind: op, channel: 'WEB_PAGE', controlPerformance: scored?.performance ?? null,
-        chosenPerformance: top?.performance ?? null, chosenRank: top?.rank ?? null, notice: r.notice },
-      changes: op === 'optimize' && top ? [{ field: touchpoint, touchpoint, original: msg.text, optimized: top.touchpoints[touchpoint] || top.text, applied: false }] : [],
-      message: op === 'score' ? 'Scored on the page' : top ? 'Optimized on the page (preview only)' : (r.notice?.message || 'No alternatives returned') });
-    return { ok: true, touchpoint, result: r, usage: await usageView() };
-  } catch (e) {
-    await recordUsage({ type: 'run', op, ok: false, error: { kind: e.kind, message: e.message }, charged: !!e.jobId, cost, usageHeaders: e.usageHeaders });
-    await activity.add({ ...base, action: op, status: 'failed', error: { kind: e.kind, message: API.describeError(e) },
-      persado: { jobId: e.jobId || null, requestId: e.requestId || null, kind: op, channel: 'WEB_PAGE' } });
-    return { ...errOut(e), usage: await usageView() };
-  }
-}
-
-// ── Mailchimp ────────────────────────────────────────────────────
-
-async function mcAdapter() {
-  const key = await readLocal(KEYS.MC_API_KEY, '');
-  const s = await mcSettings();
-  return MC.create({ apiKey: key, serverPrefix: s.serverPrefix, allowBodyOnBuilder: !!s.allowBodyOnBuilder });
-}
-
-async function mcTest() {
-  try {
-    const a = await mcAdapter();
-    const r = await a.test();
-    const s = await mcSettings();
-    await local.set({ [KEYS.MC_SETTINGS]: { ...s, accountName: r.accountName, dc: r.dc, connectedAt: Date.now(), lastError: null } });
-    await activity.add({ platform: 'mailchimp', action: 'connect', status: 'ok', message: `Connected to ${r.accountName || 'Mailchimp'} (${r.dc})` });
-    return { ok: true, accountName: r.accountName, dc: r.dc };
-  } catch (e) {
-    const s = await mcSettings();
-    await local.set({ [KEYS.MC_SETTINGS]: { ...s, connectedAt: null, lastError: e.message } });
-    return errOut(e);
-  }
-}
-
-async function mcDisconnect() {
-  await local.remove([KEYS.MC_API_KEY]);
-  const s = await mcSettings();
-  await local.set({ [KEYS.MC_SETTINGS]: { ...s, accountName: '', dc: '', connectedAt: null, lastError: null } });
-  await activity.add({ platform: 'mailchimp', action: 'connect', status: 'ok', message: 'Disconnected; the Mailchimp key was removed from this browser' });
-  return { ok: true };
-}
-
-async function snapshots() { return readLocal(KEYS.MC_SNAPSHOTS, {}); }
-async function saveSnapshot(id, snap) {
-  const all = await snapshots();
-  all[id] = snap;
-  // Keep the 20 most recent campaigns.
-  const keep = Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 20);
-  await local.set({ [KEYS.MC_SNAPSHOTS]: Object.fromEntries(keep) });
-}
-
-/** What the panel and overlay need to draw a campaign's state. Starts no run. */
-async function mcStatus(msg) {
-  const key = await readLocal(KEYS.MC_API_KEY, '');
-  const s = await mcSettings();
-  const out = { ok: true, connected: !!(key && s.connectedAt), accountName: s.accountName || '', persadoKey: !!(await persadoKey()),
-    busy: [...mcBusy], usage: await usageView() };
-  if (!out.connected || !msg.webId) return out;
-  try {
-    const a = await mcAdapter();
-    const c = await a.findByWebId(msg.webId);
-    out.campaign = c;
-    if (c) {
-      const snap = (await snapshots())[c.id];
-      out.optimizedAt = snap?.appliedAt || null;
-      out.canRevert = !!snap;
-      out.activity = await activity.list({ platform: 'mailchimp', campaignId: c.id, limit: 5 });
-    }
-  } catch (e) { out.campaignError = errOut(e).error; }
-  return out;
-}
-
-const mcBusy = new Set();
-
-async function mcOptimize(msg, tabId) {
-  const s = await persadoSettings();
-  const ms = await mcSettings();
-  let id = msg.campaignId;
-  const progress = (step, label) => {
-    const m = { type: MSG.AUTOPILOT_PROGRESS, platform: 'mailchimp', campaignId: id, step, label };
-    broadcast(m);
-  };
-  try {
-    const adapter = await mcAdapter();
-    if (!id && msg.webId) id = (await adapter.findByWebId(msg.webId))?.id;
-    if (!id) throw new MC.MailchimpError('not_found', 'This campaign is not a draft in the connected Mailchimp account.');
-    if (mcBusy.has(id)) return { ok: false, kind: 'busy', error: 'This draft is already being optimized.' };
-    const key = await persadoKey();
-    if (!key) throw new API.PersadoError(API.KIND.NO_KEY, 'No Persado API key');
-    // Duplicate protection: an untouched, already-optimized draft is not re-run
-    // (it would spend 5 runs to rewrite Persado's own copy) unless asked.
-    const snap = (await snapshots())[id];
-    if (snap?.appliedFingerprint && !msg.force) {
-      const now = await adapter.read(id).catch(() => null);
-      if (now && now.fingerprint === snap.appliedFingerprint) {
-        return { ok: false, kind: 'already_optimized', error: 'This draft is already optimized and has not changed since. Revert it, or run again anyway.' };
-      }
-    }
-    mcBusy.add(id);
-    setSessionState('working');
-    const result = await self.PERSADO_OPTIMIZER.optimizeDraft({ id }, {
-      adapter, persadoKey: key,
-      account: { accountName: (s.brand || ms.accountName || '').trim(), industry: s.industry || undefined },
-      onStep: progress,
-      usage: recordUsage,
-      log: (e) => activity.add(e),
-      snapshot: (draft, accepted) => saveSnapshot(draft.ref.id, {
-        id: draft.ref.id, webId: draft.ref.webId, at: Date.now(), settings: { subject_line: draft.settings.subject_line, preview_text: draft.settings.preview_text },
-        html: draft.html, bodyWritten: accepted.some(c => c.location === 'html'), appliedFingerprint: null, appliedAt: null }),
-    });
-    if (result.status === 'ok' || result.status === 'partial' || result.status === 'unverified') {
-      const after = await adapter.read(id).catch(() => null);
-      const all = await snapshots();
-      if (all[id]) { all[id].appliedFingerprint = after?.fingerprint || null; all[id].appliedAt = Date.now(); await local.set({ [KEYS.MC_SNAPSHOTS]: all }); }
-    }
-    setSessionState('ready');
-    return { ok: true, ...result, usage: await usageView() };
-  } catch (e) {
-    setSessionState('ready');
-    progress('error', explain(e));
-    if (!(e instanceof API.PersadoError)) await activity.add({ platform: 'mailchimp', action: 'optimize', status: 'failed', campaignId: id || null, error: { kind: e.kind, message: e.message } });
-    return { ...errOut(e), usage: await usageView() };
-  } finally {
-    if (id) mcBusy.delete(id);
-  }
-}
-
-async function mcRevert(msg) {
-  const id = msg.campaignId;
-  const snap = (await snapshots())[id];
-  if (!snap) return { ok: false, error: 'There is no saved original for this campaign.' };
-  try {
-    const a = await mcAdapter();
-    await a.restore(snap);
-    const all = await snapshots(); delete all[id]; await local.set({ [KEYS.MC_SNAPSHOTS]: all });
-    await activity.add({ platform: 'mailchimp', action: 'revert', status: 'ok', campaignId: id, campaignWebId: snap.webId,
-      message: 'Restored the subject line, preview text' + (snap.bodyWritten ? ' and body' : '') + ' saved before optimization' });
-    broadcast({ type: MSG.AUTOPILOT_PROGRESS, platform: 'mailchimp', campaignId: id, step: 'reverted', label: 'Original restored' });
-    return { ok: true };
-  } catch (e) {
-    await activity.add({ platform: 'mailchimp', action: 'revert', status: 'failed', campaignId: id, error: { kind: e.kind, message: e.message } });
-    return errOut(e);
-  }
-}
-
-async function mcTestSend(msg) {
-  try {
-    const a = await mcAdapter();
-    const s = await mcSettings();
-    const r = await a.sendTest(msg.campaignId, String(s.testEmails || '').split(/[,\s]+/));
-    await activity.add({ platform: 'mailchimp', action: 'test_send', status: 'ok', campaignId: msg.campaignId, message: `Mailchimp test e-mail sent to ${r.sentTo.length} address(es)` });
-    return { ok: true, sentTo: r.sentTo.length };
-  } catch (e) {
-    await activity.add({ platform: 'mailchimp', action: 'test_send', status: 'failed', campaignId: msg.campaignId, error: { kind: e.kind, message: e.message } });
-    return errOut(e);
-  }
-}
-
-// The Mailchimp overlay is a content script: it may ask for status (which
-// carries the campaign's activity), optimize and revert — and only from a Mailchimp admin page. Every
-// other message here is panel-only.
-const OVERLAY_ALLOWED = new Set([MSG.MC_STATUS, MSG.MC_OPTIMIZE, MSG.MC_REVERT]);
+// ═══ Authenticated local integration relay ═══════════════════════
+// Provider credentials are read only by gateway/integrations.mjs. A pairing
+// token authorizes this browser profile to use the local development gateway.
+const OVERLAY_ALLOWED = new Set([MSG.MC_STATUS]);
 function senderAllowed(msg, sender) {
   if (sender.id !== chrome.runtime.id) return false;
-  // Our own pages (side panel, options — even when opened in a tab) are trusted.
-  // Content scripts report the PAGE's URL, so they never match this origin.
   const own = `chrome-extension://${chrome.runtime.id}/`;
-  if (!sender.tab || String(sender.url || '').startsWith(own) || sender.origin === own.slice(0, -1)) return true;
+  if (String(sender.url || '').startsWith(own) || sender.origin === own.slice(0, -1)) return true;
+  // A runtime message without a tab is from our extension, never a web page.
+  if (!sender.tab && !sender.url) return true;
   let host = '';
-  try { host = new URL(sender.url || sender.tab.url || '').hostname; } catch {}
+  try { host = new URL(sender.url || sender.tab?.url || '').hostname; } catch {}
   return OVERLAY_ALLOWED.has(msg.type) && /(^|\.)admin\.mailchimp\.com$/i.test(host);
 }
-
+const INTEGRATION_MESSAGES = new Set([
+  MSG.PERSADO_TEST, MSG.PERSADO_SCORE, MSG.PERSADO_OPTIMIZE, MSG.USAGE_GET, MSG.USAGE_RESET,
+  MSG.MC_TEST, MSG.MC_DISCONNECT, MSG.MC_STATUS, MSG.MC_DRAFTS, MSG.MC_SCORE,
+  MSG.MC_OPTIMIZE, MSG.MC_APPLY, MSG.MC_REVERT, MSG.MC_TEST_SEND,
+]);
+async function integration(msg) {
+  const stored = await chrome.storage.local.get([KEYS.PROXY_TOKEN, KEYS.PERSADO_SETTINGS]);
+  const token = stored[KEYS.PROXY_TOKEN];
+  if (!token) return { ok: false, kind: 'not_paired', error: 'Pair this extension with the local gateway in Settings. Provider keys belong in the gateway environment.' };
+  try {
+    const response = await fetch(GATEWAY_URL + ENDPOINTS.INTEGRATIONS, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Persado-Token': token },
+      body: JSON.stringify({ ...msg, settings: stored[KEYS.PERSADO_SETTINGS] || {} }),
+    });
+    const out = await response.json();
+    if (response.status === 404) return { ok: false, kind: 'gateway_old', error: 'Restart the Persado gateway with the updated code and provider environment.' };
+    if (out.ok && (msg.type === MSG.PERSADO_TEST || msg.type === MSG.MC_TEST)) {
+      // Remove a legacy browser-stored provider key only after the replacement
+      // environment credential has been successfully verified.
+      await chrome.storage.local.remove(msg.type === MSG.PERSADO_TEST ? KEYS.API_KEY : KEYS.MC_API_KEY);
+    }
+    if (out.usage) relay({ type: MSG.USAGE_UPDATED, usage: out.usage });
+    return out;
+  } catch { return { ok: false, kind: 'gateway_down', error: 'Cannot reach the local Persado gateway. Start it with provider credentials and the pairing token.' }; }
+}
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  const handlers = {
-    [MSG.PERSADO_TEST]: () => persadoTest(),
-    [MSG.PERSADO_SCORE]: () => persadoWeb('score', msg),
-    [MSG.PERSADO_OPTIMIZE]: () => persadoWeb('optimize', msg),
-    [MSG.USAGE_GET]: () => usageView(),
-    [MSG.USAGE_RESET]: async () => { await usageStore.reset(await currentFingerprint()); const u = await usageView(); broadcast({ type: MSG.USAGE_UPDATED, usage: u }); return u; },
-    [MSG.MC_TEST]: () => mcTest(),
-    [MSG.MC_DISCONNECT]: () => mcDisconnect(),
-    [MSG.MC_STATUS]: () => mcStatus(msg),
-    [MSG.MC_DRAFTS]: async () => { try { return { ok: true, drafts: await (await mcAdapter()).listDrafts(25) }; } catch (e) { return errOut(e); } },
-    [MSG.MC_OPTIMIZE]: () => mcOptimize(msg, sender.tab?.id),
-    [MSG.MC_REVERT]: () => mcRevert(msg),
-    [MSG.MC_TEST_SEND]: () => mcTestSend(msg),
-  };
-  const h = handlers[msg?.type];
-  if (!h) return false;
+  if (!INTEGRATION_MESSAGES.has(msg?.type)) return false;
   if (!senderAllowed(msg, sender)) { sendResponse({ ok: false, error: 'Not allowed from this context.' }); return false; }
-  Promise.resolve().then(h).then(sendResponse).catch(e => sendResponse(errOut(e)));
+  integration(msg).then(sendResponse).catch(() => sendResponse({ ok: false, error: 'The integration request failed.' }));
   return true;
 });

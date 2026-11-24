@@ -1,0 +1,199 @@
+// Provider fixtures exercise contracts only. Live verification is reported separately.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import http from 'node:http';
+import { createIntegrations, handleIntegrationRequest } from '../../gateway/integrations.mjs';
+import { json } from './helpers.mjs';
+
+function setup(opts = {}) {
+  const path = join(mkdtempSync(join(tmpdir(), 'persado-integrations-')), 'state.json');
+  const c = { id: 'abc', web_id: 42, status: 'save', type: 'regular', content_type: 'multichannel',
+    settings: { title: 'Spring campaign', subject_line: 'Spring favourites just arrived', preview_text: 'Find your new seasonal favourites', from_name: 'Acme', reply_to: 'hello@example.test' } };
+  const calls = [];
+  const html = '<h1>Spring favourites for your home</h1><p>Make room for new ideas and something beautiful this season.</p><a class="mcnButton" href="https://example.test">Shop now</a><p>*|UNSUB|* Privacy policy</p>';
+  const f = async (url, init = {}) => {
+    const u = new URL(url), body = init.body ? JSON.parse(init.body) : null, method = init.method || 'GET';
+    calls.push({ url: u.href, body, method });
+    if (u.hostname === 'api.persado.com') {
+      if (opts.rejectKey) return json(401, { error: { message: 'invalid key' } });
+      if (opts.exhausted) return json(429, { error: { code: 'quota_exhausted' } });
+      if (opts.transport) throw new Error('socket lost');
+      if (u.pathname.endsWith('/catalogue')) return json(200, { channels: [{ key: 'EMAIL_SUBJECT_BODY' }] });
+      if (opts.delay) await new Promise(r => setTimeout(r, 15));
+      if (u.pathname.endsWith('/score')) return json(200, { id: 'job_score', kind: 'score', status: 'completed', result: {
+        variants: [{ performance: 63, touchpoints: body.variants[0] }] } });
+      if (u.pathname.endsWith('/optimize')) {
+        const field = Object.keys(body.variant)[0];
+        return json(200, { id: 'job_optimize', kind: 'optimize', status: 'completed', result: {
+          control: { performance: 63 }, alternatives: [{ rank: 1, touchpoints: { [field]: opts.unsafe ? 'Save 90% today' : 'Explore fresh spring favourites' } }] } });
+      }
+    }
+    if (u.pathname.endsWith('/ping')) return json(200, { health_status: 'ok' });
+    if (u.pathname === '/3.0/') return json(200, { account_name: 'Acme' });
+    if (u.pathname === '/3.0/campaigns') return json(200, { campaigns: opts.ambiguous ? [c, { ...c, id: 'other' }] : [c], total_items: 1 });
+    if (u.pathname.endsWith('/content')) return json(200, { html });
+    if (u.pathname === '/3.0/campaigns/abc') {
+      if (method === 'PATCH') {
+        if (!opts.ignorePatch) Object.assign(c.settings, body.settings);
+        if (opts.failPatch) return json(400, { title: 'Update rejected' });
+      }
+      return json(200, c);
+    }
+    return json(404, { title: 'Unexpected fixture route' });
+  };
+  const env = { PERSADO_API_KEY: 'fixture-persado', MAILCHIMP_API_KEY: 'fixture-mailchimp-us21', PERSADO_PROXY_TOKEN: 't'.repeat(64) };
+  const service = createIntegrations({ env, fetchImpl: f, statePath: path });
+  const settings = { brand: 'Acme', industry: 'RETAIL_ECOMMERCE' };
+  const send = msg => service.dispatch({ settings, ...msg });
+  const field = (type, name = 'subject_line') => ({ type, campaignId: 'abc', webId: 42, field: name, text: c.settings[name] });
+  return { send, field, c, calls, env, service, path, f, settings };
+}
+
+async function optimize(s, name = 'subject_line') {
+  if (name === 'subject_line') assert.equal((await s.send(s.field('MC_SCORE', name))).ok, true);
+  const out = await s.send(s.field('MC_OPTIMIZE', name));
+  assert.equal(out.ok, true, out.error);
+  return out;
+}
+
+test('detects actual draft content without spending credits; builder blocks exclude legal copy', async () => {
+  const s = setup();
+  const r = await s.send({ type: 'MC_STATUS', webId: 42 });
+  assert.equal(r.campaign.id, 'abc');
+  assert.equal(r.campaign.subject, s.c.settings.subject_line);
+  assert.equal(r.campaign.previewText, s.c.settings.preview_text);
+  assert.equal(r.usage.requests, 0);
+  assert.ok(r.campaign.fields.some(f => f.touchpoint === 'cta' && f.applyDisabledReason));
+  assert.ok(!r.campaign.fields.some(f => f.text.includes('UNSUB')));
+  assert.equal(s.calls.filter(c => c.url.includes('api.persado')).length, 0);
+  assert.equal((await s.send({ type: 'MC_STATUS', webId: 99 })).kind, 'not_found');
+  assert.equal((await s.send({ type: 'MC_STATUS', campaignId: 'wrong', webId: 42 })).kind, 'not_found');
+});
+
+test('ambiguous identifiers never select a draft', async () => {
+  const s = setup({ ambiguous: true });
+  assert.equal((await s.send({ type: 'MC_STATUS', webId: 42 })).kind, 'ambiguous');
+});
+
+test('manual score and optimize are separate, concurrent duplicate scoring coalesces and survives restart', async () => {
+  const s = setup({ delay: true });
+  assert.equal((await s.send(s.field('MC_OPTIMIZE'))).kind, 'score_required');
+  const scores = await Promise.all([s.send(s.field('MC_SCORE')), s.send(s.field('MC_SCORE'))]);
+  assert.ok(scores.every(r => r.ok));assert.equal(scores[0].result.variants[0].performance, 63);
+  assert.equal(s.calls.filter(c => c.url.includes('/v1/score')).length, 1);
+  const restarted = createIntegrations({ env: s.env, fetchImpl: s.f, statePath: s.path });
+  const cached = await restarted.dispatch({ ...s.field('MC_SCORE'), settings: s.settings });
+  assert.equal(cached.cached, true);
+  assert.equal(s.calls.filter(c => c.url.includes('/v1/score')).length, 1);
+  const out = await optimize(s);
+  assert.equal(out.result.alternatives[0].performance, null, 'never invent a revised score');
+  assert.equal(s.calls.filter(c => c.method === 'PATCH').length, 0, 'Optimize is preview only');
+  assert.equal((await s.send({ type: 'USAGE_GET' })).used, 6);
+  assert.equal(statSync(s.path).mode & 0o777, 0o600);
+  assert.ok(!readFileSync(s.path, 'utf8').includes(s.env.PERSADO_API_KEY));
+});
+
+test('apply writes only the chosen setting, reads it back, deduplicates, and undo preserves unrelated edits', async () => {
+  const s = setup(), before = { ...s.c.settings };
+  const out = await optimize(s);
+  const msg = { type: 'MC_APPLY', campaignId: 'abc', webId: 42, cacheId: out.cacheId };
+  const applied = await s.send(msg);
+  assert.equal(applied.verified, true, applied.error);
+  assert.equal(s.c.settings.subject_line, 'Explore fresh spring favourites');
+  assert.deepEqual(s.calls.find(c => c.method === 'PATCH').body, { settings: { subject_line: 'Explore fresh spring favourites' } });
+  assert.equal(s.c.settings.preview_text, before.preview_text);
+  assert.equal((await s.send(msg)).duplicate, true);
+  assert.equal(s.calls.filter(c => c.method === 'PATCH').length, 1);
+  s.c.settings.preview_text = 'A manual change elsewhere';
+  const undo = await s.send({ type: 'MC_REVERT', campaignId: 'abc', undoId: applied.undoId });
+  assert.equal(undo.verified, true, undo.error);
+  assert.equal(s.c.settings.subject_line, before.subject_line);
+  assert.equal(s.c.settings.preview_text, 'A manual change elsewhere');
+});
+
+test('preview text can be optimized and independently applied', async () => {
+  const s = setup(), subject = s.c.settings.subject_line;
+  const out = await optimize(s, 'preview_text');
+  const r = await s.send({ type: 'MC_APPLY', campaignId: 'abc', cacheId: out.cacheId });
+  assert.equal(r.verified, true); assert.equal(s.c.settings.subject_line, subject);
+  assert.equal(s.c.settings.preview_text, 'Explore fresh spring favourites');
+});
+
+test('changed, sent, and unsafe drafts are not overwritten; undo refuses a later edit', async () => {
+  for (const mode of ['changed', 'sent', 'unsafe']) {
+    const s = setup({ unsafe: mode === 'unsafe' }), out = await optimize(s);
+    if (mode === 'changed') s.c.settings.subject_line = 'Manual edit';
+    if (mode === 'sent') s.c.status = 'sent';
+    const r = await s.send({ type: 'MC_APPLY', campaignId: 'abc', cacheId: out.cacheId });
+    assert.equal(r.ok, false);assert.equal(s.calls.filter(c => c.method === 'PATCH').length, 0);
+  }
+  const s = setup(), out = await optimize(s);
+  const applied = await s.send({ type: 'MC_APPLY', campaignId: 'abc', cacheId: out.cacheId });
+  s.c.settings.subject_line = 'A later manual subject';
+  assert.equal((await s.send({ type: 'MC_REVERT', campaignId: 'abc', undoId: applied.undoId })).kind, 'changed');
+  assert.equal(s.c.settings.subject_line, 'A later manual subject');
+});
+
+test('body results cannot be applied, and sending is unavailable', async () => {
+  const s = setup();
+  const st = await s.send({ type: 'MC_STATUS', webId: 42 });
+  const f = st.campaign.fields.find(f => f.location === 'html');
+  const out = await s.send({ type: 'MC_OPTIMIZE', campaignId: 'abc', field: f.field, text: f.text });
+  assert.equal(out.ok, true);
+  assert.equal((await s.send({ type: 'MC_APPLY', campaignId: 'abc', cacheId: out.cacheId })).kind, 'body_read_only');
+  assert.equal((await s.send({ type: 'MC_TEST_SEND', campaignId: 'abc' })).kind, 'unsupported');
+  assert.ok(!s.calls.some(c => c.method === 'PUT' || c.url.includes('/actions/')));
+});
+
+test('verification failure retains undo receipt and does not claim success', async () => {
+  const s = setup({ ignorePatch: true }), out = await optimize(s);
+  const r = await s.send({ type: 'MC_APPLY', campaignId: 'abc', cacheId: out.cacheId });
+  assert.equal(r.kind, 'unverified');
+  const st = await s.send({ type: 'MC_STATUS', webId: 42 });
+  assert.equal(st.undo.length, 1);
+});
+
+test('invalid keys and insufficient credits are actionable; uncertain paid requests are not resubmitted', async () => {
+  const invalid = setup({ rejectKey: true });
+  assert.equal((await invalid.send(invalid.field('MC_SCORE'))).kind, 'invalid_key');
+  const quota = setup({ exhausted: true });
+  assert.equal((await quota.send(quota.field('MC_SCORE'))).kind, 'quota_exhausted');
+  assert.equal((await quota.send(quota.field('MC_SCORE'))).kind, 'quota_exhausted');
+  assert.equal(quota.calls.filter(c => c.url.includes('/v1/score')).length, 1);
+  const uncertain = setup({ transport: true });
+  await uncertain.send(uncertain.field('MC_SCORE'));
+  assert.equal((await uncertain.send(uncertain.field('MC_SCORE'))).kind, 'pending');
+  assert.equal(uncertain.calls.filter(c => c.url.includes('/v1/score')).length, 1);
+});
+
+test('website score and optimize still use real provider client schemas and cache unchanged copy', async () => {
+  const s = setup();
+  const msg = { type: 'PERSADO_SCORE', kind: 'headline', text: 'Find something you love' };
+  const r = await s.send(msg);assert.equal(r.result.variants[0].performance, 63);
+  await s.send(msg);
+  assert.equal(s.calls.filter(c => c.url.includes('/v1/score')).length, 1);
+  const out = await s.send({ ...msg, type: 'PERSADO_OPTIMIZE' });
+  assert.equal(out.result.alternatives[0].touchpoints.headline, 'Explore fresh spring favourites');
+  assert.equal(s.calls.find(c => c.url.includes('/v1/optimize')).body.channel, 'WEB_PAGE');
+});
+
+test('HTTP gateway rejects unpaired requests, web origins and rebinding hosts', async t => {
+  const s = setup();
+  const server = http.createServer((req, res) => handleIntegrationRequest(req, res, s.service, s.env));
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  t.after(() => server.close());
+  const url = `http://127.0.0.1:${server.address().port}/v1/integrations`;
+  const init = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Persado-Token': s.env.PERSADO_PROXY_TOKEN }, body: JSON.stringify({ type: 'USAGE_GET' }) };
+  assert.equal((await fetch(url, { ...init, headers: { 'Content-Type': 'application/json' } })).status, 401);
+  assert.equal((await fetch(url, { ...init, headers: { ...init.headers, Origin: 'https://evil.test' } })).status, 403);
+  const rebound = await new Promise((resolve, reject) => {
+    const req = http.request(url, { method: 'POST', headers: { ...init.headers, Host: 'evil.test' } }, res => { res.resume(); resolve(res.statusCode); });
+    req.on('error', reject); req.end(init.body);
+  });
+  assert.equal(rebound, 403);
+  const r = await fetch(url, init);assert.equal(r.status, 200);
+  assert.ok(!(await r.text()).includes(s.env.PERSADO_API_KEY));
+});

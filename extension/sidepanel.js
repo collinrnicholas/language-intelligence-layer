@@ -49,12 +49,12 @@ const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnR
 const btnBackToScan=$('btnBackToScan'),pnlSettings=$('panelSettings'),btnSettings=$('btnSettings'),btnBackFromSettings=$('btnBackFromSettings'),apiKeyInput=$('apiKeyInput'),btnSaveKey=$('btnSaveKey'),btnClearKey=$('btnClearKey'),apiKeyState=$('apiKeyState'),btnOpenOptions=$('btnOpenOptions'),pickBar=$('pickBar'),btnCancelPick=$('btnCancelPick'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
 
 const pnlMailchimp=$('panelMailchimp'),mcSub=$('mcSub'),mcList=$('mcList'),mcDetail=$('mcDetail'),mcSteps=$('mcSteps'),mcResult=$('mcResult'),mcActivity=$('mcActivity');
-const btnMcRefresh=$('btnMcRefresh'),btnMcSettings=$('btnMcSettings'),btnMcOptimize=$('btnMcOptimize'),btnMcTestSend=$('btnMcTestSend'),btnMcRevert=$('btnMcRevert');
+const btnMcRefresh=$('btnMcRefresh'),btnMcSettings=$('btnMcSettings');
 const usageDot=$('usageDot'),usageConn=$('usageConn'),usageNum=$('usageNum'),usageFill=$('usageFill'),usageOpen=$('usageOpen');
 const brandInput=$('brandInput'),industrySelect=$('industrySelect'),btnTestPersado=$('btnTestPersado'),persadoConnState=$('persadoConnState');
 const useConn=$('useConn'),useBal=$('useBal'),useBalLbl=$('useBalLbl'),useUsed=$('useUsed'),useReq=$('useReq'),useScore=$('useScore'),useOpt=$('useOpt'),useLast=$('useLast'),useNote=$('useNote');
 const btnRefreshUsage=$('btnRefreshUsage'),btnResetUsage=$('btnResetUsage');
-const mcKeyInput=$('mcKeyInput'),mcPrefixInput=$('mcPrefixInput'),mcTestEmails=$('mcTestEmails'),mcAllowBody=$('mcAllowBody'),btnMcConnect=$('btnMcConnect'),btnMcDisconnect=$('btnMcDisconnect'),mcState=$('mcState');
+const btnMcConnect=$('btnMcConnect'),mcState=$('mcState');
 
 const LISTENING='Listening — describe the problem and the audience.';
 const PAUSED_MSG='Paused — nothing is being recorded.';
@@ -721,62 +721,41 @@ scanList.addEventListener('keydown',(e)=>{
 // with no text, an element behind a hover state. Selecting text first picks that
 // phrase instead of the whole block.
 
-// ─── Settings: Persado key, brand, usage, Mailchimp ─────────────
-// The panel WRITES keys to chrome.storage.local and never reads them back into
-// the UI or into a request: every Persado and Mailchimp call is made by the
-// service worker (src/background.js), which is the only reader. `apiKey` below is
-// only a presence flag for the status line.
-let apiKey=null;
+// ─── Settings: local gateway pairing and non-secret request settings ───
+let apiKey=false;
 async function loadApiKey(){
-  try{apiKey=!!(await chrome.storage.local.get(KEYS.API_KEY))[KEYS.API_KEY];}catch(e){apiKey=false;}
-  return apiKey;
+  const u=await worker({type:MSG.USAGE_GET});apiKey=!!u.hasKey;return apiKey;
 }
 function renderKeyState(msg,kind){
-  if(!apiKeyState)return;
   apiKeyState.className='set-state'+(kind?' '+kind:'');
-  apiKeyState.textContent=msg||(apiKey?'Key saved on this device.':'No key saved yet.');
+  apiKeyState.textContent=msg||(apiKey?'Persado credential configured in gateway.':'Set PERSADO_API_KEY in the gateway environment.');
 }
 let settingsReturn='scan';
 async function openSettings(){
   if(uiState&&uiState!=='settings')settingsReturn=uiState==='mailchimp'?'mailchimp':'scan';
-  if(apiKeyInput)apiKeyInput.value='';
-  await loadApiKey();renderKeyState();
-  await loadSettingsForm();
-  renderUsage(await worker({type:MSG.USAGE_GET}));
-  setUiState('settings');
+  apiKeyInput.value='';await loadApiKey();renderKeyState();await loadSettingsForm();
+  renderUsage(await worker({type:MSG.USAGE_GET}));setUiState('settings');
 }
 async function leaveSettings(){
-  // Back goes to the front door for the tab that is active NOW (it may have
-  // changed to or from Mailchimp while Settings was open).
   let onMc=settingsReturn==='mailchimp';
   try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(t?.url)onMc=isMailchimpUrl(t.url);}catch{}
   if(onMc){showMailchimp();return;}
   if(scanResult){setUiState('scan');renderScanList();if(resMaterialIndex>=0)selectMaterial(resMaterialIndex);}
   else{setUiState('scan');autoScan();}
 }
-if(btnSettings)btnSettings.addEventListener('click',openSettings);
-if(btnBackFromSettings)btnBackFromSettings.addEventListener('click',leaveSettings);
-if(usageOpen)usageOpen.addEventListener('click',()=>{if(uiState!=='settings')openSettings();});
-if(btnOpenOptions)btnOpenOptions.addEventListener('click',()=>{
-  if(chrome.runtime.openOptionsPage)chrome.runtime.openOptionsPage();
+btnSettings.addEventListener('click',openSettings);
+btnBackFromSettings.addEventListener('click',leaveSettings);
+usageOpen.addEventListener('click',()=>{if(uiState!=='settings')openSettings();});
+btnOpenOptions.addEventListener('click',()=>chrome.runtime.openOptionsPage?.());
+btnSaveKey.addEventListener('click',async()=>{
+  const token=apiKeyInput.value.trim();
+  if(token.length<32){renderKeyState('Enter the gateway pairing token (at least 32 characters).','err');return;}
+  await chrome.storage.local.set({[KEYS.PROXY_TOKEN]:token});apiKeyInput.value='';
+  const r=await testPersado();await loadApiKey();renderKeyState(r.ok?'Gateway paired and Persado verified.':r.error,r.ok?'on':'err');
 });
-if(btnSaveKey)btnSaveKey.addEventListener('click',async()=>{
-  const v=(apiKeyInput.value||'').trim();
-  if(!v){renderKeyState('Paste a key first.','err');apiKeyInput.focus();return;}
-  try{
-    await chrome.storage.local.set({[KEYS.API_KEY]:v});
-    apiKey=true;apiKeyInput.value='';
-    renderKeyState('Saved. Testing the connection…','on');
-    await testPersado();
-  }catch(e){renderKeyState('Could not save the key.','err');}
-});
-if(btnClearKey)btnClearKey.addEventListener('click',async()=>{
-  try{
-    await chrome.storage.local.remove(KEYS.API_KEY);
-    apiKey=false;if(apiKeyInput)apiKeyInput.value='';
-    renderKeyState('Key removed.','');
-    renderUsage(await worker({type:MSG.USAGE_GET}));
-  }catch(e){renderKeyState('Could not remove the key.','err');}
+btnClearKey.addEventListener('click',async()=>{
+  await chrome.storage.local.remove(KEYS.PROXY_TOKEN);apiKey=false;
+  renderKeyState('Gateway unpaired. Provider credentials remain in your secret manager.');
 });
 
 /** Message the worker; a dead worker or a reloaded extension reads as an error, not a hang. */
@@ -805,58 +784,27 @@ if(industrySelect&&industrySelect.options.length<2){
   for(const v of INDUSTRY_LIST){const o=document.createElement('option');o.value=v;o.textContent=v.toLowerCase().replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());industrySelect.appendChild(o);}
 }
 async function readSettings(){
-  const r=await chrome.storage.local.get([KEYS.PERSADO_SETTINGS,KEYS.MC_SETTINGS,KEYS.MC_API_KEY]).catch(()=>({}));
-  return{persado:{brand:'',industry:'',...(r[KEYS.PERSADO_SETTINGS]||{})},mc:{serverPrefix:'',allowBodyOnBuilder:false,testEmails:'',...(r[KEYS.MC_SETTINGS]||{})},mcKey:!!r[KEYS.MC_API_KEY]};
+  const r=await chrome.storage.local.get(KEYS.PERSADO_SETTINGS).catch(()=>({}));
+  return {persado:{brand:'',industry:'',...(r[KEYS.PERSADO_SETTINGS]||{})}};
 }
 async function loadSettingsForm(){
-  const s=await readSettings();
-  brandInput.value=s.persado.brand||'';industrySelect.value=s.persado.industry||'';
-  mcPrefixInput.value=s.mc.serverPrefix||'';mcTestEmails.value=s.mc.testEmails||'';mcAllowBody.checked=!!s.mc.allowBodyOnBuilder;
-  mcKeyInput.value='';
-  renderMcState(s);
-}
-function renderMcState(s){
-  if(s.mcKey&&s.mc.connectedAt){mcState.className='set-state on';mcState.textContent=`Connected to ${s.mc.accountName||'Mailchimp'} (${s.mc.dc||s.mc.serverPrefix}).`;}
-  else if(s.mc.lastError){mcState.className='set-state err';mcState.textContent=s.mc.lastError;}
-  else if(s.mcKey){mcState.className='set-state';mcState.textContent='Key saved, not yet verified.';}
-  else{mcState.className='set-state';mcState.textContent='Not connected.';}
+  const s=await readSettings();brandInput.value=s.persado.brand;industrySelect.value=s.persado.industry;
+  mcState.textContent='Mailchimp credentials are configured in the gateway environment.';
 }
 async function savePersadoSettings(){
-  const s=await readSettings();
-  await chrome.storage.local.set({[KEYS.PERSADO_SETTINGS]:{...s.persado,brand:brandInput.value.trim(),industry:industrySelect.value}});
+  await chrome.storage.local.set({[KEYS.PERSADO_SETTINGS]:{brand:brandInput.value.trim(),industry:industrySelect.value}});
 }
 brandInput.addEventListener('change',savePersadoSettings);
 industrySelect.addEventListener('change',savePersadoSettings);
-async function saveMcSettings(){
-  const s=await readSettings();
-  await chrome.storage.local.set({[KEYS.MC_SETTINGS]:{...s.mc,serverPrefix:mcPrefixInput.value.trim(),testEmails:mcTestEmails.value.trim(),allowBodyOnBuilder:mcAllowBody.checked}});
-}
-mcPrefixInput.addEventListener('change',saveMcSettings);
-mcTestEmails.addEventListener('change',saveMcSettings);
-mcAllowBody.addEventListener('change',saveMcSettings);
 btnMcConnect.addEventListener('click',async()=>{
-  const k=(mcKeyInput.value||'').trim();
-  await saveMcSettings();
-  const s=await readSettings();
-  if(!k&&!s.mcKey){mcState.className='set-state err';mcState.textContent='Paste a Mailchimp API key first.';mcKeyInput.focus();return;}
-  if(k)await chrome.storage.local.set({[KEYS.MC_API_KEY]:k});
-  mcKeyInput.value='';
-  btnMcConnect.disabled=true;btnMcConnect.textContent='Testing…';
-  const r=await worker({type:MSG.MC_TEST});
-  btnMcConnect.disabled=false;btnMcConnect.textContent='Save and test';
-  renderMcState(await readSettings());
-  if(!r.ok){mcState.className='set-state err';mcState.textContent=r.error;}
-});
-btnMcDisconnect.addEventListener('click',async()=>{
-  await worker({type:MSG.MC_DISCONNECT});
-  renderMcState(await readSettings());
+  btnMcConnect.disabled=true;mcState.textContent='Checking Mailchimp…';
+  const r=await worker({type:MSG.MC_TEST});btnMcConnect.disabled=false;
+  mcState.className='set-state '+(r.ok?'on':'err');
+  mcState.textContent=r.ok?`Connected to ${r.accountName||'Mailchimp'} (${r.dc}).`:r.error;
 });
 
 // ─── Usage ──────────────────────────────────────────────────────
-// Every number says where it came from. Persado's API has no balance endpoint,
-// so "remaining" is a LOCAL ESTIMATE (runs started from this browser × the
-// developer portal's published costs) unless Persado itself reported the quota
-// exhausted — then it is 0, and says so.
+// The gateway ledger reports estimated usage; no current balance is inferred.
 const fmtWhen=(t)=>t?new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'never';
 let lastUsage=null;
 function renderUsage(u){
@@ -869,25 +817,20 @@ function renderUsage(u){
     :{cls:'',t:'Persado API · Not tested'};
   usageDot.className='dot '+conn.cls;
   usageConn.textContent=conn.t;
-  if(u.hasKey){
-    usageNum.innerHTML=u.exhausted?'<b>0</b> runs left · per Persado'
-      :`<b>${u.remaining}</b> / ${u.quota} runs left <span title="Local estimate">· est.</span>`;
-    usageFill.style.width=Math.round((1-u.fraction)*100)+'%';
-    usageFill.className=(u.exhausted||u.remaining<=10)?'low':'';
-  }else{usageNum.textContent='';usageFill.style.width='0';}
-  $('usageBar').title=u.hasKey?`Persado API usage. ${u.exhausted?'Persado reported this key’s quota exhausted.':`Estimated from ${u.requests} request(s) made from this browser since ${fmtWhen(u.since)}; Persado does not report a balance.`}`:'Add a Persado API key in Settings';
+  usageNum.textContent=u.hasKey?`${u.used} credits used · estimate`:'';
+  usageFill.style.width='0';
+  $('usageBar').title='Account balance unavailable. Costs are configured estimates; usage headers from Persado are shown in Settings.';
   if(useConn){
     useConn.textContent=u.connection?`${u.connection.ok?'Connected':'Failed'} · ${u.connection.message||''} · ${fmtWhen(u.connection.at)}`:(u.hasKey?'Not tested':'No key');
-    useBalLbl.textContent=u.exhausted?'Balance':'Remaining (est.)';
-    useBal.innerHTML=!u.hasKey?'—':u.exhausted?'0 — Persado reported the quota exhausted'
-      :`${u.remaining} of ${u.quota} runs <span class="est">local estimate</span>`;
+    useBalLbl.textContent='Account balance';
+    useBal.textContent=u.exhausted?'Insufficient credits — reported by Persado':'Unavailable — no documented balance endpoint';
     useUsed.innerHTML=u.hasKey?`${u.used} runs <span class="est">${u.scoreRuns}×${u.costs.score} score + ${u.optimizeRuns}×${u.costs.optimize} optimize</span>`:'—';
     useReq.textContent=u.hasKey?`${u.requests}${u.failedRequests?` (${u.failedRequests} failed)`:''}`:'—';
     useScore.textContent=u.hasKey?String(u.scoreRuns):'—';
     useOpt.textContent=u.hasKey?String(u.optimizeRuns):'—';
     useLast.textContent=u.hasKey?fmtWhen(u.lastSuccessAt):'—';
     const hdrs=u.serverReported?Object.entries(u.serverReported.headers).map(([k,v])=>`${k}: ${v}`).join(', '):'';
-    useNote.textContent=`Persado’s API does not report an account balance, so remaining runs are counted locally from requests made in this browser since ${fmtWhen(u.since)}, against the developer portal’s quota of ${u.quota}. `
+    useNote.textContent=`Account balance is unavailable. This gateway has tracked estimated credit usage since ${fmtWhen(u.since)}. `
       +`Costs: optimize ${u.costs.optimize} (${u.costSource.optimize}); score ${u.costs.score} (${u.costSource.score}). Runs made elsewhere with the same key are not counted.`
       +(hdrs?` Persado reported: ${hdrs}.`:'')
       +(u.lastError?` Last error: ${u.lastError.message}`:'');
@@ -900,7 +843,7 @@ if(btnRefreshUsage)btnRefreshUsage.addEventListener('click',async()=>{
   if(apiKey)await testPersado();else renderUsage(await worker({type:MSG.USAGE_GET}));
   btnRefreshUsage.disabled=false;
 });
-if(btnResetUsage)btnResetUsage.addEventListener('click',async()=>{renderUsage(await worker({type:MSG.USAGE_RESET}));tm('Local usage count reset');});
+if(btnResetUsage)btnResetUsage.addEventListener('click',()=>tm('Usage is persisted by the gateway to protect against duplicate charges.'));
 
 let picking=false,pickTabId=null;
 function setPicking(on){
@@ -1778,141 +1721,93 @@ async function offerResume(){
 const MC_HOST=/^https:\/\/[^/]*\.admin\.mailchimp\.com\//i;
 const isMailchimpUrl=(u)=>MC_HOST.test(u||'');
 const webIdOf=(u)=>{try{const x=new URL(u);const id=x.searchParams.get('id');return /\/campaigns\//.test(x.pathname)&&/^\d+$/.test(id||'')?Number(id):null;}catch{return null;}};
-const MC_STEPS=[['read','Reading campaign'],['optimize','Optimizing with Persado'],['write','Updating Mailchimp draft'],['verify','Verifying saved draft']];
-const MC_FIELD={subject_line:'Subject line',preview_text:'Preview text'};
-const mcFieldLabel=(c)=>MC_FIELD[c.field]||({headline:'Headline',subheadline:'Subheadline',body:'Body',cta:'Button'}[c.touchpoint])||c.field;
-let mcDrafts=[],mcSel=null,mcRun={running:false,step:null,error:null,result:null},mcTabWebId=null;
-
+let mcSel=null,mcTabWebId=null,mcEpoch=0,mcBusyUi=false,mcUndo=[],mcFeedback='';
+const mcLabel=f=>({subject_line:'Subject line',preview_text:'Preview text'})[f.field]||({cta:'Button language',headline:'Headline',subheadline:'Subheadline',body:'Copy block'})[f.touchpoint]||'Copy block';
 async function showMailchimp(){
   setUiState('mailchimp');
-  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});mcTabWebId=webIdOf(t?.url);}catch{}
-  await loadDrafts();
+  const epoch=++mcEpoch;mcSel=null;mcUndo=[];mcFeedback='';mcBusyUi=false;
+  mcDetail.hidden=true;mcList.innerHTML='';mcSub.textContent='Identifying the current campaign…';
+  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(epoch!==mcEpoch)return;mcTabWebId=webIdOf(t?.url);}catch{mcTabWebId=null;}
+  await loadDrafts(epoch);
 }
-
-async function loadDrafts(){
-  mcSub.textContent='Loading drafts…';
-  const st=await worker({type:MSG.MC_STATUS,webId:mcTabWebId});
+async function loadDrafts(epoch=mcEpoch){
+  const st=await worker({type:MSG.MC_STATUS,...(mcTabWebId?{webId:mcTabWebId}:mcSel?{campaignId:mcSel.id}:{})});
+  if(epoch!==mcEpoch||uiState!=='mailchimp')return;
   if(st.usage)renderUsage(st.usage);
-  if(!st.persadoKey){mcSub.textContent='Add your Persado API key in Settings to optimize drafts.';mcList.innerHTML='';mcDetail.hidden=true;mcButtons();return;}
-  if(!st.connected){mcSub.textContent='Connect your Mailchimp account in Settings.';mcList.innerHTML='';mcDetail.hidden=true;mcButtons();return;}
-  const r=await worker({type:MSG.MC_DRAFTS});
-  if(!r.ok){mcSub.textContent=r.error;mcList.innerHTML='';mcButtons();return;}
-  mcDrafts=r.drafts||[];
-  mcSub.textContent=mcDrafts.length?`${st.accountName||'Mailchimp'} · ${mcDrafts.length} draft${mcDrafts.length===1?'':'s'}`:`${st.accountName||'Mailchimp'} · no draft campaigns`;
-  // Pre-select the campaign open in the editor, else keep the selection, else the newest.
-  const pick=mcDrafts.find(d=>mcTabWebId&&Number(d.webId)===mcTabWebId)||mcDrafts.find(d=>d.id===mcSel?.id)||mcDrafts[0]||null;
-  mcSelect(pick?.id);
-}
-
-function mcSelect(id){
-  const changed=id!==mcSel?.id;
-  mcSel=mcDrafts.find(d=>d.id===id)||null;
-  if(changed&&!mcRun.running)mcRun={running:false,step:null,error:null,result:null};
-  mcList.innerHTML=mcDrafts.map(d=>`<div class="scan-row${d.id===mcSel?.id?' sel':''}" data-id="${esc(d.id)}" role="button" tabindex="0">`
-    +`<div class="scan-row-k">${esc(d.contentType==='html'?'Custom HTML':d.contentType==='multichannel'?'New builder':'Drag-and-drop')}${mcTabWebId&&Number(d.webId)===mcTabWebId?' · open in editor':''}</div>`
-    +`<div class="scan-row-t">${esc(d.title||d.subject||'(untitled draft)')}</div>`
-    +`<div class="scan-row-s"></div></div>`).join('')||'<div class="scan-empty">Create a draft campaign in Mailchimp, then Refresh.</div>';
-  renderMcDetail();
-}
-mcList.addEventListener('click',e=>{const r=e.target.closest('.scan-row');if(r)mcSelect(r.dataset.id);});
-mcList.addEventListener('keydown',e=>{const r=e.target.closest('.scan-row');if(r&&(e.key==='Enter'||e.key===' ')){e.preventDefault();mcSelect(r.dataset.id);}});
-
-function mcButtons(){
-  btnMcOptimize.disabled=!mcSel||mcRun.running;
-  btnMcOptimize.textContent=mcRun.running?'Optimizing…':'Optimize draft';
-  btnMcTestSend.disabled=!mcSel||mcRun.running;
-}
-
-async function renderMcDetail(){
-  mcButtons();
-  if(!mcSel){mcDetail.hidden=true;btnMcRevert.hidden=true;return;}
-  mcDetail.hidden=false;
-  // Steps: only those that actually started are marked.
-  const at=MC_STEPS.findIndex(([k])=>k===mcRun.step);
-  const failed=!!mcRun.error;
-  mcSteps.innerHTML=mcRun.step||mcRun.result?MC_STEPS.map(([k,l],i)=>{
-    const cls=mcRun.step==='done'||(mcRun.result&&!failed)?'done':i<at?'done':i===at?(failed?'err':'active'):'';
-    return `<div class="mc-step ${cls}"><span class="dot"></span>${esc(l)}</div>`;}).join(''):'';
-  let html=`<div class="mc-chg"><div class="mc-chg-f">Subject line</div><div class="mc-now">${esc(mcSel.subject||'(none)')}</div>`
-    +`<div class="mc-chg-f" style="margin-top:6px;">Preview text</div><div class="mc-now">${esc(mcSel.previewText||'(none)')}</div></div>`;
-  if(mcRun.error)html=`<div class="mc-note err">${esc(mcRun.error)}</div>`+(mcRun.errorKind==='already_optimized'?`<div class="scan-alt"><button class="btn-quiet" id="btnMcForce">Run again anyway</button></div>`:'')+html;
-  const r=mcRun.result;
-  if(r){
-    const applied=(r.changes||[]).filter(c=>c.applied);
-    const perf=r.persado?.controlPerformance!=null&&r.alternative?.performance!=null?` Persado score ${r.persado.controlPerformance} → ${r.alternative.performance} (rank ${r.alternative.rank??'–'}).`:'';
-    const msg=r.status==='nothing_eligible'?'Nothing in this draft is eligible to optimize.'
-      :r.status==='no_change'?(r.message||'Persado returned nothing that passed the safeguards. The draft is unchanged.')
-      :r.status==='unverified'?'Written, but Mailchimp did not read every change back. Check the draft, or Revert.'
-      :`${applied.length} field${applied.length===1?'':'s'} updated and verified in Mailchimp.${perf} Reload the Mailchimp editor to see them.`;
-    html=`<div class="mc-note ${r.status==='ok'?'ok':r.status==='partial'?'ok':'warn'}">${esc(msg)}</div>`
-      +(r.changes||[]).map(c=>`<div class="mc-chg"><div class="mc-chg-f">${esc(mcFieldLabel(c))}${c.applied?'':' · kept'}</div>`
-        +(c.applied?`<div class="mc-was">${esc(c.original)}</div><div class="mc-now">${esc(c.optimized)}</div>`
-          :`<div class="mc-now">${esc(c.original)}</div>${c.reasons?.length?`<div class="mc-why">${esc(c.reasons[0])}</div>`:''}`)+`</div>`).join('')
-      +((r.skipped||[]).filter(x=>x.text||x.field==='body').length?`<div class="mc-note">Not sent: ${esc((r.skipped||[]).filter(x=>x.text||x.field==='body').map(x=>`${x.field==='body'?'body':x.text.slice(0,40)} (${x.reason})`).join('; '))}</div>`:'')
-      +(r.persado?.jobId?`<div class="mc-act-i"><span class="meta">Persado job ${esc(r.persado.jobId)}${r.persado.requestId?' · request '+esc(r.persado.requestId):''}</span></div>`:'');
+  if(st.ok&&st.campaign){
+    mcSel=st.campaign;mcUndo=st.undo||[];mcList.innerHTML='';
+    mcSub.textContent=`${st.accountName||'Mailchimp'} · Connected · ${mcSel.title||'Untitled draft'}`;
+    renderMcDetail();return;
   }
+  mcSel=null;mcDetail.hidden=true;
+  mcSub.textContent=st.error||(!st.connected?'Connect Mailchimp through the gateway in Settings.':'Choose the draft you want to review.');
+  if(!st.ok&&st.kind!=='not_found'&&st.kind!=='selection_required'&&st.kind!=='ambiguous')return;
+  const r=await worker({type:MSG.MC_DRAFTS});if(epoch!==mcEpoch)return;
+  if(!r.ok){mcSub.textContent=r.error;return;}
+  mcList.innerHTML=(r.drafts||[]).map(d=>`<button class="mc-choice" data-campaign="${esc(d.id)}">${esc(d.title||d.subject||'Untitled draft')}</button>`).join('')||'<p class="mc-note">No drafts found in this account.</p>';
+}
+mcList.addEventListener('click',async e=>{
+  const button=e.target.closest('[data-campaign]');if(!button)return;
+  const epoch=++mcEpoch;mcTabWebId=null;mcFeedback='';
+  const r=await worker({type:MSG.MC_STATUS,campaignId:button.dataset.campaign});
+  if(epoch!==mcEpoch)return;
+  if(!r.ok){mcSub.textContent=r.error;return;}
+  mcSel=r.campaign;mcUndo=r.undo||[];mcList.innerHTML='';mcSub.textContent=`${r.accountName||'Mailchimp'} · Connected · ${mcSel.title}`;renderMcDetail();
+});
+function renderMcDetail(){
+  mcDetail.hidden=!mcSel;if(!mcSel)return;
+  mcDetail.setAttribute('aria-busy',String(mcBusyUi));
+  mcSteps.textContent=mcBusyUi?'Waiting for the API…':mcFeedback;
+  const fields=mcSel.fields||[];
+  const section=f=>{
+    const score=f.score?.variants?.[0]?.performance;
+    const disabled=mcBusyUi||!lastUsage?.hasKey;
+    const alternatives=f.optimization?.result?.alternatives||[];
+    return `<section class="mc-chg"><h3>${esc(mcLabel(f))}</h3><p class="mc-current">${esc(f.text)}</p>`
+      +`<p class="mc-meta">${score!=null?'Persado score: '+esc(score):'Not scored'}${f.score?' · cached for this copy':''}</p>`
+      +`<div class="mc-actions"><button data-op="score" data-field="${esc(f.field)}" ${disabled||f.score?'disabled':''}>${f.score?'Scored':'Score · 1 credit'}</button>`
+      +`<button data-op="optimize" data-field="${esc(f.field)}" ${disabled||(f.field==='subject_line'&&!f.score)?'disabled':''}>Optimize · 5 credits</button></div>`
+      +(f.field==='subject_line'&&!f.score?'<p class="mc-meta">Score this subject line to enable Optimize.</p>':'')
+      +alternatives.map((v,i)=>{
+        const text=v.touchpoints?.[f.touchpoint]||v.text||'';
+        return `<div class="mc-alternative"><p class="mc-meta">Persado alternative${v.performance!=null?' · score '+esc(v.performance):' · revised score not returned'}</p><p>${esc(text)}</p>`
+        +`<button data-op="apply" data-field="${esc(f.field)}" data-index="${i}" ${disabled||f.applyDisabledReason?'disabled':''}>Apply to Mailchimp</button></div>`;
+      }).join('')
+      +(f.applyDisabledReason?`<p class="mc-meta">${esc(f.applyDisabledReason)}</p>`:'')+'</section>';
+  };
+  let html='';
+  for(const name of ['subject_line','preview_text']){
+    const f=fields.find(x=>x.field===name);
+    html+=f?section(f):`<section class="mc-chg"><h3>${name==='subject_line'?'Subject line':'Preview text'}</h3><p>${esc(name==='subject_line'?mcSel.subject:mcSel.previewText)||'No copy yet.'}</p><p class="mc-meta">This copy is not eligible for optimization.</p></section>`;
+  }
+  html+='<h2 class="mc-body-title">Email body</h2>';
+  const blocks=fields.filter(f=>f.location==='html');
+  html+=blocks.length?blocks.map(section).join(''):'<p class="mc-meta">No safely extractable copy blocks. Nested markup, footer, and legal content are excluded.</p>';
   mcResult.innerHTML=html;
-  const f=mcResult.querySelector('#btnMcForce');if(f)f.onclick=()=>mcOptimize(true);
-  // Status (revert + activity) is re-read only between runs, not on every step.
-  if(mcRun.running){btnMcRevert.hidden=true;return;}
-  const st=await worker({type:MSG.MC_STATUS,webId:mcSel.webId});
-  btnMcRevert.hidden=!st.canRevert||mcRun.running;
-  const acts=st.activity||[];
-  mcActivity.innerHTML=acts.length?acts.map(a=>`<div class="mc-act-i"><b>${esc(a.action)}</b> · ${esc(a.status)} · ${esc(fmtWhen(a.at))}${a.source==='demo'?' · demo fixture':''}`
-    +(a.message?`<div>${esc(a.message)}</div>`:'')+(a.error?`<div class="mc-why">${esc(a.error.message)}</div>`:'')
-    +(a.persado?.jobId?`<div class="meta">job ${esc(a.persado.jobId)}</div>`:'')+`</div>`).join(''):'<div class="mc-act-i">No activity for this draft yet.</div>';
+  mcActivity.innerHTML=mcUndo.map(u=>`<button class="mc-choice" data-undo="${esc(u.undoId)}" ${mcBusyUi?'disabled':''}>Undo ${u.field==='subject_line'?'subject line':'preview text'}${u.pending?' (save needs verification)':''}</button>`).join('')||'<p class="mc-meta">No saved changes to undo.</p>';
 }
-
-async function mcOptimize(force){
-  if(!mcSel||mcRun.running)return;
-  mcRun={running:true,step:'read',error:null,result:null};
-  renderMcDetail();
-  const r=await worker({type:MSG.MC_OPTIMIZE,campaignId:mcSel.id,force:!!force});
-  if(r.usage)renderUsage(r.usage);
-  mcRun={running:false,step:r.ok?'done':mcRun.step,error:r.ok?null:r.error,errorKind:r.ok?null:r.kind,result:r.ok?r:null};
-  // Pick up the new subject/preview for the list.
-  if(r.ok&&(r.status==='ok'||r.status==='partial'||r.status==='unverified')){
-    const d=await worker({type:MSG.MC_DRAFTS});
-    if(d.ok){mcDrafts=d.drafts;mcSel=mcDrafts.find(x=>x.id===mcSel.id)||mcSel;}
-  }
+async function mcAction(msg, success){
+  if(!mcSel||mcBusyUi)return;
+  const epoch=mcEpoch,id=mcSel.id;mcBusyUi=true;mcFeedback='';renderMcDetail();
+  const r=await worker({...msg,campaignId:id,...(mcTabWebId?{webId:mcTabWebId}:{})});
+  if(epoch!==mcEpoch||mcSel?.id!==id)return;
+  mcBusyUi=false;if(r.usage)renderUsage(r.usage);
+  mcFeedback=r.ok?success:r.error;
+  if(r.ok)await loadDrafts(epoch);
   renderMcDetail();
 }
-btnMcOptimize.addEventListener('click',()=>mcOptimize(false));
-btnMcRefresh.addEventListener('click',loadDrafts);
+mcResult.addEventListener('click',e=>{
+  const b=e.target.closest('[data-op]');if(!b||b.disabled||!mcSel)return;
+  const f=mcSel.fields.find(x=>x.field===b.dataset.field);if(!f)return;
+  const op=b.dataset.op;
+  mcAction({type:op==='score'?MSG.MC_SCORE:op==='optimize'?MSG.MC_OPTIMIZE:MSG.MC_APPLY,
+    field:f.field,text:f.text,cacheId:f.optimization?.cacheId,alternativeIndex:Number(b.dataset.index||0)},
+    op==='apply'?'Saved and verified in Mailchimp. Refresh the Mailchimp editor to see the persisted copy.':op==='score'?'Persado scoring completed.':'Persado alternatives ready. Review and Apply to save.');
+});
+mcActivity.addEventListener('click',e=>{const b=e.target.closest('[data-undo]');if(b)mcAction({type:MSG.MC_REVERT,undoId:b.dataset.undo},'Original restored and verified in Mailchimp.');});
+btnMcRefresh.addEventListener('click',()=>{if(!mcBusyUi)showMailchimp();});
 btnMcSettings.addEventListener('click',openSettings);
-btnMcRevert.addEventListener('click',async()=>{
-  if(!mcSel)return;
-  btnMcRevert.disabled=true;
-  const r=await worker({type:MSG.MC_REVERT,campaignId:mcSel.id});
-  btnMcRevert.disabled=false;
-  if(!r.ok){tm(r.error,'err');return;}
-  tm('Original restored in Mailchimp');
-  mcRun={running:false,step:null,error:null,result:null};
-  await loadDrafts();
-});
-btnMcTestSend.addEventListener('click',async()=>{
-  if(!mcSel)return;
-  btnMcTestSend.disabled=true;
-  const r=await worker({type:MSG.MC_TEST_SEND,campaignId:mcSel.id});
-  btnMcTestSend.disabled=false;
-  if(!r.ok){tm(r.error,'err');if(/test e-mail address/i.test(r.error||''))openSettings();return;}
-  tm(`Mailchimp sent a test to ${r.sentTo} address${r.sentTo===1?'':'es'}`);
-  renderMcDetail();
-});
-
-chrome.runtime.onMessage.addListener((msg)=>{
-  if(msg.type===MSG.USAGE_UPDATED){renderUsage(msg.usage);return;}
-  if(msg.type===MSG.AUTOPILOT_PROGRESS){
-    if(!mcSel||msg.campaignId!==mcSel.id)return;
-    if(msg.step==='reverted'){if(uiState==='mailchimp')loadDrafts();return;}
-    // A run started from the Mailchimp overlay reports here too; when it ends,
-    // re-read the drafts so the panel shows the saved copy.
-    if(msg.step==='done'){mcRun.step='done';if(!mcRun.running&&uiState==='mailchimp')loadDrafts();return;}
-    if(msg.step==='error'){mcRun.error=msg.label;}
-    else mcRun.step=msg.step;
-    if(uiState==='mailchimp')renderMcDetail();
-  }
-});
+chrome.runtime.onMessage.addListener(msg=>{if(msg.type===MSG.USAGE_UPDATED)renderUsage(msg.usage);});
 
 async function init(){
   syncCtxSummary();

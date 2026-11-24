@@ -45,22 +45,22 @@ Everything painful in this codebase comes from state being split across four JS 
 
 **`extension/src/background.js`** — service worker. Owns `chrome.tabs.captureVisibleTab` screenshots (FLAG-GATED behind `CAPTURE_SCREENSHOTS` in `config.js`, **default OFF** — when off, capture never runs and no `frames` are written), the DOM element extraction (`extractPageElements`, which runs in BOTH modes and is the PRIMARY grounding path), the session context in `chrome.storage.session` (`persado:pageContext` → `{ frames: [{full, thumb}], elements }`), gateway relay, and the toolbar `chrome.action` icon/badge state.
 
-**Persado Autopilot modules (service worker)** — `src/persado-api.js` (the only Persado client), `src/adapters/*.js` (platform adapters; Mailchimp first), `src/optimizer.js`, `src/guard.js` (safeguards), `src/usage.js`, `src/activity.js`. `background.js` is the ONLY reader of the Persado and Mailchimp keys and the only caller of either API. See `docs/AUTOPILOT.md`.
+**Persado Autopilot modules (service worker)** — `src/persado-api.js` (the only Persado client), `src/adapters/*.js` (platform adapters; Mailchimp first), `src/optimizer.js`, `src/guard.js` (safeguards), `src/usage.js`, `src/activity.js`. `gateway/integrations.mjs` is the ONLY runtime reader of the Persado and Mailchimp environment keys and calls the reused API clients; `background.js` relays authenticated requests to it. See `docs/AUTOPILOT.md`.
 
-**`extension/src/mc-overlay.js`** — content script on `*.admin.mailchimp.com`; closed shadow root; may only send `MC_STATUS`/`MC_OPTIMIZE`/`MC_REVERT` (enforced by `senderAllowed` and smoke).
+**`extension/src/mc-overlay.js`** — content script on `*.admin.mailchimp.com`; closed shadow root; may only send read-only `MC_STATUS` (enforced by `senderAllowed` and smoke).
 
-**`gateway/server.mjs`** — the ONLY place model-provider API keys live. The extension now uses it for transcription only. Endpoints: `POST /v1/ai/transcribe` (Whisper) and `POST /v1/ai/recommend` (variants). Model tiers resolve via `PERSADO_MODEL_PREMIUM` (default `gpt-4o`, vision-capable) and `PERSADO_MODEL_STANDARD` (default `gpt-4o-mini`); the legacy `LOUPE_*` names still work as a fallback. An attached image routes the call to the premium/vision tier. Must be running (`npm run gateway`) or transcription and generation fail — a down gateway is NOT a microphone bug, do not conflate them.
+**`gateway/server.mjs`** — the ONLY place model-provider API keys live. The extension uses it for transcription and authenticated provider integrations. Endpoints: `POST /v1/ai/transcribe` (Whisper) and `POST /v1/ai/recommend` (variants). Model tiers resolve via `PERSADO_MODEL_PREMIUM` (default `gpt-4o`, vision-capable) and `PERSADO_MODEL_STANDARD` (default `gpt-4o-mini`); the legacy `LOUPE_*` names still work as a fallback. An attached image routes the call to the premium/vision tier. Must be running (`npm run gateway`) or transcription and generation fail — a down gateway is NOT a microphone bug, do not conflate them.
 
 ## 4. Hard invariants — do not violate these
 
 1. **`getUserMedia` stays in the page context (`content.js`).** Never move it to a popup, an offscreen document, or the side panel. Each of those was tried and each broke the permission prompt. Chrome suppresses or auto-dismisses the mic dialog outside the page.
 2. **Nothing may open a tab or window, or cover the page.** The user is often recording their screen. A full-page permission tab was shipped once and was unusable. Screenshot capture must stay silent.
-3. **No fabricated scores.** Every score, rank, band or compliance value shown comes from a Persado response field; absent fields render as absent. Usage "remaining" is a labelled local estimate unless Persado reported `quota_exhausted`. (The extension no longer calls `/v1/ai/recommend`.)
+3. **No fabricated scores.** Every score, rank, band or compliance value shown comes from a Persado response field; absent fields render as absent. The UI shows balance unavailable and gateway-tracked usage as an estimate; `quota_exhausted` is authoritative. (The extension no longer calls `/v1/ai/recommend`.)
 4. **No purple, no emoji, anywhere in the UI.** The purple/magenta gradient is deprecated; see `claude-design.md` §8. Check marks, dots, rings, and glyphs are CSS/SVG shapes.
 5. **A progress step must never claim work that did not run.** Compliance and lift come back inside the single `/v1/ai/recommend` response — do not tick separate "compliance check" / "scoring" steps on a timer.
 6. **Fail soft on grounding.** A failed screenshot or element extraction logs and is skipped; it must never block recording or generation.
 7. **Single-file inline CSS in `sidepanel.html`.** No build step, no external UI libraries.
-8. **Credentials stay in the worker.** Page contexts and the panel never read a key or call Persado/Mailchimp; `npm run smoke` §20 enforces it. Mailchimp writes only to `status: "save"` drafts, never sends to an audience.
+8. **Provider credentials stay in the gateway environment.** Page contexts and the panel never read a provider key or call Persado/Mailchimp. The worker holds only the local pairing capability; `npm run smoke` §20 enforces it. Mailchimp writes only to `status: "save"` drafts, never sends to an audience.
 
 ## 5. Known failure modes — these have already bitten, repeatedly
 

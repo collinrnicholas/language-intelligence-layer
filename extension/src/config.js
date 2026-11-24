@@ -19,11 +19,12 @@
   // installs as dev.persado.gateway on this port (gateway/install-launchd.sh).
   const GATEWAY_URL = 'http://127.0.0.1:8788';
 
-  // Only transcription still uses the local gateway. Scoring and optimization go
-  // to the Persado API from the service worker (src/persado-api.js).
+  // Transcription and authenticated integration operations use the local gateway.
+  // Provider credentials never enter browser-delivered code.
   const ENDPOINTS = Object.freeze({
     HEALTH: '/health',
     TRANSCRIBE: '/v1/ai/transcribe',
+    INTEGRATIONS: '/v1/integrations',
   });
 
   const TIMEOUTS = Object.freeze({

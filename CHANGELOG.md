@@ -8,6 +8,33 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.10.0
+
+Provider keys leave the browser, and Mailchimp campaigns become editable in place.
+
+- **Credentials live in the gateway, not in the extension.** Settings now takes a
+  single local pairing token (`PERSADO_PROXY_TOKEN`); the Persado and Mailchimp keys
+  stay in the gateway environment (Keydeck, `.env`, or the launchd env file). A
+  provider key in a browser profile is readable by anything with access to that
+  profile, and a Mailchimp key has no scopes to limit.
+- **Every integration call is a JSON POST to `/v1/integrations`** on loopback, with
+  the pairing token in `X-Persado-Token`. Origin checks and a constant-time token
+  compare guard the route.
+- **Draft lookup pages properly.** `findByWebId` walks 100-draft pages instead of
+  trusting the first 100, and refuses ambiguous matches rather than editing the wrong
+  campaign.
+- **Applying a change touches one field.** `updateSetting` re-reads the campaign,
+  refuses anything that is not a regular draft, refuses when the field changed since
+  the preview, patches only `subject_line` or `preview_text`, then reads back to
+  confirm. No stale title, sender or body is ever re-sent.
+- New message types: `MC_SCORE` and `MC_APPLY`.
+
+- Contextual Mailchimp Language Intelligence: identify the open draft, display subject, preview, and eligible body/CTA blocks without spending credits.
+- Manual Score and Optimize actions, persistent result caching and concurrent request deduplication; subject optimization requires scoring first.
+- Separate Apply for subject and preview only, single-setting PATCH, draft checks, read-back verification, and guarded Undo. Body Apply and all send actions are unavailable.
+- Provider credentials moved to an authenticated loopback gateway. Keydeck environment injection, placeholder-only `.env.example`, ignored runtime state, and automatic removal of legacy browser keys after successful replacement connection tests.
+- No invented balances or scores; configured credit estimates and real API performance fields only.
+
 ## 0.9.3
 
 The header names the page again instead of pasting fifteen lines of tracking.

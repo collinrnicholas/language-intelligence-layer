@@ -63,7 +63,7 @@
   }
 
   function create({ apiKey, serverPrefix, fetchImpl = fetch, allowBodyOnBuilder = false, timeoutMs = 30000 }) {
-    if (!apiKey) throw new MailchimpError('no_key', 'Mailchimp is not connected. Add a Mailchimp API key in Settings.');
+    if (!apiKey) throw new MailchimpError('no_key', 'Set MAILCHIMP_API_KEY in the local gateway environment, then restart the gateway.');
     const dc = serverPrefixFor(apiKey, serverPrefix);
     const base = `https://${dc}.api.mailchimp.com/3.0`;
     const auth = 'Basic ' + btoa('persado:' + String(apiKey).trim());
@@ -104,8 +104,8 @@
 
     const DRAFT_FIELDS = 'campaigns.id,campaigns.web_id,campaigns.type,campaigns.status,campaigns.content_type,campaigns.create_time,'
       + 'campaigns.settings.title,campaigns.settings.subject_line,campaigns.settings.preview_text,total_items';
-    async function listDrafts(count = 25) {
-      const r = await call('GET', `/campaigns?status=save&count=${count}&sort_field=create_time&sort_dir=DESC&fields=${DRAFT_FIELDS}`);
+    async function listDrafts(count = 25, offset = 0) {
+      const r = await call('GET', `/campaigns?status=save&count=${count}&offset=${offset}&sort_field=create_time&sort_dir=DESC&fields=${DRAFT_FIELDS}`);
       return (r?.campaigns || []).map(c => ({
         id: c.id, webId: c.web_id, type: c.type, status: c.status, contentType: c.content_type,
         createdAt: c.create_time, title: c.settings?.title || '', subject: c.settings?.subject_line || '',
@@ -114,8 +114,16 @@
     }
 
     async function findByWebId(webId) {
-      const drafts = await listDrafts(100);
-      return drafts.find(d => Number(d.webId) === Number(webId)) || null;
+      if (!Number.isSafeInteger(Number(webId)) || Number(webId) <= 0) return null;
+      let match = null;
+      for (let offset = 0; ; offset += 100) {
+        const drafts = await listDrafts(100, offset);
+        const matches = drafts.filter(d => Number(d.webId) === Number(webId));
+        if (matches.length > 1 || (match && matches.length)) throw new MailchimpError('ambiguous', 'More than one draft matched this URL. Select a draft explicitly.');
+        if (matches.length) match = matches[0];
+        if (drafts.length < 100) return match;
+        if (offset >= 9900) throw new MailchimpError('selection_required', 'Too many drafts to identify this URL safely. Select a draft explicitly.');
+      }
     }
 
     async function getCampaign(id) {
@@ -123,6 +131,18 @@
     }
     async function getContent(id) {
       return call('GET', `/campaigns/${encodeURIComponent(id)}/content?fields=html,plain_text`);
+    }
+
+    // First iteration: patch exactly one reviewed setting. Never re-send a
+    // stale title, sender, reply-to, preview, or body along with a subject edit.
+    async function updateSetting(id, field, expected, value) {
+      if (!['subject_line', 'preview_text'].includes(field)) throw new MailchimpError('body_read_only', 'Body Apply is unavailable.');
+      const c = await getCampaign(id);
+      if (c?.status !== 'save' || c?.type !== 'regular') throw new MailchimpError('not_draft', 'Only regular draft campaigns can be updated.');
+      if ((c.settings?.[field] || '') !== expected) throw new MailchimpError('changed', 'This field changed in Mailchimp. Refresh before applying or undoing.');
+      await call('PATCH', `/campaigns/${encodeURIComponent(id)}`, { settings: { [field]: value } });
+      const saved = await getCampaign(id);
+      return { ok: saved?.settings?.[field] === value, status: saved?.status || null };
     }
 
     /**
@@ -255,7 +275,7 @@
       return { ok: true, sentTo: list };
     }
 
-    return { id: 'mailchimp', label: 'Mailchimp', dc, channel: 'EMAIL_SUBJECT_BODY', test, listDrafts, findByWebId, read, write, verify, restore, sendTest };
+    return { id: 'mailchimp', label: 'Mailchimp', dc, channel: 'EMAIL_SUBJECT_BODY', test, listDrafts, findByWebId, read, write, verify, restore, sendTest, updateSetting };
   }
 
   root.PERSADO_ADAPTERS = Object.freeze({ ...(root.PERSADO_ADAPTERS || {}),

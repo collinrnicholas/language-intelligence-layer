@@ -64,7 +64,9 @@
     MC_DISCONNECT: 'MC_DISCONNECT',
     MC_STATUS: 'MC_STATUS',
     MC_DRAFTS: 'MC_DRAFTS',
+    MC_SCORE: 'MC_SCORE',
     MC_OPTIMIZE: 'MC_OPTIMIZE',
+    MC_APPLY: 'MC_APPLY',
     MC_REVERT: 'MC_REVERT',
     MC_TEST_SEND: 'MC_TEST_SEND',
 
@@ -97,6 +99,7 @@
     // The user's Persado API key, entered in Settings. local storage so it survives
     // a restart; never synced, never written anywhere but this profile.
     API_KEY: 'persado:apiKey',
+    PROXY_TOKEN: 'persado:proxyToken',
     // Non-secret Persado request settings: { brand, industry }. brand is sent as
     // account.name, which Persado requires on every run.
     PERSADO_SETTINGS: 'persado:settings',

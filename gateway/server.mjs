@@ -29,6 +29,13 @@
 
 import http from 'node:http';
 import { spawnSync } from 'node:child_process';
+import { createIntegrations, handleIntegrationRequest } from './integrations.mjs';
+
+// Environment injection (for example Keydeck `run`) is preferred. Optional .env
+// loading supports local development without adding a dependency or shipping keys.
+try { process.loadEnvFile(new URL('../.env', import.meta.url)); }
+catch (e) { if (e.code !== 'ENOENT') throw e; }
+const integrations = createIntegrations();
 
 /** PERSADO_* wins; LOUPE_* is the deprecated fallback; then the default. */
 const env = (name, fallback) => process.env[`PERSADO_${name}`] ?? process.env[`LOUPE_${name}`] ?? fallback;
@@ -151,6 +158,7 @@ const server = http.createServer(async (req, res) => {
         models: { premium: MODEL_PREMIUM, standard: MODEL_STANDARD },
       });
     }
+    if (req.method === 'POST' && req.url === '/v1/integrations') return await handleIntegrationRequest(req, res, integrations);
     if (req.method === 'POST' && req.url === '/v1/ai/transcribe') return await handleTranscribe(req, res);
     if (req.method === 'POST' && req.url === '/v1/ai/complete') return await handleComplete(req, res);
     if (req.method === 'POST' && req.url === '/v1/ai/recommend') return await handleRecommend(req, res);
