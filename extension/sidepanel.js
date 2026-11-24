@@ -1723,7 +1723,9 @@ const isMailchimpUrl=u=>MC_HOST.test(u||'');
 const webIdOf=u=>{try{const x=new URL(u),id=x.searchParams.get('id');return /\/campaigns\//.test(x.pathname)&&/^\d+$/.test(id||'')?Number(id):null;}catch{return null;}};
 let mcSel=null,mcTabWebId=null,mcTabId=null,mcEpoch=0,mcBusyUi=false,mcUndo=[],mcFeedback='',mcFeedbackError=false;
 let mcLoad=null,mcQueued=false,mcRefreshTimer=null,mcSettleTimer=null,mcFeedbackTimer=null,mcViewSignature='',mcWorkingField=null;
+let mcDataRevision=0,mcWorkingOp=null,mcWorkingIndex=null;
 const mcExpanded=new Set(['subject_line']);
+const intelligence=self.PERSADO_INTELLIGENCE;
 const mcConnection=$('mcConnection'),mcCount=$('mcCount');
 const mcLabel=f=>({subject_line:'Subject line',preview_text:'Preview text'})[f.field]||({cta:'Button',headline:'Headline',subheadline:'Subheadline',body:'Copy block'})[f.touchpoint]||'Copy block';
 function mcConnectionState(ok,label){mcConnection.classList.toggle('connected',ok);mcConnection.textContent=label||(ok?'Mailchimp connected':'Connection needs attention');}
@@ -1756,14 +1758,16 @@ function scheduleMcRefresh(delay=1200){
 async function loadDrafts(epoch=mcEpoch,quiet=false){
   if(mcLoad?.epoch===epoch){mcQueued=true;return mcLoad.promise;}
   if(mcBusyUi){mcQueued=true;return;}
-  const selectedId=mcSel?.id;
+  const selectedId=mcSel?.id,revision=mcDataRevision;
   const task=(async()=>{
     const st=await worker({type:MSG.MC_STATUS,...(selectedId?{campaignId:selectedId}:{}),...(mcTabWebId?{webId:mcTabWebId}:{})});
     if(epoch!==mcEpoch||uiState!=='mailchimp')return;
+    if(revision!==mcDataRevision){mcQueued=true;return;}
     if(st.usage)renderUsage(st.usage);
     mcConnectionState(!!(st.ok&&st.connected));
     if(st.ok&&st.campaign){
-      const previous=mcSel?.fingerprint;mcSel=st.campaign;mcUndo=st.undo||[];mcList.innerHTML='';mcContext();
+      const previous=mcSel?.fingerprint,first=!mcSel?.fields;mcSel=st.campaign;mcUndo=st.undo||[];mcList.innerHTML='';mcContext();
+      if(first){const next=intelligence.prioritize(mcSel.fields||[]).next;if(next){mcExpanded.clear();mcExpanded.add(next.field);}}
       const signature=JSON.stringify([mcSel,mcUndo]);
       if(signature!==mcViewSignature){mcViewSignature=signature;renderMcDetail();}
       if(quiet&&previous&&previous!==mcSel.fingerprint)mcNotice('Updated from Mailchimp.');
@@ -1800,41 +1804,63 @@ function renderMcDetail(){
   const focusKey=focused?.dataset?.op?{op:focused.dataset.op,field:focused.dataset.field,index:focused.dataset.index}:null;
   const scroll=mcResult.closest('.mc-wrap')?.scrollTop||0;
   const fields=mcSel.fields||[],disabled=mcBusyUi||!lastUsage?.hasKey;
+  const priority=intelligence.prioritize(fields),hasScores=priority.scored.length>0;
   const isOpen=key=>mcExpanded.has(key)?' open':'';
+  const scoreDetails=(info)=>info.evaluated?`<div class="mc-intelligence">`
+    +`<div class="mc-score-title">Language score: <strong>${esc(info.score)}${info.inRange?'/100':''}</strong>${info.band?`<span>Persado band: ${esc(info.bandLabel)}</span>`:''}</div>`
+    +(info.inRange?`<div class="mc-score-track" role="meter" aria-label="Predicted language score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${info.score}"><span style="width:${info.score}%"></span></div>`:'')
+    +`<p class="mc-meta">${esc(info.interpretation)}</p>`
+    +(info.rationale?`<div class="mc-explanation"><h4>Persado brand feedback${info.brandFit!=null?' · '+esc(info.brandFit)+'/5':''}</h4><p>${esc(info.rationale)}</p></div>`:'')
+    +(info.emotions.length||info.descriptors.length?`<p class="mc-meta">Detected language: ${esc([...info.emotions,...info.descriptors].join(' · '))}</p>`:'')
+    +(info.compliance||info.issues.length?`<div class="mc-explanation"><h4>Persado compliance feedback</h4><p>${esc(info.compliance||info.issues.join(' '))}</p></div>`:'')
+    +(info.explanationUnavailable?'<p class="mc-meta">Persado did not return an explanation for this score.</p>':'')
+    +`<p class="mc-recommendation">${esc(info.recommendation)}</p></div>`:'';
   const row=f=>{
-    const score=f.score?.variants?.[0]?.performance,alternatives=(f.optimization?.result?.alternatives||[]).slice(0,3);
-    const primary=f.field==='subject_line';
-    const alternative=(v,i)=>`<div class="mc-alternative"><div class="mc-alternative-label">${i===0?'Suggested alternative':'Alternative '+(i+1)}${v.performance!=null?' · Score '+esc(v.performance):''}</div>`
+    const info=intelligence.describe(f),alternatives=(f.optimization?.result?.alternatives||[]).slice(0,3);
+    const primary=hasScores?priority.next?.field===f.field:f.field==='subject_line';
+    const collapsedAction=alternatives.length?'review':info.evaluated?'optimize':'score';
+    const collapsedLabel=alternatives.length?'Review alternatives':info.evaluated?'Optimize · 5 credits':'Score · 1 credit';
+    const originalScore=info.score;
+    const alternative=(v,i)=>`<div class="mc-alternative"><div class="mc-alternative-label">${i===0?'Optimized alternative':'Alternative '+(i+1)}${v.performance!=null?' · Predicted score '+esc(v.performance)+'/100':''}</div>`
       +`<p class="mc-alternative-copy">${esc(v.touchpoints?.[f.touchpoint]||v.text||'')}</p>`
-      +(!f.applyDisabledReason?`<button class="mc-apply" data-op="apply" data-field="${esc(f.field)}" data-index="${i}" ${disabled?'disabled':''}>Apply to Mailchimp</button>`:'')+'</div>';
+      +(!f.applyDisabledReason?`<button class="mc-apply" data-op="apply" data-field="${esc(f.field)}" data-index="${i}" ${disabled?'disabled':''}>${mcBusyUi&&mcWorkingOp===MSG.MC_APPLY&&mcWorkingField===f.field&&mcWorkingIndex===i?'Saving…':'Apply to Mailchimp'}</button>`:'')+'</div>';
     return `<details class="mc-row${primary?' primary':''}" data-key="${esc(f.field)}"${isOpen(f.field)}>`
-      +`<summary><span class="mc-summary-copy"><span class="mc-heading">${esc(mcLabel(f))}</span><span class="mc-snippet">${esc(f.text)}</span></span>${primary?'<span class="mc-start">Start here</span>':''}</summary>`
-      +`<div class="mc-row-content"><p class="mc-current">${esc(f.text)}</p>`
-      +(score!=null?`<p class="mc-meta">Score ${esc(score)}</p>`:'')
+      +`<summary><span class="mc-summary-copy"><span class="mc-heading">${esc(mcLabel(f))}</span>`
+      +`<span class="mc-summary-status">${info.evaluated?`${esc(info.score)}${info.inRange?'/100':''} · ${esc(info.status)}`:esc(info.status)}${primary?' · '+(hasScores?'Review next':'Start here'):''}</span></span>`
+      +`<button class="mc-summary-action" data-op="${collapsedAction}" data-field="${esc(f.field)}" ${disabled?'disabled':''}>${collapsedLabel}</button></summary>`
+      +`<div class="mc-row-content">${alternatives.length?`<div class="mc-alternative-label">Original${originalScore!=null?' · Predicted score '+esc(originalScore)+'/100':''}</div>`:''}<p class="mc-current">${esc(f.text)}</p>`
+      +scoreDetails(info)
       +`<div class="mc-actions"><button data-op="score" data-field="${esc(f.field)}" ${disabled||f.score?'disabled':''}>${f.score?'Scored':'Score · 1 credit'}</button>`
-      +`<button data-op="optimize" data-field="${esc(f.field)}" ${disabled?'disabled':''}>${mcBusyUi&&mcWorkingField===f.field?'Working…':'Optimize · 5 credits'}</button></div>`
+      +`<button data-op="optimize" data-field="${esc(f.field)}" ${disabled?'disabled':''}>${mcBusyUi&&mcWorkingOp===MSG.MC_OPTIMIZE&&mcWorkingField===f.field?'Working…':'Optimize · 5 credits'}</button></div>`
       +(alternatives.length?alternative(alternatives[0],0):'')
       +(alternatives.length>1?`<details class="mc-more" data-key="more:${esc(f.field)}"${isOpen('more:'+f.field)}><summary>${alternatives.length-1} more alternatives</summary>${alternatives.slice(1).map((v,i)=>alternative(v,i+1)).join('')}</details>`:'')
       +(alternatives.length&&f.applyDisabledReason?'<p class="mc-meta">Preview only. Body changes cannot be safely applied.</p>':'')+'</div></details>';
   };
-  const emptyRow=(key,label,text)=>`<details class="mc-row${key==='subject_line'?' primary':''}" data-key="${key}"${isOpen(key)}><summary><span class="mc-heading">${label}</span>${key==='subject_line'?'<span class="mc-start">Start here</span>':''}</summary><p class="mc-empty">${esc(text)||'No copy yet.'}</p></details>`;
-  let html='';
-  for(const key of ['subject_line','preview_text']){
-    const f=fields.find(x=>x.field===key);
-    html+=f?row(f):emptyRow(key,key==='subject_line'?'Subject line':'Preview text',key==='subject_line'?mcSel.subject:mcSel.previewText);
-  }
+  const emptyRow=(key,label,text)=>`<details class="mc-row${!hasScores&&key==='subject_line'?' primary':''}" data-key="${key}"${isOpen(key)}><summary><span class="mc-summary-copy"><span class="mc-heading">${label}</span><span class="mc-summary-status">Not yet evaluated</span></span></summary><p class="mc-empty">${esc(text)||'No copy yet.'}</p></details>`;
   const group=(key,label,items,body)=>`<details class="mc-group" data-key="${key}"${isOpen(key)}><summary><span class="mc-heading">${label}</span><span class="mc-count">${items.length}</span></summary>${body||'<p class="mc-empty">No eligible copy found.</p>'}</details>`;
-  const body=fields.filter(f=>f.location==='html'&&f.touchpoint!=='cta');
-  const buttons=fields.filter(f=>f.touchpoint==='cta');
-  const custom=buttons.filter(f=>!f.templateDefault),templates=buttons.filter(f=>f.templateDefault);
-  html+=group('body','Email body',body,body.map(row).join(''));
-  html+=group('buttons','Button language',buttons,custom.map(row).join('')+(templates.length?`<details class="mc-template" data-key="templates"${isOpen('templates')}><summary>Template buttons (${templates.length})</summary>${templates.map(row).join('')}</details>`:''));
+  function contentRows(items){
+    let html='';
+    for(const key of ['subject_line','preview_text']){
+      const f=items.find(x=>x.field===key);
+      if(f)html+=row(f);
+      else if(!fields.some(x=>x.field===key))html+=emptyRow(key,key==='subject_line'?'Subject line':'Preview text',key==='subject_line'?mcSel.subject:mcSel.previewText);
+    }
+    const body=items.filter(f=>f.location==='html'&&f.touchpoint!=='cta');
+    const buttons=items.filter(f=>f.touchpoint==='cta');
+    const custom=buttons.filter(f=>!f.templateDefault),templates=buttons.filter(f=>f.templateDefault);
+    if(body.length||!hasScores)html+=group('body','Email body',body,body.map(row).join(''));
+    if(buttons.length||!hasScores)html+=group('buttons','Button language',buttons,custom.map(row).join('')+(templates.length?`<details class="mc-template" data-key="templates"${isOpen('templates')}><summary>Template buttons (${templates.length})</summary>${templates.map(row).join('')}</details>`:''));
+    return html;
+  }
+  let html=hasScores?'<div class="mc-review-heading">Scored content <span>Lower scores first</span></div>'+priority.scored.map(row).join(''):'';
+  if(hasScores&&priority.unscored.length)html+=group('unevaluated','Not yet evaluated',priority.unscored,contentRows(priority.unscored));
+  else if(!hasScores)html+='<div class="mc-review-heading">Not yet evaluated</div>'+contentRows(fields);
   mcResult.innerHTML=html;
   mcActivity.innerHTML=mcUndo.length?mcUndo.slice(-1).map(u=>`<div class="mc-saved"><span>${u.pending?'Check save':'Saved'} · ${u.field==='subject_line'?'Subject line':'Preview text'}</span><button class="mc-undo" data-undo="${esc(u.undoId)}" ${mcBusyUi?'disabled':''}>Undo</button></div>`).join(''):'';
   const wrap=mcResult.closest('.mc-wrap');if(wrap)wrap.scrollTop=scroll;
   if(focusKey){
     const selector=`[data-op="${CSS.escape(focusKey.op)}"][data-field="${CSS.escape(focusKey.field)}"]${focusKey.index!=null?`[data-index="${CSS.escape(focusKey.index)}"]`:''}`;
-    mcResult.querySelector(selector)?.focus({preventScroll:true});
+    [...mcResult.querySelectorAll(selector)].find(el=>el.getClientRects().length)?.focus({preventScroll:true});
   }
 }
 mcResult.addEventListener('toggle',e=>{
@@ -1843,12 +1869,26 @@ mcResult.addEventListener('toggle',e=>{
 },true);
 async function mcAction(msg,success){
   if(!mcSel||mcBusyUi)return;
+  ++mcDataRevision;
   const epoch=mcEpoch,id=mcSel.id;mcBusyUi=true;mcWorkingField=msg.field;mcExpanded.add(msg.field||'subject_line');
-  mcNotice('Working…');renderMcDetail();
+  mcWorkingOp=msg.type;mcWorkingIndex=Number(msg.alternativeIndex||0);
+  mcNotice(msg.type===MSG.MC_APPLY?'Saving to Mailchimp…':msg.type===MSG.MC_REVERT?'Restoring…':'Working…');renderMcDetail();
   const r=await worker({...msg,campaignId:id,...(mcTabWebId?{webId:mcTabWebId}:{})});
   if(epoch!==mcEpoch||mcSel?.id!==id)return;
-  mcBusyUi=false;mcWorkingField=null;if(r.usage)renderUsage(r.usage);
+  mcBusyUi=false;mcWorkingField=null;mcWorkingOp=null;mcWorkingIndex=null;if(r.usage)renderUsage(r.usage);
   mcNotice(r.ok?success:r.error,!r.ok);
+  if(r.ok&&r.verified&&r.settingsOnly&&r.campaign){
+    const fields=mcSel.fields.map(f=>{
+      const text=f.field==='subject_line'?r.campaign.subject:f.field==='preview_text'?r.campaign.previewText:f.text;
+      return text===f.text?f:{...f,text,score:r.predictions?.[f.field]||null,optimization:null};
+    });
+    mcSel={...mcSel,...r.campaign,fields,fingerprint:null};mcUndo=r.undo||[];
+    mcViewSignature='';mcContext();renderMcDetail();
+    // The save is already verified. Refresh body/cache metadata in the
+    // background rather than blocking the confirmed UI on two more API reads.
+    scheduleMcRefresh(300);
+    return;
+  }
   // Always re-read after an explicit action, including a stale-content error.
   // A newer edit clears the old score/alternative without starting another job.
   await loadDrafts(epoch);renderMcDetail();
@@ -1858,6 +1898,8 @@ mcResult.addEventListener('click',e=>{
   const b=e.target.closest('[data-op]');if(!b||b.disabled||!mcSel)return;
   const f=mcSel.fields.find(x=>x.field===b.dataset.field);if(!f)return;
   const op=b.dataset.op;
+  e.preventDefault();e.stopPropagation();
+  if(op==='review'){mcExpanded.add(f.field);renderMcDetail();return;}
   if(f.location==='html'){mcExpanded.add(f.touchpoint==='cta'?'buttons':'body');if(f.templateDefault)mcExpanded.add('templates');}
   mcAction({type:op==='score'?MSG.MC_SCORE:op==='optimize'?MSG.MC_OPTIMIZE:MSG.MC_APPLY,
     field:f.field,text:f.text,cacheId:f.optimization?.cacheId,alternativeIndex:Number(b.dataset.index||0)},

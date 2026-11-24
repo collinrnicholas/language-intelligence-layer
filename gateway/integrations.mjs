@@ -103,15 +103,31 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
     return { a, draft, id };
   }
 
+  function scoreForField(f,acct,id) {
+    let score = state.cache[runKey('score', f, acct, 'mailchimp')];
+    if (!score?.result) {
+      // A previously applied alternative already has a real prediction.
+      // Reuse it only for this campaign/account/touchpoint and exact text;
+      // this is not a new Score request or an inferred revised score.
+      for (const [cacheId,cached] of Object.entries(state.cache)) {
+        if (cached.scope!=='mailchimp'||!cached.campaignIds?.includes(id)||cached.touchpoint!==f.touchpoint||cached.result?.kind!=='optimize') continue;
+        if (cacheId!==runKey('optimize',{...f,text:cached.original},acct,'mailchimp')) continue;
+        const variant=cached.original===f.text&&typeof cached.result.control?.performance==='number'?cached.result.control:cached.result.alternatives.find(v=>(v.touchpoints?.[f.touchpoint]||v.text)===f.text&&typeof v.performance==='number');
+        if (variant) { score={result:{source:'live',kind:'optimize',jobId:cached.result.jobId,variants:[variant]}};break; }
+      }
+    }
+    return score?.result||null;
+  }
+
   function view(draft, msg) {
     const acct = account(msg);
     return { id: draft.ref.id, webId: draft.ref.webId, title: draft.ref.title,
       subject: draft.settings.subject_line, previewText: draft.settings.preview_text,
       fingerprint: draft.fingerprint, contentType: draft.contentType,
       fields: draft.fields.map(f => {
-        const score = state.cache[runKey('score', f, acct, 'mailchimp')];
+        const score=scoreForField(f,acct,draft.ref.id);
         const key = runKey('optimize', f, acct, 'mailchimp');
-        return { ...f, score: score?.result || null,
+        return { ...f, score,
           optimization: state.cache[key]?.result ? { ...state.cache[key], cacheId: key } : null };
       }), canRevert: Object.values(state.undo).some(u => u.id === draft.ref.id && !u.reverted) };
   }
@@ -122,39 +138,53 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
     try { return await fn(); } finally { busy.delete(id); }
   }
 
+  function undoView(id) {
+    return Object.entries(state.undo).filter(([,u])=>u.id===id&&!u.reverted)
+      .map(([undoId,u])=>({undoId,field:u.field,pending:u.pending}));
+  }
+
   async function apply(msg, undo = false) {
-    if (!msg.campaignId) fail('selection_required', 'Select a draft first.');
-    return locked(msg.campaignId, async () => {
-      const { a, draft, id } = await campaign(msg);
-      let field, original, text, receipt;
+    const id=msg.campaignId;
+    if (!id) fail('selection_required', 'Select a draft first.');
+    return locked(id, async () => {
+      const a=adapter();
+      let field,original,text,receipt,existing;
       if (undo) {
-        receipt = state.undo[msg.undoId];
-        if (!receipt || receipt.id !== id || receipt.reverted) fail('no_undo', 'No original value is available to undo.');
-        field = receipt.field; original = receipt.text; text = receipt.original;
+        receipt=state.undo[msg.undoId];
+        if (!receipt||receipt.id!==id||receipt.reverted) fail('no_undo','No original value is available to undo.');
+        field=receipt.field;original=receipt.text;text=receipt.original;
       } else {
-        const c = state.cache[msg.cacheId];
-        if (!c?.result || c.result.kind !== 'optimize' || c.scope !== 'mailchimp') fail('invalid_result', 'Optimize this field before applying it.');
-        field = c.field; original = c.original;
-        if (field !== 'subject_line' && field !== 'preview_text') fail('body_read_only', 'Body Apply is disabled to preserve the email structure.');
-        // Bind the result to this exact campaign, even when identical copy was cached elsewhere.
-        if (!state.cache[msg.cacheId].campaignIds?.includes(id)) fail('wrong_campaign', 'This alternative was not reviewed for the selected campaign.');
-        const alternative = c.result.alternatives[msg.alternativeIndex ?? 0];
-        text = alternative?.touchpoints?.[c.touchpoint] || alternative?.text;
-        const check = G.validateRewrite(original, text, { maxLength: c.maxLength });
-        if (!check.ok) fail('unsafe_rewrite', check.reasons.join('; '));
-        const existing = Object.entries(state.undo).find(([, u]) => u.id === id && u.cacheId === msg.cacheId && u.text === text && !u.reverted);
-        if (existing && draft.settings[field] === text) return { ok: true, verified: true, duplicate: true, undoId: existing[0], campaign: view(draft, msg) };
+        const c=state.cache[msg.cacheId];
+        if (!c?.result||c.result.kind!=='optimize'||c.scope!=='mailchimp') fail('invalid_result','Optimize this field before applying it.');
+        field=c.field;original=c.original;
+        if (field!=='subject_line'&&field!=='preview_text') fail('body_read_only','Body Apply is disabled to preserve the email structure.');
+        if (!c.campaignIds?.includes(id)) fail('wrong_campaign','This alternative was not reviewed for the selected campaign.');
+        const alternative=c.result.alternatives[msg.alternativeIndex??0];
+        text=alternative?.touchpoints?.[c.touchpoint]||alternative?.text;
+        const check=G.validateRewrite(original,text,{maxLength:c.maxLength});
+        if (!check.ok) fail('unsafe_rewrite',check.reasons.join('; '));
+        existing=Object.entries(state.undo).find(([,u])=>u.id===id&&u.cacheId===msg.cacheId&&u.text===text&&!u.reverted);
       }
-      if (draft.settings[field] !== original) fail('changed', 'This field changed in Mailchimp. Refresh and review the current copy before applying or undoing.');
-      const undoId = undo ? msg.undoId : randomUUID();
-      if (!undo) { state.undo[undoId] = { id, field, original, text, cacheId: msg.cacheId, at: Date.now(), pending: true }; save(); }
-      const verification = await a.updateSetting(id, field, original, text);
-      if (!verification.ok) fail('unverified', 'Mailchimp accepted the update, but read-back did not match. Refresh the draft before retrying. The original value is retained for undo.');
-      if (undo) receipt.reverted = true;
-      else state.undo[undoId].pending = false;
+      const undoId=undo?msg.undoId:existing?.[0]||randomUUID();
+      // Critical path: fresh settings GET → one-field PATCH → verification GET.
+      // Neither campaign HTML nor the draft list is needed to save a setting.
+      const verification=await a.updateSetting(id,field,original,text,{
+        webId:msg.webId,
+        allowAlreadySaved:!!existing,
+        beforeWrite:()=>{
+          if (!undo) { state.undo[undoId]={id,field,original,text,cacheId:msg.cacheId,at:Date.now(),pending:true};save(); }
+        },
+      });
+      if (!verification.ok) fail('unverified','Mailchimp accepted the update, but read-back did not match. Refresh the draft before retrying. The original value is retained for undo.');
+      if (undo) receipt.reverted=true;
+      else state.undo[undoId].pending=false;
       save();
-      const refreshed = await campaign(msg);
-      return { ok: true, verified: true, undoId, campaign: view(refreshed.draft, msg) };
+      const c=verification.campaign;
+      const prediction=scoreForField({field,text:c.settings?.[field]||'',touchpoint:field==='subject_line'?'subject_line':'preheader',maxLength:150},account(msg),id);
+      // Return the independently verified settings now. Body synchronization is
+      // a background UI read, never a prerequisite for reporting a saved subject.
+      return {ok:true,verified:true,duplicate:!!verification.duplicate,undoId,undo:undoView(id),settingsOnly:true,predictions:{[field]:prediction},
+        campaign:{id:c.id,webId:c.web_id,title:c.settings?.title||'',subject:c.settings?.subject_line||'',previewText:c.settings?.preview_text||''}};
     });
   }
 

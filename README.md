@@ -33,12 +33,12 @@ docs live in `docs/loupe/`.
 
 **In Mailchimp:**
 1. Open a regular campaign draft. The sidebar matches its URL to an API-verified campaign and displays actual subject, preview, and eligible body/CTA copy without spending credits.
-2. Score individual fields explicitly (1 credit estimate). Scoring and optimization are independent actions.
-3. Optimize a selected field (5 credits estimate), then review the real Persado alternatives. No changes are saved automatically.
+2. Score individual fields explicitly (1 credit estimate). See the returned score/band, brand feedback and linguistic characteristics when available. Scored fields appear in lower-score-first review order; unscored copy is separate. Scoring and optimization are independent actions.
+3. Optimize a selected field (5 credits estimate), then compare original copy with up to three real Persado alternatives. Scores are predictions, not measured conversion lift. No changes are saved automatically.
 4. Apply an alternative to subject or preview. The gateway patches only the selected setting, checks draft status and verifies by re-reading. Undo restores that field if no later edit conflicts.
 5. Body Apply is disabled to preserve the email structure. No send action is available.
 
-**Usage:** the header shows gateway-tracked credits used (estimate). Account balance is unavailable; no assumed 100-credit balance is shown. Cached scoring of unchanged text avoids another paid request. See [architecture and limits](docs/AUTOPILOT.md).
+**Usage:** Mailchimp connection and usage diagnostics live in Settings. Account balance is unavailable; no assumed 100-credit balance is shown. Cached scoring of unchanged text avoids another paid request. Explanations use fields already returned by Persado, without an additional paid call. See [architecture and limits](docs/AUTOPILOT.md).
 
 Recording a narrated brief still works. Narration is transcribed by the local
 gateway (Whisper), and the variants now come from Persado's optimize run.

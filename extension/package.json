@@ -1,6 +1,6 @@
 {
   "name": "persado-autopilot-extension",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "Persado Autopilot Chrome extension (MV3, loaded unpacked; no build step)",
   "type": "module",
   "scripts": {

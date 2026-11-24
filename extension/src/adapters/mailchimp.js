@@ -135,14 +135,19 @@
 
     // First iteration: patch exactly one reviewed setting. Never re-send a
     // stale title, sender, reply-to, preview, or body along with a subject edit.
-    async function updateSetting(id, field, expected, value) {
+    async function updateSetting(id, field, expected, value, { webId = null, beforeWrite = () => {}, allowAlreadySaved = false } = {}) {
       if (!['subject_line', 'preview_text'].includes(field)) throw new MailchimpError('body_read_only', 'Body Apply is unavailable.');
       const c = await getCampaign(id);
       if (c?.status !== 'save' || c?.type !== 'regular') throw new MailchimpError('not_draft', 'Only regular draft campaigns can be updated.');
+      if (webId != null && Number(c.web_id) !== Number(webId)) throw new MailchimpError('not_found', 'The URL does not match the selected draft.');
+      if (allowAlreadySaved && c.settings?.[field] === value) return { ok: true, duplicate: true, status: c.status, campaign: c };
       if ((c.settings?.[field] || '') !== expected) throw new MailchimpError('changed', 'This field changed in Mailchimp. Refresh before applying or undoing.');
+      // Journal the original only after the fresh draft/field check, before PATCH.
+      // The callback is local storage work, never another provider request.
+      await beforeWrite();
       await call('PATCH', `/campaigns/${encodeURIComponent(id)}`, { settings: { [field]: value } });
       const saved = await getCampaign(id);
-      return { ok: saved?.settings?.[field] === value, status: saved?.status || null };
+      return { ok: saved?.settings?.[field] === value, status: saved?.status || null, campaign: saved };
     }
 
     /**

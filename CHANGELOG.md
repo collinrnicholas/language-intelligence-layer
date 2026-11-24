@@ -8,6 +8,12 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.10.3
+
+- Added actionable scoring with real API scores/bands, neutral prediction meters, Persado brand feedback, language characteristics, contextual next actions, and separate unscored content. No local thresholds, model explanations, confidence, lift or ROI are fabricated.
+- Review order uses actual scores, replacing the fixed Start here marker once evaluations exist. Collapsed rows expose score/status and a primary action; expanded results compare original and optimized predictions. Three alternatives remain the maximum.
+- Apply and Undo now make only the necessary fresh settings GET, one-field PATCH, and independent verification GET. Verified settings update the sidebar immediately; body/cache synchronization runs afterward. Saving feedback appears on the clicked action, and stale background responses cannot overwrite a newer action.
+
 ## 0.10.2
 
 - Show at most three Persado alternatives in the Mailchimp sidebar and public website results, including previously cached responses.

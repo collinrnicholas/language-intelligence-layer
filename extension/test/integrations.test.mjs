@@ -28,7 +28,7 @@ function setup(opts = {}) {
       if (u.pathname.endsWith('/optimize')) {
         const field = Object.keys(body.variant)[0];
         return json(200, { id: 'job_optimize', kind: 'optimize', status: 'completed', result: {
-          control: { performance: 63 }, alternatives: [{ rank: 1, touchpoints: { [field]: opts.unsafe ? 'Save 90% today' : 'Explore fresh spring favourites' } }] } });
+          control: { performance: 63 }, alternatives: [{ rank: 1, ...(opts.performance!=null?{performance:opts.performance,performanceBand:'strong',brandRationale:'More specific brand wording.'}:{}), touchpoints: { [field]: opts.unsafe ? 'Save 90% today' : 'Explore fresh spring favourites' } }] } });
       }
     }
     if (u.pathname.endsWith('/ping')) return json(200, { health_status: 'ok' });
@@ -102,8 +102,11 @@ test('apply writes only the chosen setting, reads it back, deduplicates, and und
   const s = setup(), before = { ...s.c.settings };
   const out = await optimize(s);
   const msg = { type: 'MC_APPLY', campaignId: 'abc', webId: 42, cacheId: out.cacheId };
+  const beforeApply=s.calls.length;
   const applied = await s.send(msg);
   assert.equal(applied.verified, true, applied.error);
+  assert.deepEqual(s.calls.slice(beforeApply).map(c=>c.method),['GET','PATCH','GET'],'save path keeps fresh draft check and independent verification, without extra reads');
+  assert.ok(!s.calls.slice(beforeApply).some(c=>c.url.includes('/content')||c.url.includes('/campaigns?')));
   assert.equal(s.c.settings.subject_line, 'Explore fresh spring favourites');
   assert.deepEqual(s.calls.find(c => c.method === 'PATCH').body, { settings: { subject_line: 'Explore fresh spring favourites' } });
   assert.equal(s.c.settings.preview_text, before.preview_text);
@@ -114,6 +117,12 @@ test('apply writes only the chosen setting, reads it back, deduplicates, and und
   assert.equal(undo.verified, true, undo.error);
   assert.equal(s.c.settings.subject_line, before.subject_line);
   assert.equal(s.c.settings.preview_text, 'A manual change elsewhere');
+});
+
+test('fast Apply still rejects a mismatched URL before any write',async()=>{
+ const s=setup(),out=await optimize(s);const before=s.calls.length;
+ const r=await s.send({type:'MC_APPLY',campaignId:'abc',webId:99,cacheId:out.cacheId});
+ assert.equal(r.kind,'not_found');assert.deepEqual(s.calls.slice(before).map(c=>c.method),['GET']);
 });
 
 test('preview text can be optimized and independently applied', async () => {
@@ -198,4 +207,22 @@ test('HTTP gateway rejects unpaired requests, web origins and rebinding hosts', 
   assert.equal(rebound, 403);
   const r = await fetch(url, init);assert.equal(r.status, 200);
   assert.ok(!(await r.text()).includes(s.env.PERSADO_API_KEY));
+});
+
+test('applied optimization predictions keep their provenance without another score charge or account leakage',async()=>{
+ const s=setup({performance:84});
+ const out=await s.send(s.field('MC_OPTIMIZE'));
+ const applied=await s.send({type:'MC_APPLY',campaignId:'abc',webId:42,cacheId:out.cacheId});
+ assert.equal(applied.predictions.subject_line.variants[0].performance,84);
+ assert.equal(applied.predictions.subject_line.kind,'optimize');
+ const st=await s.send({type:'MC_STATUS',campaignId:'abc'});
+ const field=st.campaign.fields.find(f=>f.field==='subject_line');
+ assert.equal(field.score.variants[0].performance,84);assert.equal(st.usage.scoreRuns,0);
+ assert.equal(st.usage.optimizeRuns,1);assert.equal(st.usage.used,5);
+ const other=await s.send({type:'MC_STATUS',campaignId:'abc',settings:{brand:'Different account name'}});
+ assert.equal(other.campaign.fields.find(f=>f.field==='subject_line').score,null);
+ const before=s.calls.length;
+ const undo=await s.send({type:'MC_REVERT',campaignId:'abc',undoId:applied.undoId});
+ assert.equal(undo.predictions.subject_line.variants[0].performance,63);
+ assert.deepEqual(s.calls.slice(before).map(c=>c.method),['GET','PATCH','GET']);
 });

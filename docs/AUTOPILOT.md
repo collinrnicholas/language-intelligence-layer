@@ -71,7 +71,7 @@ Verified on November 24, 2026:
 
 Still unverified: microphone permission/recording/transcription; live body-block scoring and optimization; and live insufficient-credit behavior (quota errors are covered by automated fixtures). Public website provider request/response handling is tested with fixtures; public website scanning is checked in Chromium. Body Apply and all sending remain intentionally unavailable.
 
-Before testing in the user's Chrome, reload/load the final 0.10.1 extension, hard-reload Mailchimp, pair the local gateway and run the checklist above. Restart the existing gateway yourself if it predates the final files; only one gateway should use the state file at a time.
+For a fresh installation, load the current extension build, hard-reload Mailchimp, pair the local gateway and run the checklist above. Restart the exact existing gateway if it predates the final files; only one gateway should use the state file at a time.
 
 ## Sidebar UX verification — 0.10.1
 
@@ -95,3 +95,24 @@ Verified in the user's actual signed-in Chrome and Mailchimp, November 24, 2026:
 Automated validation: 118 agent tests and 55 extension tests, lint/typecheck, smoke, build and repository hygiene passed. Tests cover Optimize without scoring, concurrent status-read coalescing, trusted read-only change hints and rejection of untrusted senders, alongside existing billing/cache, draft-only Apply, read-back and Undo safeguards.
 
 Limitations retained: body Apply is unavailable; the API reads saved content only; the fallback may take up to roughly fifteen seconds plus API latency. Template recognition is a narrow heuristic, not proof of authorship. No ROI ranking, account balance, automatic scoring or sending is invented. Microphone behavior and live quota-exhaustion handling were not retested for this UX change.
+
+## Actionable scoring and Apply verification — 0.10.3
+
+The official [Persado client manual](https://github.com/persado/martechapi-cli/blob/develop/USER_MANUAL.md#4-score-variants) describes performance on a 0–100 scale and brand fit out of five. Its [response schema](https://github.com/persado/martechapi-cli/blob/develop/src/pkg/api/models.go) includes `performanceBand`, `brandRationale`, `brandAlignment`, emotions, descriptors and compliance. No validated numerical band thresholds were found. The sidebar displays a returned band verbatim apart from capitalization, and never derives one from the score. A numeric-only response gets a neutral score and an explicit explanation-unavailable message.
+
+Brand rationale is labelled **Persado brand feedback**, not presented as a causal explanation of the performance number. Detected characteristics and compliance feedback also come from actual response fields. Recommendations point to that feedback, editing or optimization. No separate explanation model, additional explanation charge, model confidence, conversion forecast or ROI claim is introduced.
+
+Scored rows display score/status and their primary action while collapsed. Lower returned performance numbers appear first as an editorial review order, not a financial priority or a cross-job Persado ranking. The fixed Start here label disappears once scores exist. Not yet evaluated content is grouped separately. Expanded rows show original language, real feedback and explicit paid actions. Optimization compares the original with up to three alternatives, labelling actual API scores as predictions. An applied alternative retains its genuine cached prediction only when account, campaign, touchpoint and exact text match; no extra scoring job is submitted.
+
+Apply and Undo now use three sequential Mailchimp requests: fresh campaign/settings GET, one-field PATCH and independent verification GET. The previous path made seven requests before returning the save result. Draft, URL/campaign identity, stale-copy, rewrite, serialization and undo-journaling safeguards remain. The sidebar renders verified settings immediately and synchronizes HTML/cache metadata afterward. Saving feedback begins immediately, but saved confirmation waits for read-back; network persistence cannot be guaranteed instantaneous.
+
+Verified November 24, 2026 in the actual signed-in Chrome side panel against campaign web_id `4750548`:
+
+- Reloaded the extension to 0.10.3. Inspected genuine cached live Persado results: preview 51/Fair with brand fit 3/5 and its returned rationale; subject 87/Excellent with brand fit 3/5. The preview appeared first with Review next, the subject retained a collapsed Optimize action, and four unevaluated body/button elements were grouped separately. No Start here remained.
+- Inspected original subject 78/Strong against optimized subject 87, with two further alternatives behind one disclosure (three total). The comparison uses actual API predictions.
+- Used native Undo and Apply controls. Undo restored the original subject, then Apply restored the user's previously selected optimized subject. Both returned verified success and the contextual Undo appeared. Preview remained unchanged. No email was sent and no new Persado paid request was needed for these checks or explanations.
+- The sidebar fit the actual docked width with readable actions, neutral meter, progressive disclosure and source-labelled brand feedback. Content scripts were unchanged in this patch; their detection/navigation path was hard-reloaded and verified in the preceding native UX checks.
+
+Automated validation: 118 agent tests plus 63 extension tests passed. New coverage checks neutral numeric-only results, genuine band/rationale/tag provenance, unscored separation, actual optimization predictions, three-request Apply, mismatched campaign identity, cross-account cache isolation and existing stale-write/Undo protections. Smoke, typecheck, build, version and repository checks passed.
+
+Limits remain: body Apply is disabled; Mailchimp's already-open editor form can retain stale text until a refresh; scores and brand feedback do not prove conversion lift. This patch reused real responses rather than buying additional scores solely for UI testing. Microphone/transcription and live quota exhaustion were not retested.
