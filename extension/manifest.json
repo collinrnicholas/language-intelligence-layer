@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Persado Autopilot",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Persado inside the tools you already use: score and optimize page copy, and optimize Mailchimp drafts in place with the Persado API.",
   "permissions": [
     "storage",

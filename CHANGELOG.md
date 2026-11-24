@@ -8,6 +8,10 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.10.2
+
+- Show at most three Persado alternatives in the Mailchimp sidebar and public website results, including previously cached responses.
+
 ## 0.10.1
 
 - Compact Mailchimp sidebar: one native Persado Autopilot title, connection indicator and settings gear, campaign context and eligible count, subject-first disclosure rows, and grouped button language with template buttons de-emphasized.

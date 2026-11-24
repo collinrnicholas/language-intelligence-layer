@@ -1041,7 +1041,7 @@ function renderSingle(mode,sel){
 
   // optimize
   const tp=sel.touchpoint;
-  const alts=r.alternatives||[];
+  const alts=(r.alternatives||[]).slice(0,3);
   const best=alts[0]||null;
   const copyOf=(a)=>a?.touchpoints?.[tp]||a?.text||'';
   resHeading.textContent=best?'Optimized by Persado':'No better version found';
@@ -1802,7 +1802,7 @@ function renderMcDetail(){
   const fields=mcSel.fields||[],disabled=mcBusyUi||!lastUsage?.hasKey;
   const isOpen=key=>mcExpanded.has(key)?' open':'';
   const row=f=>{
-    const score=f.score?.variants?.[0]?.performance,alternatives=f.optimization?.result?.alternatives||[];
+    const score=f.score?.variants?.[0]?.performance,alternatives=(f.optimization?.result?.alternatives||[]).slice(0,3);
     const primary=f.field==='subject_line';
     const alternative=(v,i)=>`<div class="mc-alternative"><div class="mc-alternative-label">${i===0?'Suggested alternative':'Alternative '+(i+1)}${v.performance!=null?' · Score '+esc(v.performance):''}</div>`
       +`<p class="mc-alternative-copy">${esc(v.touchpoints?.[f.touchpoint]||v.text||'')}</p>`
