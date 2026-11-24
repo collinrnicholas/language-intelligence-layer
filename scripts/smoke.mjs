@@ -216,6 +216,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
 {
   const iBoot = HTML.indexOf('src/boot.js'), iMsg = HTML.indexOf('src/messages.js'), iMod = HTML.indexOf('sidepanel.js" type="module"');
   const iIntelligence=HTML.indexOf('src/language-intelligence.js');
+  if(HTML.indexOf('src/guard.js')<0||HTML.indexOf('src/guard.js')>iIntelligence)fail('recommendation eligibility','guard.js must load before language-intelligence.js');
   if(PANEL.includes('PERSADO_INTELLIGENCE')&&(iIntelligence<0||iIntelligence>iMod)) fail('score presentation','language-intelligence.js must load before the panel module');
   const iImpact=HTML.indexOf('src/campaign-impact.js');
   if(PANEL.includes('PERSADO_IMPACT')&&(iImpact<0||iImpact>iMod)) fail('campaign impact','campaign-impact.js must load before the panel module');

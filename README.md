@@ -22,20 +22,20 @@ docs live in `docs/loupe/`.
 ## What it does
 
 **On any web page:**
-1. **Scan.** The side panel reads the page's headlines and calls to action and ranks
-   them with a local copy check, labelled as local.
+1. **Scan.** The side panel reads the page's headlines and calls to action. Local
+   copy-review suggestions remain optional and clearly labelled.
 2. **Score.** Sends the selected line to Persado (`POST /v1/score`, 1 run) and shows
-   Persado's score, band, compliance and emotions.
+   an evidence-backed content state. Actual scores and response details are optional.
 3. **Optimize.** Sends it to Persado (`POST /v1/optimize`, 5 runs) and shows the
-   original against Persado's ranked alternatives, with real scores.
+   strongest eligible, comparably scored version. Original copy and other options stay secondary.
 4. **Preview on page.** Swaps the optimized line into the page in place, then
    restores it. Nothing is saved to the site.
 
 **In Mailchimp:**
 1. Open a regular campaign draft. The sidebar matches its URL to an API-verified campaign and displays actual subject, preview, and eligible body/CTA copy without spending credits.
-2. See actual estimated campaign reach and, when comparable sent history exists, an email-volume-weighted click baseline. Optional details provide source campaigns and observed post-send reports.
-3. Score individual fields explicitly (1 credit). Scored fields appear in lower-score-first review order with compact returned bands/scores; unscored copy is separate. Scoring and optimization are independent actions.
-4. Optimize a selected field (5 credits). The highest comparable returned score is selected first, with its predicted score-point improvement. Up to three scored choices and Compare original stay compact. Scores are predictions, not measured conversion lift. No changes are saved automatically.
+2. See the campaign title and checked/remaining progress. Campaign details retain supported reach, historical baselines and observed reports.
+3. Check individual fields explicitly (1 credit). One recommended action opens first; Looking good and Not checked content remain grouped. Scoring and optimization are independent actions.
+4. Find a better version (5 credits). Only a valid higher-scoring returned alternative offers Use this version. Up to three choices, original copy, rationale and scores remain optional. No changes are saved automatically; scores do not establish conversion lift.
 5. Apply an alternative to subject or preview. The gateway patches only the selected setting, checks draft status and verifies by re-reading. Undo restores that field if no later edit conflicts.
 6. Explore impact with an explicitly labelled scenario calculator. User-selected assumptions are distinct from Persado model output and observed results. No score difference is converted to revenue.
 7. Body Apply is disabled to preserve the email structure. No send action is available.

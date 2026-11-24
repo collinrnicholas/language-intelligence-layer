@@ -561,7 +561,7 @@
     #mcSteps{font-size:12px;line-height:1.5;color:var(--text-2);margin-bottom:8px;overflow-wrap:anywhere}
     #mcSteps.error{color:var(--red)}
     .mc-row{border-top:1px solid var(--border);min-width:0}
-    .mc-row.primary{border-top:0;border-left:2px solid var(--red);padding-left:12px;margin-bottom:10px}
+    .mc-row.primary{border-top:0;margin-bottom:10px}
     .mc-row>summary,.mc-group>summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:48px;cursor:pointer;min-width:0}
     .mc-row>summary::-webkit-details-marker,.mc-group>summary::-webkit-details-marker{display:none}
     .mc-row>summary::after,.mc-group>summary::after{content:'';width:6px;height:6px;flex:none;border-right:1.5px solid var(--text-2);border-bottom:1.5px solid var(--text-2);transform:rotate(45deg);margin-left:auto;margin-right:4px}
@@ -579,6 +579,14 @@
     .mc-option{max-width:100%;min-height:36px;border:1px solid var(--border);border-radius:6px;padding:6px;background:var(--surface);color:var(--text-1);font:12px var(--sans);margin-top:8px}
     .mc-overview{font-size:12px;line-height:1.5;color:var(--text-2);padding-bottom:10px}
     .mc-overview:empty{display:none}
+    .mc-outcome{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:400;color:var(--text-2);margin-top:3px}
+    .mc-state-icon{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text-3);flex:none;position:relative}
+    .mc-state-icon.worth{background:var(--amber-text)}
+    .mc-state-icon.good{width:10px;height:10px;border-radius:0;background:transparent}
+    .mc-state-icon.good::after{content:'';position:absolute;left:2px;top:0;width:4px;height:7px;border-right:1.7px solid var(--green-text);border-bottom:1.7px solid var(--green-text);transform:rotate(45deg)}
+    .mc-state-message{font-size:12px;color:var(--text-2);line-height:1.5;margin-bottom:8px}
+    .mc-field-error{font-size:12px;line-height:1.5;color:var(--red);margin-top:10px;overflow-wrap:anywhere}
+    .mc-response{font:11px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow-y:auto;margin-top:8px}
     .mc-row>summary:not(:has(button)) .mc-summary-copy{grid-column:1/3}
     .mc-overview details{margin-top:4px}.mc-overview summary,.mc-impact>summary{min-height:32px;cursor:pointer;display:flex;align-items:center;gap:8px}
     .mc-overview p{margin-top:6px}.mc-baseline-list{padding-left:16px;margin-top:6px;font-size:12px}
@@ -629,6 +637,7 @@
     .p-alt b{font-family:var(--mono);}
     .p-alt button{flex:none;}
 
+    body>#usageBar{display:none}
     /* Shared interaction system. Movement is reserved for user/state changes. */
     body :is(button,summary,a,input,select,textarea,[role="button"]){transition:background-color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease),color var(--motion-fast) var(--motion-ease),box-shadow var(--motion-fast) var(--motion-ease),opacity var(--motion-fast) var(--motion-ease),transform var(--motion-fast) var(--motion-ease)}
     :root :is(button,summary,a,input,select,textarea,[role="button"]):focus-visible{outline:2px solid var(--ink);outline-offset:3px}
@@ -711,8 +720,8 @@
 
   <div class="start-foot" style="margin-top:auto;">
     <div class="opt-actions">
-      <button class="btn btn-outline" id="btnConfirm">Score</button>
-      <button class="btn btn-primary" id="btnOptimize">Optimize</button>
+      <button class="btn btn-primary" id="btnConfirm">Check · 1 credit</button>
+      <button class="btn btn-outline" id="btnOptimize">Find a better version · 5 credits</button>
     </div>
     <div class="scan-alt">
       <button class="btn-quiet" id="btnPick">Pick on page</button>
@@ -1038,6 +1047,7 @@
 <script src="src/config.js"></script>
 <script src="src/page-noise.js"></script>
 <script src="src/url-display.js"></script>
+<script src="src/guard.js"></script>
 <script src="src/language-intelligence.js"></script>
 <script src="src/campaign-impact.js"></script>
 <script src="src/interactions.js"></script>

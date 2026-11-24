@@ -620,7 +620,7 @@ chrome.runtime.onMessage.addListener((msg)=>{
 const KIND_LABEL={cta:'Call to action',headline:'Headline',body:'Body copy'};
 let resMaterialIndex=-1,scanResult=null,scanMaterial=null,scanBusy=false,scanMode='optimize';
 
-const scoreClass=(n)=>n<60?'low':n<73?'mid':'hi';   // weak/fair · good · strong/excellent
+const webField=m=>({field:m.id||m.selector||'selected',text:m.text,touchpoint:m.evaluationTouchpoint||({cta:'cta',body:'body',headline:'headline'})[m.kind]||'headline',score:m.evaluation?.kind==='score'?m.evaluation:null,optimization:m.evaluation?.kind==='optimize'?{result:m.evaluation}:null});
 
 async function injectScanner(tabId){
   // messages.js rides along because scan.js reads MSG from it, exactly as the
@@ -659,7 +659,7 @@ async function autoScan(){
     const ms=r.materials||[];
     scanCount.textContent=ms.length?`${ms.length} found`:'nothing found';
     scanSub.textContent=ms.length
-      ?'Ranked by how much attention the slot gets against how weak the copy is. The top one is the best place to start.'
+      ?'Check the copy you want to improve.'
       :'No buttons or headlines could be read here. Record a brief instead.';
     renderScanList();
   }catch(e){
@@ -675,16 +675,11 @@ async function autoScan(){
 function renderScanList(){
   const ms=scanResult?.materials||[];
   if(!ms.length){scanDetail.style.display='none';return;}
-  const top=ms[0];
-  scanPriority.innerHTML=top
-    ?`Start here: <b>${esc(trunc(top.text,64))}</b> — it takes ${top.prominence}% of the page’s attention and scores ${top.score} (${esc(top.band?.label||'')}), so it is the largest single gain on this page. Everything below it matters less.`
-    :'';
-  scanList.innerHTML=ms.map((m,i)=>`<div class="scan-row${i===0?' weak':''}" data-i="${i}" role="button" tabindex="0">`
-    +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}${m.aboveFold?' · above fold':''}</div>`
-    +`<div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
-    +`<div class="scan-row-s">${i===0?'<span class="scan-badge">Start here</span>':''}`
-    +`<span class="scan-score ${scoreClass(m.score)}">${m.score}</span>`
-    +`<span class="scan-band ${m.band?.key||''}">${esc(m.band?.label||'')}</span></div></div>`).join('');
+  scanPriority.textContent='';
+  const checked=ms.filter(m=>m.evaluation).length;scanCount.textContent=`${checked} checked · ${ms.length-checked} remaining`;
+  scanList.innerHTML=ms.map((m,i)=>{const state=self.PERSADO_INTELLIGENCE.outcome(webField(m));return `<div class="scan-row" data-i="${i}" role="button" tabindex="0">`
+    +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}</div><div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
+    +`<div class="scan-row-s mc-outcome"><i class="mc-state-icon ${state.kind==='good'?'good':['recommended','opportunity'].includes(state.kind)?'worth':'neutral'}" aria-hidden="true"></i>${esc(state.label)}</div></div>`;}).join('');
   selectMaterial(0);
 }
 
@@ -697,14 +692,16 @@ function selectMaterial(i){
 
 function renderScanDetail(m){
   if(!m){scanDetail.style.display='none';return;}
-  const issues=(m.issues||[]).slice(0,5);
+  const issues=(m.issues||[]).slice(0,5),state=self.PERSADO_INTELLIGENCE.outcome(webField(m));
   scanDetail.style.display='';
-  scanDetail.innerHTML=`<div class="scan-d-title">Scores <b>${m.score}</b>/100 · ${esc(m.band?.label||'')} · ${esc((KIND_LABEL[m.kind]||m.kind).toLowerCase())} · ${m.prominence}% of the page’s attention</div>`
-    +(m.cappedBy?`<div class="scan-cap">Topped out at ${esc(m.band?.label||'')}: ${esc(m.cappedBy.why)}.</div>`:'')
-    +`<div class="scan-d-copy">“${esc(m.text)}”</div>`
-    +`<div class="scan-why">${issues.length
-      ?issues.map(x=>`<div class="scan-why-i"><b>−${x.points}</b><span><strong>${esc(x.label)}.</strong> ${esc(x.detail)}</span></div>`).join('')
-      :'<div class="scan-why-i"><b>0</b><span>Nothing measurable is working against this copy — it is simply the highest-attention slot on the page.</span></div>'}</div>`;
+  scanDetail.innerHTML=`<p class="mc-state-message">${esc(state.message)}</p><div class="scan-d-copy">${esc(m.text)}</div>`
+    +`<details class="mc-compare"><summary>Local copy review</summary><p class="mc-meta">Heuristic review, not a Persado score.</p><div class="scan-why">${issues.length?issues.map(x=>`<div class="scan-why-i"><span><strong>${esc(x.label)}.</strong> ${esc(x.detail)}</span></div>`).join(''):'<p class="mc-meta">No local suggestions.</p>'}</div></details>`;
+  btnConfirm.textContent='Check · 1 credit';btnConfirm.hidden=state.kind!=='unchecked';
+  btnConfirm.disabled=!apiKey||!!lastUsage?.exhausted;
+  btnOptimize.textContent=m.evaluation?.kind==='optimize'?'Review recommendation':'Find a better version · 5 credits';
+  btnOptimize.classList.toggle('btn-primary',state.kind==='opportunity'||state.kind==='recommended');
+  btnOptimize.classList.toggle('btn-outline',state.kind!=='opportunity'&&state.kind!=='recommended');
+  btnOptimize.disabled=!apiKey||(!!lastUsage?.exhausted&&m.evaluation?.kind!=='optimize');
 }
 
 scanList.addEventListener('click',(e)=>{
@@ -921,7 +918,7 @@ document.addEventListener('keydown',e=>{
 });
 if(btnRescanStale)btnRescanStale.addEventListener('click',()=>{if(resStale)resStale.hidden=true;setUiState('scan');autoScan();});
 
-function optimizeMaterial(){return persadoRun('optimize');}
+function optimizeMaterial(){if(scanMaterial?.evaluation?.kind==='optimize'){renderSingle('optimize',{material:scanMaterial,result:scanMaterial.evaluation,touchpoint:webField(scanMaterial).touchpoint});return;}return persadoRun('optimize');}
 
 /** Brand for account.name when Settings has none: the site's own name. */
 function brandFromPage(){
@@ -944,19 +941,20 @@ async function persadoRun(op){
   if(!m){tm('Pick a piece of copy first','err');return;}
   if(runBusy)return;
   runBusy=true;
-  const btn=op==='score'?btnConfirm:btnOptimize;
+  const btn=document.activeElement?.tagName==='BUTTON'?document.activeElement:op==='score'?btnConfirm:btnOptimize;
   const label=btn.textContent;
-  btn.disabled=true;btn.dataset.busy='true';btn.setAttribute('aria-busy','true');btn.textContent=op==='score'?'Scoring…':'Optimizing…';
-  if(op==='optimize')tm('Persado optimize runs can take a minute or two','ok');
+  document.querySelector('.web-request-error')?.remove();
+  btn.disabled=true;btn.dataset.busy='true';btn.setAttribute('aria-busy','true');btn.textContent=op==='score'?'Checking…':'Finding a version…';
   try{
     const r=await worker({type:op==='score'?MSG.PERSADO_SCORE:MSG.PERSADO_OPTIMIZE,
       text:m.text,kind:m.kind,pageUrl:scanResult?.url||currentUrl,brand:brandFromPage(),
       context:[scanResult?.title?`Page: ${scanResult.title}`:'',m.context?`Nearby copy: ${m.context}`:'',`Objective: ${goalValue}`].filter(Boolean).join('\n')});
     if(r.usage)renderUsage(r.usage);
-    if(!r.ok){tm(r.error||'Persado request failed','err');if(r.kind==='no_key'||r.kind==='invalid_key')openSettings();return;}
+    if(!r.ok){const error=document.createElement('p');error.className='mc-field-error web-request-error';error.setAttribute('role','alert');error.textContent=r.error||'Persado request failed';(uiState==='results'?resultsContainer:scanDetail).append(error);if(r.kind==='no_key'||r.kind==='invalid_key')openSettings();return;}
     renderSingle(op,{material:m,result:r.result,touchpoint:r.touchpoint,product:currentProduct()});
   }finally{
-    runBusy=false;btn.disabled=false;delete btn.dataset.busy;btn.removeAttribute('aria-busy');btn.textContent=label;
+    runBusy=false;btn.disabled=!!lastUsage?.exhausted||!apiKey;delete btn.dataset.busy;btn.removeAttribute('aria-busy');btn.textContent=label;
+    btnConfirm.disabled=!!lastUsage?.exhausted||!apiKey;btnOptimize.disabled=!apiKey||(!!lastUsage?.exhausted&&scanMaterial?.evaluation?.kind!=='optimize');
   }
 }
 
@@ -1003,6 +1001,7 @@ function renderSingle(mode,sel){
   scanMode=mode;
   briefPayload=null;recommendations=null;
   const r=sel.result;
+  if(r){m.evaluation=r;m.evaluationTouchpoint=sel.touchpoint||({cta:'cta',body:'body',headline:'headline'})[m.kind]||'headline';}
 
   // "confirm" = a picked line shown before any Persado call: measured locally only.
   if(mode==='confirm'||!r){
@@ -1012,75 +1011,53 @@ function renderSingle(mode,sel){
     resOrig.style.display='none';
     resultsContainer.innerHTML=`<div class="opt-card"><div class="opt-copy">${esc(m.text)}</div>`
       +`<div class="opt-delta">Score it or optimize it with Persado.</div>`
-      +`<div class="opt-act"><button class="vc-copybtn" id="btnScoreFromCard">Score</button><button class="vc-optimize" id="btnOptFromCard">Optimize</button></div></div>`;
+      +`<div class="opt-act"><button class="vc-copybtn" id="btnScoreFromCard">Check · 1 credit</button><button class="vc-optimize" id="btnOptFromCard">Find a better version · 5 credits</button></div></div>`;
     resNote.style.display='none';
     resultsContainer.querySelector('#btnScoreFromCard').onclick=()=>persadoRun('score');
     resultsContainer.querySelector('#btnOptFromCard').onclick=()=>persadoRun('optimize');
     finishSingle();return;
   }
 
-  const meta=`<div class="res-note" style="display:block;margin-top:10px;">Persado ${esc(r.kind||mode)} job <span class="mono">${esc(r.jobId||'')}</span>${r.requestId?` · request ${esc(r.requestId)}`:''}${r.source==='demo'?' · demo fixture':''}</div>`;
+  const evidence=self.PERSADO_INTELLIGENCE.outcome(webField(m));
+  const meta=`<details class="mc-compare"><summary>Score details</summary><p class="mc-meta">Model scoring, not measured business outcomes.</p><pre class="mc-response">${esc(JSON.stringify({jobId:r.jobId,channel:r.channel,variants:r.kind==='score'?r.variants:undefined,control:r.control,notice:r.notice},null,2))}</pre></details>`;
   if(mode==='score'){
-    const v=r.variants[0]||null;
-    resHeading.textContent='Scored by Persado';
-    resCtx.innerHTML=[(KIND_LABEL[m.kind]||'').toUpperCase(),'WEB PAGE'].map(x=>`<span class="nw">${esc(x)}</span>`).join(' · ');
-    capLine.textContent='1 score run · nothing rewritten';
+    resHeading.textContent=evidence.label;resCtx.textContent=KIND_LABEL[m.kind]||'Copy';capLine.textContent=evidence.message;
     resOrig.style.display='none';
-    resultsContainer.innerHTML=`<div class="opt-card">`
-      +`<div class="opt-top"><span class="opt-label">As written</span>${typeof v?.performance==='number'?`<span class="opt-score">Persado<b>${v.performance}</b></span>`:''}</div>`
-      +`<div class="opt-copy">${esc(m.text)}</div>`
-      +(v?perfTag(v):'<div class="opt-delta">Persado returned no score for this copy.</div>')
-      +(typeof v?.performance!=='number'&&v?'<div class="opt-delta">Persado returned no performance score for this channel.</div>':'')
-      +`<div class="opt-act"><button class="vc-optimize" id="btnOptFromCard">Optimize this</button><button class="vc-copybtn" id="btnCopyOpt">Copy</button></div>`
-      +`</div>`+meta;
-    resNote.style.display='none';
-    resultsContainer.querySelector('#btnOptFromCard').onclick=()=>persadoRun('optimize');
-    const cb=resultsContainer.querySelector('#btnCopyOpt');
-    cb.onclick=()=>navigator.clipboard.writeText(m.text).then(()=>{cb.textContent='Copied';}).catch(()=>tm('Could not copy','err'));
+    resultsContainer.innerHTML=`<div class="opt-card"><p class="opt-copy">${esc(m.text)}</p>`
+      +(evidence.kind==='opportunity'?'<div class="opt-act"><button class="vc-optimize" id="btnOptFromCard">Find a better version · 5 credits</button></div>':'<details class="mc-compare"><summary>More actions</summary><button class="vc-copybtn" id="btnOptFromCard">Find a better version · 5 credits</button></details>')
+      +`<button class="mc-secondary" id="btnCopyOpt">Copy</button>${meta}</div>`;
+    resNote.style.display='none';resultsContainer.querySelector('#btnOptFromCard').onclick=()=>persadoRun('optimize');
+    const cb=resultsContainer.querySelector('#btnCopyOpt');cb.onclick=()=>navigator.clipboard.writeText(m.text).then(()=>{cb.textContent='Copied';}).catch(()=>tm('Could not copy','err'));
     finishSingle();return;
   }
-
-  // optimize
-  const tp=sel.touchpoint;
-  const ranked=self.PERSADO_INTELLIGENCE.comparison({touchpoint:tp,optimization:{result:r}});
-  const alts=ranked.alternatives;
-  const best=alts[0]||null;
-  const copyOf=(a)=>a?.touchpoints?.[tp]||a?.text||'';
-  resHeading.textContent=best?'Optimized by Persado':'No better version found';
-  resCtx.innerHTML=[(KIND_LABEL[m.kind]||'').toUpperCase(),'WEB PAGE'].map(x=>`<span class="nw">${esc(x)}</span>`).join(' · ');
-  capLine.textContent=`1 optimize run · ${alts.length} alternative${alts.length===1?'':'s'} ranked by Persado`;
-  resOrigText.textContent=m.text+(typeof r.control?.performance==='number'?`  ·  Persado score ${r.control.performance}`:'');
-  resOrig.style.display='';
-  if(!best){
-    resultsContainer.innerHTML=`<div class="opt-card"><div class="opt-delta">${esc(r.notice?.message||'Persado returned no alternatives for this copy.')}${r.notice?.code?` (${esc(r.notice.code)})`:''}</div></div>`+meta;
-    resNote.style.display='none';finishSingle();return;
-  }
-  const copy=copyOf(best);
-  const delta=ranked.delta!==null
-    ?`${ranked.originalScore} → ${ranked.score} · <b>${ranked.delta>0?'+':''}${ranked.delta} score points</b><br>Predicted language-score ${ranked.delta>0?'improvement':'change'}`:'';
-  resultsContainer.innerHTML=`<div class="opt-card">`
-    +`<div class="opt-top"><span class="opt-label">${ranked.top?'Top recommendation':'Recommended copy'}</span></div>`
-    +`<div class="opt-copy">${esc(copy)}</div>`
-    +(delta?`<div class="opt-delta">${delta}</div>`:'')
-    +perfTag(best,{showScore:false})
-    +`<div class="opt-act"><button class="vc-optimize" id="btnPreview">Preview on page</button>`
-    +`<button class="vc-copybtn" id="btnCopyOpt">Copy</button></div>`
-    +(alts.length>1?`<details class="p-alts"><summary>${alts.length-1} more from Persado</summary>`
-      +alts.slice(1).map((a,i)=>`<div class="p-alt"><span>${esc(copyOf(a))}</span><span>${typeof a.performance==='number'?`<b>${a.performance}</b>`:''}</span><button class="vc-copybtn" data-alt="${i+1}">Preview</button></div>`).join('')
-      +`</details>`:'')
-    +`</div>`+meta;
-  resNote.textContent='Previews swap the text in this tab only. Reloading or leaving the page restores the site; nothing is saved to it.';
-  resNote.style.display='';
+  // Recommendations use evaluated, eligible versions from this same job.
+  const tp=webField(m).touchpoint,ranked=self.PERSADO_INTELLIGENCE.comparison(webField(m));
+  const alts=ranked.alternatives,best=alts[0]||null,recommended=evidence.kind==='recommended';
+  const copyOf=a=>a?.touchpoints?.[tp]||a?.text||'';
+  const copy=recommended?copyOf(best):m.text;
+  resHeading.textContent=evidence.label;resCtx.textContent=KIND_LABEL[m.kind]||'Copy';capLine.textContent=evidence.message;
+  resOrig.style.display='none';
+  const scoreDetails=`<details class="mc-compare"><summary>Score details</summary><p class="mc-meta">Language score: ${ranked.originalScore??'not returned'}${best?' → '+(ranked.score??'not returned'):''}</p>${best?perfTag(best):''}<p class="mc-meta">Model scoring, not measured business outcomes.</p><pre class="mc-response">${esc(JSON.stringify({jobId:r.jobId,channel:r.channel,control:r.control,selected:best,notice:r.notice},null,2))}</pre></details>`;
+  const remaining=recommended?alts.map((a,i)=>({a,i})).slice(1):alts.map((a,i)=>({a,i}));
+  const feedback=best?.performanceWhy||best?.brandRationale;
+  resultsContainer.innerHTML=`<div class="opt-card"><p class="opt-copy">${esc(copy)}</p>`
+    +(recommended?'<div class="opt-act"><button class="vc-optimize" id="btnPreview">Preview this version</button></div>':'')
+    +`<button class="mc-secondary" id="btnCopyOpt">Copy</button>`
+    +(remaining.length?`<details class="p-alts"><summary>Other options · ${remaining.length}</summary>${remaining.map(({a,i})=>`<div class="p-alt"><span>${esc(copyOf(a))}</span><button class="vc-copybtn" data-alt="${i}">Preview</button></div>`).join('')}</details>`:'')
+    +(recommended?`<details class="mc-compare"><summary>Original copy</summary><p class="mc-current">${esc(m.text)}</p></details>`:'')
+    +(feedback?`<details class="mc-compare"><summary>Why this recommendation?</summary><p class="mc-meta">${best.performanceWhy?'Persado performance feedback':'Persado brand guidance'}: ${esc(feedback)}</p></details>`:'')
+    +scoreDetails+'</div>';
+  resNote.textContent=recommended||alts.length?'Preview changes this tab only. Restore or reload to return to the original.':'';resNote.style.display=resNote.textContent?'':'none';
   const pv=resultsContainer.querySelector('#btnPreview');
   let showing=null;
   const show=async(text,btn)=>{
-    if(showing===text){await setPreview(false,m);showing=null;btn.textContent=btn===pv?'Preview on page':'Preview';return;}
+    if(showing===text){await setPreview(false,m);showing=null;btn.textContent=btn===pv?'Preview this version':'Preview';return;}
     if(await setPreview(true,m,text)){
-      resultsContainer.querySelectorAll('[data-alt],#btnPreview').forEach(b=>b.textContent=b===pv?'Preview on page':'Preview');
+      resultsContainer.querySelectorAll('[data-alt],#btnPreview').forEach(b=>b.textContent=b===pv?'Preview this version':'Preview');
       showing=text;btn.textContent='Restore original';
     }
   };
-  pv.onclick=()=>show(copy,pv);
+  if(pv)pv.onclick=()=>show(copy,pv);
   resultsContainer.querySelectorAll('[data-alt]').forEach(b=>b.onclick=()=>show(copyOf(alts[+b.dataset.alt]),b));
   const cb=resultsContainer.querySelector('#btnCopyOpt');
   cb.onclick=()=>navigator.clipboard.writeText(copy).then(()=>{cb.textContent='Copied';cb.classList.add('done');}).catch(()=>tm('Could not copy','err'));
@@ -1727,6 +1704,14 @@ const webIdOf=u=>{try{const x=new URL(u),id=x.searchParams.get('id');return /\/c
 let mcSel=null,mcTabWebId=null,mcTabId=null,mcEpoch=0,mcBusyUi=false,mcUndo=[],mcFeedback='',mcFeedbackError=false;
 let mcLoad=null,mcQueued=false,mcRefreshTimer=null,mcSettleTimer=null,mcFeedbackTimer=null,mcViewSignature='',mcWorkingField=null;
 let mcDataRevision=0,mcWorkingOp=null,mcApplied=null;
+const mcFailures=new Map();
+const mcFailureKey=f=>mcSel?.id+':'+f.field+':'+f.text;
+function expandMcField(f){
+  mcExpanded.clear();if(!f)return;mcExpanded.add(f.field);
+  const kind=intelligence.outcome(f).kind;
+  if(kind==='unchecked')mcExpanded.add('unchecked');else if(kind==='unavailable')mcExpanded.add('unavailable');else if(kind==='good')mcExpanded.add('good');
+  if(f.location==='html'){mcExpanded.add(f.touchpoint==='cta'?'buttons':'body');if(f.templateDefault)mcExpanded.add('templates');}
+}
 const mcExpanded=new Set(['subject_line']);
 const intelligence=self.PERSADO_INTELLIGENCE,impact=self.PERSADO_IMPACT;
 const mcChoices=new Map();
@@ -1742,7 +1727,7 @@ function mcNotice(text,error=false){
 }
 function mcContext(){
   mcSub.textContent=mcSel?.title||'Untitled draft';mcSub.title=mcSub.textContent;
-  const n=mcSel?.fields?.length||0;mcCount.textContent=`${mcSel?.status==='save'?'Draft':mcSel?.status||'Campaign'} · ${n} eligible ${n===1?'element':'elements'}`;
+  const fields=mcSel?.fields||[],checked=intelligence.organize(fields).checked;mcCount.textContent=`${checked} checked · ${fields.length-checked} remaining`;
   renderMcOverview();
 }
 const mcNumber=n=>new Intl.NumberFormat(undefined,n!==0&&Math.abs(n)<.01?{maximumSignificantDigits:3}:{maximumFractionDigits:2}).format(n);
@@ -1823,7 +1808,7 @@ mcOverview.addEventListener('click',async e=>{
 });
 async function showMailchimp(){
   const epoch=++mcEpoch;clearTimeout(mcRefreshTimer);clearTimeout(mcSettleTimer);mcQueued=false;
-  mcSel=null;mcUndo=[];mcApplied=null;mcBusyUi=false;mcViewSignature='';mcInsights=null;mcInsightsLoading=null;mcOverviewSignature='';mcChoices.clear();mcOverview.innerHTML='';mcImpact.innerHTML='';delete mcImpact.dataset.campaign;mcExpanded.clear();mcExpanded.add('subject_line');
+  mcSel=null;mcUndo=[];mcApplied=null;mcBusyUi=false;mcViewSignature='';mcInsights=null;mcInsightsLoading=null;mcOverviewSignature='';mcChoices.clear();mcFailures.clear();mcOverview.innerHTML='';mcImpact.innerHTML='';delete mcImpact.dataset.campaign;mcExpanded.clear();mcExpanded.add('subject_line');
   mcDetail.hidden=true;mcActivity.innerHTML='';mcList.innerHTML='<div class="mc-skeleton" role="status" aria-label="Loading campaign"><i></i><i></i><i></i></div>';mcCount.textContent='';
   mcSub.textContent='Identifying campaign…';mcNotice('');
   mcConnectionState(false,'Connecting to Mailchimp');setUiState('mailchimp');
@@ -1849,12 +1834,11 @@ async function loadDrafts(epoch=mcEpoch,quiet=false){
     if(st.usage)renderUsage(st.usage);
     mcConnectionState(!!(st.ok&&st.connected));
     if(st.ok&&st.campaign){
-      const previous=mcSel?.fingerprint,first=!mcSel?.fields;mcSel=st.campaign;mcUndo=st.undo||[];mcList.innerHTML='';mcContext();
-      if(first){const next=intelligence.prioritize(mcSel.fields||[]).next;if(next){mcExpanded.clear();mcExpanded.add(next.field);}}
-      const signature=JSON.stringify([mcSel,mcUndo]);
+      const first=!mcSel?.fields;mcSel=st.campaign;mcUndo=st.undo||[];mcList.innerHTML='';mcContext();
+      if(first)expandMcField(intelligence.organize(mcSel.fields||[]).next);
+      const signature=JSON.stringify([mcSel,mcUndo,!!lastUsage?.hasKey,!!lastUsage?.exhausted]);
       if(signature!==mcViewSignature){mcViewSignature=signature;renderMcDetail();}
       loadMcInsights(epoch);
-      if(quiet&&previous&&previous!==mcSel.fingerprint)mcNotice('Updated from Mailchimp.');
       return;
     }
     // Keep a known draft visible during transient network failures. A campaign
@@ -1886,67 +1870,67 @@ function renderMcDetail(){
   mcDetail.setAttribute('aria-busy',String(mcBusyUi));
   const focused=document.activeElement;
   const focusKey=focused?.dataset?.op?{op:focused.dataset.op,field:focused.dataset.field,index:focused.dataset.index}:null;
-  const scroll=mcResult.closest('.mc-wrap')?.scrollTop||0;
-  const fields=mcSel.fields||[],disabled=mcBusyUi||!lastUsage?.hasKey;
-  const priority=intelligence.prioritize(fields),hasScores=priority.scored.length>0;
+  const scroll=mcResult.closest('.mc-wrap')?.scrollTop||0,fields=mcSel.fields||[];
+  const applied=mcApplied&&mcApplied.campaignId===mcSel.id&&fields.some(f=>f.field===mcApplied.field&&f.text===mcApplied.text)&&mcUndo.some(u=>u.undoId===mcApplied.undoId);
+  const priority=intelligence.organize(fields,{appliedField:applied?mcApplied.field:null});
+  const disabled=mcBusyUi||!lastUsage?.hasKey,paidDisabled=disabled||!!lastUsage?.exhausted;
   const isOpen=key=>mcExpanded.has(key)?' open':'';
-  const guidance=g=>g?`<p class="mc-recommendation">${esc(g.source)}: ${esc(g.text)}</p>`:'';
   const row=f=>{
-    const info=intelligence.describe(f),choiceKey=mcSel.id+':'+f.field+':'+(f.optimization?.cacheId||'');
-    const comparison=intelligence.comparison(f,mcChoices.get(choiceKey)),optimized=!!comparison.variant;
-    const applied=mcApplied?.campaignId===mcSel.id&&mcApplied.field===f.field&&mcApplied.text===f.text&&mcUndo.some(u=>u.undoId===mcApplied.undoId)?mcApplied:null;
-    const primary=hasScores?priority.next?.field===f.field:f.field==='subject_line';
-    const pending=mcBusyUi&&mcWorkingField===f.field;
-    const action=optimized?'review':info.evaluated?'optimize':'score';
-    const actionLabel=optimized?'Compare':info.evaluated?'Optimize · 5 credits':'Score · 1 credit';
-    const workLabel=mcWorkingOp===MSG.MC_SCORE?'Scoring…':mcWorkingOp===MSG.MC_OPTIMIZE?'Optimizing…':'Saving…';
-    const status=applied?'Applied':optimized?(comparison.top?'Top recommendation':'Your selection'):info.evaluated?`${info.bandLabel?esc(info.bandLabel)+' · ':''}${esc(info.score)}${info.inRange?'/100':''}`:esc(info.status);
-    const button=(op,label)=>`<button data-op="${op}" data-field="${esc(f.field)}" ${pending?'data-busy="true"':''} ${disabled?'disabled':''}>${label}</button>`;
-    const actions=optimized||applied?'':`<div class="mc-actions">${button(action,pending?workLabel:actionLabel)}</div>`
-      +(!info.evaluated?`<button class="mc-secondary" data-op="optimize" data-field="${esc(f.field)}" ${disabled?'disabled':''}>Optimize directly · 5 credits</button>`:'');
-    const improvement=c=>c.delta!==null?`<div class="mc-improvement"><span>${esc(c.originalScore)} → ${esc(c.score)}</span><strong>${c.delta>0?'+':''}${esc(c.delta)} score points</strong><small>Predicted language-score ${c.delta>0?'improvement':'change'}</small></div>`
-      :c.score!==null?`<p class="mc-meta">Predicted language score · ${esc(c.score)}/100</p>`:'';
-    const options=comparison.options.length>1?`<details class="mc-compare" data-key="options:${esc(f.field)}"${isOpen('options:'+f.field)}><summary>Other options · ${comparison.options.length-1}</summary><select class="mc-option" data-choice="${esc(f.field)}" aria-label="Choose recommended copy" ${mcBusyUi?'disabled':''}>${comparison.options.map((o,i)=>`<option value="${o.index}" ${comparison.index===o.index?'selected':''}>${i===0&&o.comparable?'Top recommendation':esc((o.variant.touchpoints?.[f.touchpoint]||o.variant.text||'Copy option').slice(0,44))+((o.variant.touchpoints?.[f.touchpoint]||o.variant.text||'').length>44?'…':'')}${o.score!==null?' · '+esc(o.score)+'/100':''}${!o.comparable?' · separate scoring context':''}</option>`).join('')}</select></details>`:'';
-    const recommended=optimized?`<div data-motion-key="recommended:${esc(f.field)}"><p class="mc-recommended-copy">${esc(comparison.text)}</p>${improvement(comparison)}`
-      +(!f.applyDisabledReason?`<button class="mc-apply" data-op="apply" data-field="${esc(f.field)}" data-index="${comparison.index}" ${pending?'data-busy="true"':''} ${disabled?'disabled':''}>${pending&&mcWorkingOp===MSG.MC_APPLY?'Saving…':'Apply to Mailchimp'}</button>`:'<p class="mc-meta">Body comparison only · Apply unavailable</p>')
-      +options+`<details class="mc-compare" data-key="original:${esc(f.field)}"${isOpen('original:'+f.field)}><summary>Compare original</summary><p class="mc-current">${esc(f.text)}</p></details></div>`:'';
-    const summaryAction=!applied&&(primary||optimized||!info.evaluated)?`<button class="mc-summary-action" data-op="${action}" data-field="${esc(f.field)}" ${disabled?'disabled':''}>${actionLabel}</button>`:'';
+    const state=priority.states.get(f.field),info=intelligence.describe(f),choiceKey=mcSel.id+':'+f.field+':'+(f.optimization?.cacheId||'');
+    const comparison=intelligence.comparison(f,mcChoices.get(choiceKey)),pending=mcBusyUi&&mcWorkingField===f.field;
+    const ready=state.kind==='recommended',selectedHigher=comparison.delta>0;
+    const primary=priority.next?.field===f.field,failed=mcFailures.get(mcFailureKey(f));
+    const workLabel=mcWorkingOp===MSG.MC_SCORE?'Checking…':mcWorkingOp===MSG.MC_OPTIMIZE?'Finding a version…':mcWorkingOp===MSG.MC_REVERT?'Restoring…':'Saving…';
+    const button=(op,label,{index=null,secondary=false}={})=>`<button class="${secondary?'mc-secondary':op==='apply'?'mc-apply':''}" data-op="${op}" data-field="${esc(f.field)}" ${index!==null?`data-index="${index}"`:''} ${pending?'data-busy="true"':''} ${(op==='score'||op==='optimize'?paidDisabled:disabled)?'disabled':''}>${pending?workLabel:label}</button>`;
+    const result=state.kind==='applied'?mcApplied.response:f.optimization?.result;
+    const detailComparison=state.kind==='applied'?mcApplied.comparison:comparison;
+    const control=result?.control,variant=ready?comparison.variant:f.score?.variants?.[0]||control;
+    const scoreLine=detailComparison?.variant&&detailComparison.originalScore!==null
+      ?`Language score: ${esc(detailComparison.originalScore)}${control?.performanceBand?' ('+esc(intelligence.label(control.performanceBand))+')':''} → ${detailComparison.score!==null?esc(detailComparison.score)+(detailComparison.band?' ('+esc(detailComparison.band)+')':''):'not returned'}`
+      :info.evaluated?`Language score: ${esc(info.score)}${info.inRange?'/100':''}${info.bandLabel?' · '+esc(info.bandLabel):''}`:'No language score returned.';
+    const responseFields={score:f.score||null,optimization:result?{jobId:result.jobId,channel:result.channel,notice:result.notice,control,selected:detailComparison?.variant}:null};
+    const moreActions=state.kind!=='opportunity'&&state.kind!=='recommended'&&state.kind!=='applied'?`<div class="mc-actions">${button('optimize','Find a better version · 5 credits',{secondary:true})}</div>`:'';
+    const details=`<details class="mc-compare" data-key="details:${esc(f.field)}"${isOpen('details:'+f.field)}><summary>${state.kind==='unchecked'?'More actions':'Score details'}</summary><p class="mc-meta">${scoreLine}</p>`
+      +(info.evaluated?'<p class="mc-meta">Model scoring, not measured campaign outcomes.</p>':'')+moreActions
+      +`<details class="mc-compare"><summary>Persado response fields</summary><pre class="mc-response">${esc(JSON.stringify(responseFields,null,2))}</pre></details></details>`;
+    const rationale=variant?.performanceWhy||variant?.brandRationale;
+    const why=rationale?`<details class="mc-compare" data-key="why:${esc(f.field)}"${isOpen('why:'+f.field)}><summary>Why this recommendation?</summary><p class="mc-meta">${variant.performanceWhy?'Persado performance feedback':'Persado brand guidance'}: ${esc(rationale)}</p></details>`:'';
+    const selection=comparison.options.length>1?`<select class="mc-option" data-choice="${esc(f.field)}" aria-label="Choose another version" ${mcBusyUi?'disabled':''}>${comparison.options.map((o,i)=>`<option value="${o.index}" ${comparison.index===o.index?'selected':''}>${o.score!==null?esc(o.score)+'/100 · ':''}${i===0&&ready?'Recommended':esc((o.variant.touchpoints?.[f.touchpoint]||o.variant.text||'Copy option').slice(0,38))}${!o.comparable?' · separate context':''}</option>`).join('')}</select>`:'';
+    const useButton=!f.applyDisabledReason?button('apply',ready&&selectedHigher?'Use this version':'Use selected version',{index:comparison.index}):'<p class="mc-meta">Review only · Mailchimp body updates are unavailable.</p>';
+    const options=comparison.options.length?`<details class="mc-compare" data-key="options:${esc(f.field)}"${isOpen('options:'+f.field)}><summary>Other options${comparison.options.length>1?' · '+(comparison.options.length-1):''}</summary>${selection}${!ready?`<p class="mc-current">${esc(comparison.text)}</p>${useButton}`:''}</details>`:'';
+    const original=`<details class="mc-compare" data-key="original:${esc(f.field)}"${isOpen('original:'+f.field)}><summary>Original copy</summary><p class="mc-current">${esc(f.text)}</p></details>`;
+    const message=ready?(selectedHigher?'A stronger option is available.':'Review this option before using it.'):state.message;
+    const content=ready?`<div data-motion-key="recommended:${esc(f.field)}"><p class="mc-recommended-copy">${esc(comparison.text)}</p>${useButton}${options}${original}${why}${details}</div>`
+      :`<p class="mc-current">${esc(f.text)}</p>`
+        +(state.kind==='unchecked'?`<div class="mc-actions">${button('score','Check · 1 credit')}</div>`:state.kind==='opportunity'?`<div class="mc-actions">${button('optimize','Find a better version · 5 credits')}</div>`:'')+(state.kind==='applied'&&mcApplied.original?`<details class="mc-compare" data-key="original:${esc(f.field)}"${isOpen('original:'+f.field)}><summary>Original copy</summary><p class="mc-current">${esc(mcApplied.original)}</p></details>`:'')+options+why+details;
+    const icon=state.kind==='good'||state.kind==='applied'?'good':ready||state.kind==='opportunity'?'worth':'neutral';
     return `<details class="mc-row${primary?' primary':''}" data-key="${esc(f.field)}" aria-busy="${pending}"${isOpen(f.field)}>`
-      +`<summary><span class="mc-summary-copy"><span class="mc-heading">${esc(mcLabel(f))}</span><span class="mc-summary-status"> — ${status}</span></span>${summaryAction}</summary>`
-      +`<div class="mc-row-content">${optimized?recommended:`<p class="mc-current">${esc(f.text)}</p>`+(applied?improvement(applied.comparison):guidance(info.guidance))+actions}</div></details>`;
+      +`<summary><span class="mc-summary-copy"><span class="mc-heading">${esc(mcLabel(f))}</span><span class="mc-outcome"><i class="mc-state-icon ${icon}" aria-hidden="true"></i>${esc(pending?workLabel:state.label)}</span></span>`
+      +(state.kind==='unchecked'?`<button class="mc-summary-action" data-op="score" data-field="${esc(f.field)}" ${paidDisabled?'disabled':''}>Check · 1 credit</button>`:'')+'</summary>'
+      +`<div class="mc-row-content">${message?`<p class="mc-state-message">${esc(message)}</p>`:''}${content}`
+      +(failed?`<p class="mc-field-error" role="alert">${esc(failed.error)}</p>`:'')
+      +(lastUsage?.exhausted&&['unchecked','opportunity','unavailable'].includes(state.kind)?'<p class="mc-field-error">No API credits available. Review usage in Settings.</p>':'')+'</div></details>';
   };
-  const emptyRow=(key,label,text)=>`<details class="mc-row${!hasScores&&key==='subject_line'?' primary':''}" data-key="${key}"${isOpen(key)}><summary><span class="mc-summary-copy"><span class="mc-heading">${label}</span><span class="mc-summary-status">Not yet evaluated</span></span></summary><p class="mc-empty">${esc(text)||'No copy yet.'}</p></details>`;
-  const group=(key,label,items,body)=>`<details class="mc-group" data-key="${key}"${isOpen(key)}><summary><span class="mc-heading">${label}</span><span class="mc-count">${items.length}</span></summary>${body||'<p class="mc-empty">No eligible copy found.</p>'}</details>`;
-  function contentRows(items){
-    let html='';
-    for(const key of ['subject_line','preview_text']){
-      const f=items.find(x=>x.field===key);
-      if(f)html+=row(f);
-      else if(!fields.some(x=>x.field===key))html+=emptyRow(key,key==='subject_line'?'Subject line':'Preview text',key==='subject_line'?mcSel.subject:mcSel.previewText);
-    }
-    const body=items.filter(f=>f.location==='html'&&f.touchpoint!=='cta');
-    const buttons=items.filter(f=>f.touchpoint==='cta');
+  const group=(key,title,items,body=items.map(row).join(''))=>items.length?`<details class="mc-group" data-key="${key}"${isOpen(key)}><summary><span class="mc-heading">${title}</span><span class="mc-count">${items.length}</span></summary>${body}</details>`:'';
+  const uncheckedRows=()=>{
+    const body=priority.unchecked.filter(f=>f.location==='html'&&f.touchpoint!=='cta'),buttons=priority.unchecked.filter(f=>f.touchpoint==='cta');
     const custom=buttons.filter(f=>!f.templateDefault),templates=buttons.filter(f=>f.templateDefault);
-    if(body.length||!hasScores)html+=group('body','Email body',body,body.map(row).join(''));
-    if(buttons.length||!hasScores)html+=group('buttons','Button language',buttons,custom.map(row).join('')+(templates.length?`<details class="mc-template" data-key="templates"${isOpen('templates')}><summary>Template buttons (${templates.length})</summary>${templates.map(row).join('')}</details>`:''));
-    return html;
-  }
-  let html=hasScores?'<div class="mc-review-heading">Review opportunities <span>Predicted scores</span></div>'+priority.scored.map(row).join(''):'';
-  if(hasScores&&priority.unscored.length)html+=group('unevaluated','Not yet evaluated',priority.unscored,contentRows(priority.unscored));
-  else if(!hasScores)html+='<div class="mc-review-heading">Not yet evaluated</div>'+contentRows(fields);
+    return priority.unchecked.filter(f=>f.location!=='html').map(row).join('')+group('body','Email body',body)
+      +group('buttons','Button language',buttons,custom.map(row).join('')+group('templates','Template buttons',templates));
+  };
+  let html=priority.opportunities.length?'<div class="mc-review-heading">Recommended actions</div>'+priority.opportunities.map(row).join(''):'';
+  html+=priority.applied.map(row).join('')+group('good','Looking good',priority.good)
+    +group('unchecked','Not checked',priority.unchecked,uncheckedRows())+group('unavailable','Needs review',priority.unavailable);
+  if(!fields.length)html='<p class="mc-empty">No eligible content detected.</p>';
   motion.update(mcResult,html);
-  const applied=mcApplied&&mcApplied.campaignId===mcSel.id&&mcSel.fields.some(f=>f.field===mcApplied.field&&f.text===mcApplied.text)&&mcUndo.some(u=>u.undoId===mcApplied.undoId);
-  motion.update(mcActivity,applied?`<div class="mc-saved" data-motion-key="applied" data-confirmed="true"><span>Applied to Mailchimp</span><button class="mc-undo" data-undo="${esc(mcApplied.undoId)}" ${mcBusyUi?'disabled':''} ${mcBusyUi&&mcWorkingOp===MSG.MC_REVERT?'data-busy="true"':''}>${mcBusyUi&&mcWorkingOp===MSG.MC_REVERT?'Restoring…':'Undo'}</button></div>`:'');
+  motion.update(mcActivity,applied?`<div class="mc-saved" data-motion-key="applied" data-confirmed="true"><span>Applied to campaign</span><button class="mc-undo" data-undo="${esc(mcApplied.undoId)}" ${mcBusyUi?'disabled':''} ${mcBusyUi&&mcWorkingOp===MSG.MC_REVERT?'data-busy="true"':''}>${mcBusyUi&&mcWorkingOp===MSG.MC_REVERT?'Restoring…':'Undo'}</button></div>`:'');
   mcImpact.querySelectorAll('[data-context-undo]').forEach(b=>{b.disabled=mcBusyUi;b.dataset.busy=String(mcBusyUi&&mcWorkingOp===MSG.MC_REVERT);});
   const wrap=mcResult.closest('.mc-wrap');if(wrap)wrap.scrollTop=scroll;
-  if(focusKey){
-    const selector=`[data-op="${CSS.escape(focusKey.op)}"][data-field="${CSS.escape(focusKey.field)}"]${focusKey.index!=null?`[data-index="${CSS.escape(focusKey.index)}"]`:''}`;
-    [...mcResult.querySelectorAll(selector)].find(el=>el.getClientRects().length)?.focus({preventScroll:true});
-  }
+  if(focusKey){const selector=`[data-op="${CSS.escape(focusKey.op)}"][data-field="${CSS.escape(focusKey.field)}"]${focusKey.index!=null?`[data-index="${CSS.escape(focusKey.index)}"]`:''}`;[...mcResult.querySelectorAll(selector)].find(el=>el.getClientRects().length)?.focus({preventScroll:true});}
 }
 mcResult.addEventListener('toggle',e=>{
   const key=e.target.dataset?.key;if(!key)return;
-  if(e.target.open)mcExpanded.add(key);else mcExpanded.delete(key);
+  if(e.target.open){mcExpanded.add(key);if(e.target.classList.contains('mc-row')){mcResult.querySelectorAll('.mc-row[open]').forEach(row=>{if(row!==e.target){mcExpanded.delete(row.dataset.key);motion.disclose(row,false);}});}}else mcExpanded.delete(key);
 },true);
 async function mcAction(msg,success){
   if(!mcSel||mcBusyUi)return;
@@ -1955,23 +1939,26 @@ async function mcAction(msg,success){
   const restoreActionFocus=()=>document.activeElement===document.body||document.activeElement===actionFocus;
   const actionField=msg.field||mcUndo.find(u=>u.undoId===msg.undoId)?.field;
   const originalField=mcSel.fields.find(f=>f.field===msg.field),comparison=originalField?intelligence.comparison(originalField,msg.alternativeIndex):null;
+  if(originalField)mcFailures.delete(mcFailureKey(originalField));
   mcBusyUi=true;mcWorkingField=actionField;if(actionField)mcExpanded.add(actionField);
   mcWorkingOp=msg.type;
-  mcNotice(msg.type===MSG.MC_APPLY?'Saving to Mailchimp…':msg.type===MSG.MC_REVERT?'Restoring…':msg.type===MSG.MC_SCORE?'Scoring…':'Optimizing…');renderMcDetail();
+  mcNotice('');renderMcDetail();
   const r=await worker({...msg,campaignId:id,...(mcTabWebId?{webId:mcTabWebId}:{})});
   if(epoch!==mcEpoch||mcSel?.id!==id)return;
   mcBusyUi=false;mcWorkingField=null;mcWorkingOp=null;if(r.usage)renderUsage(r.usage);
-  mcNotice(r.ok?success:r.error,!r.ok);
+  if(!r.ok&&originalField){mcFailures.set(mcFailureKey(originalField),{error:r.error,kind:r.kind});mcNotice('');}else mcNotice(r.ok?(msg.type===MSG.MC_REVERT?success:''):r.error,!r.ok);
   if(r.ok&&r.verified&&r.settingsOnly&&r.campaign){
     const fields=mcSel.fields.map(f=>{
       const text=f.field==='subject_line'?r.campaign.subject:f.field==='preview_text'?r.campaign.previewText:f.text;
       return text===f.text?f:{...f,text,score:r.predictions?.[f.field]||null,optimization:null};
     });
     mcSel={...mcSel,...r.campaign,fields,fingerprint:null};mcUndo=r.undo||[];
-    mcApplied=msg.type===MSG.MC_APPLY?{campaignId:id,field:msg.field,text:fields.find(f=>f.field===msg.field)?.text,undoId:r.undoId,comparison}:null;
+    mcApplied=msg.type===MSG.MC_APPLY?{campaignId:id,field:msg.field,text:fields.find(f=>f.field===msg.field)?.text,undoId:r.undoId,comparison,original:originalField?.text,response:originalField?.optimization?.result}:null;
     const restoreFocus=restoreActionFocus();
     if(msg.type===MSG.MC_APPLY)mcNotice('');
-    mcViewSignature='';mcContext();renderMcDetail();if(mcApplied){motion.confirm(mcActivity.firstElementChild);if(restoreFocus)mcActivity.querySelector('button')?.focus({preventScroll:true});}
+    if(mcApplied)expandMcField(intelligence.organize(fields,{appliedField:mcApplied.field}).next);
+    else if(msg.type===MSG.MC_REVERT)expandMcField(fields.find(f=>f.field===actionField));
+    mcViewSignature='';mcContext();renderMcDetail();if(mcApplied){motion.confirm(mcActivity.firstElementChild);if(restoreFocus){const next=intelligence.organize(fields,{appliedField:mcApplied.field}).next;const row=[...mcResult.querySelectorAll('.mc-row')].find(el=>el.dataset.key===next?.field);(row?.querySelector(':scope > summary')||mcActivity.querySelector('button'))?.focus({preventScroll:true});}}
     else if(restoreFocus)[...mcResult.querySelectorAll('.mc-row')].find(el=>el.dataset.key===actionField)?.querySelector('summary')?.focus({preventScroll:true});
     // The save is already verified. Refresh body/cache metadata in the
     // background rather than blocking the confirmed UI on two more API reads.
@@ -1982,7 +1969,7 @@ async function mcAction(msg,success){
   // A newer edit clears the old score/alternative without starting another job.
   const restoreFocus=restoreActionFocus();
   await loadDrafts(epoch);renderMcDetail();
-  if(r.ok){const row=[...mcResult.querySelectorAll('.mc-row')].find(el=>el.dataset.key===msg.field);if(msg.type===MSG.MC_OPTIMIZE)motion.reveal(row?.querySelector('[data-motion-key]'));else motion.confirm(row?.querySelector('.mc-summary-status'));if(restoreFocus)row?.querySelector('.mc-row-content button')?.focus({preventScroll:true});}
+  if(r.ok){const row=[...mcResult.querySelectorAll('.mc-row')].find(el=>el.dataset.key===msg.field);if(msg.type===MSG.MC_OPTIMIZE)motion.reveal(row?.querySelector('[data-motion-key]'));else motion.confirm(row?.querySelector('.mc-outcome'));if(restoreFocus)row?.querySelector('.mc-row-content button')?.focus({preventScroll:true});}
   if(mcQueued){mcQueued=false;scheduleMcRefresh(1200);}
 }
 mcResult.addEventListener('change',e=>{
@@ -1999,7 +1986,7 @@ mcResult.addEventListener('click',e=>{
   if(f.location==='html'){mcExpanded.add(f.touchpoint==='cta'?'buttons':'body');if(f.templateDefault)mcExpanded.add('templates');}
   mcAction({type:op==='score'?MSG.MC_SCORE:op==='optimize'?MSG.MC_OPTIMIZE:MSG.MC_APPLY,
     field:f.field,text:f.text,cacheId:f.optimization?.cacheId,alternativeIndex:Number(b.dataset.index||0)},
-    op==='apply'?'Saved to Mailchimp.':op==='score'?'Score ready.':'Alternative ready to review.');
+    op==='apply'?'Applied to campaign':op==='score'?'Checked.':'Recommendation ready.');
 });
 mcImpact.addEventListener('click',e=>{const b=e.target.closest('[data-context-undo]');if(b)mcAction({type:MSG.MC_REVERT,undoId:b.dataset.contextUndo},'Original restored.');});
 mcActivity.addEventListener('click',e=>{const b=e.target.closest('[data-undo]');if(b)mcAction({type:MSG.MC_REVERT,undoId:b.dataset.undo},'Original restored.');});

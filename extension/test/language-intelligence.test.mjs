@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {load} from './helpers.mjs';
-await load('language-intelligence.js');
+await load('guard.js','language-intelligence.js');
 const {describe,prioritize,comparison}=globalThis.PERSADO_INTELLIGENCE;
 const field=(n,extra={})=>({field:'preview_text',text:'Saved preview',score:{kind:'score',variants:[{performance:n,...extra}]}});
 test('numeric-only score remains neutral without a fabricated band, reason or lift',()=>{
@@ -57,4 +57,47 @@ test('separate score jobs, missing scores and differing scoring contexts cannot 
 });
 test('template defaults do not displace marketer-authored opportunities merely because their score is lower',()=>{
  const custom=field(51),template={...field(12),templateDefault:true};assert.equal(prioritize([template,custom]).next,custom);
+});
+
+const {outcome,organize}=globalThis.PERSADO_INTELLIGENCE;
+const potential=(n,projected,state='band_change')=>({current:n,projected,headroomPoints:projected-n,state});
+const optimized=(alternatives,control=51,notice=null)=>({...field(control),touchpoint:'preheader',maxLength:150,optimization:{result:{kind:'optimize',jobId:'job_outcome',channel:'EMAIL_SUBJECT_BODY',control:{performance:control},alternatives,notice}}});
+test('Looking good requires actual provider evidence, never an invented band threshold',()=>{
+ assert.equal(outcome(field(87,{performanceBand:'excellent',potential:potential(87,87,'healthy')})).kind,'good');
+ for(const n of [0,51,87,100])assert.equal(outcome(field(n,{performanceBand:'excellent'})).kind,'unavailable');
+ assert.equal(outcome(field(87,{potential:{...potential(87,87,'healthy'),current:51}})).kind,'unavailable');
+});
+test('provider headroom before optimization does not claim a stronger version exists',()=>{
+ const s=outcome(field(51,{performanceBand:'fair',potential:potential(51,70)}));
+ assert.equal(s.kind,'opportunity');assert.equal(s.action,'optimize');assert.doesNotMatch(s.message,/available|stronger/);
+});
+test('recommendation picks the highest eligible evaluated alternative while preserving provider index',()=>{
+ const f=optimized([{performance:99,rank:1,text:'Save 90% today'},{performance:65,rank:2,text:'Preview your message before sending'},{performance:69,rank:3,text:'One preview before the real send'}]);
+ assert.equal(comparison(f).index,2);assert.equal(outcome(f).kind,'recommended');assert.equal(outcome(f).action,'apply');
+ assert.match(outcome(f).message,/A stronger option is available/);
+});
+test('no-improvement results produce no recommendation or automatic retry',()=>{
+ const floor=optimized([],87,{code:'performance_floor',message:'No improvement found'});
+ assert.equal(outcome(floor).kind,'good');assert.equal(outcome(floor).action,null);
+ const weaker=optimized([{performance:65,text:'Review your preview before sending'}],69);
+ assert.equal(outcome(optimized([{performance:65,text:'Review your preview before sending'}],200)).kind,'unavailable');
+ assert.equal(outcome(weaker).kind,'good');assert.doesNotMatch(outcome(weaker).message,/stronger option/);
+});
+test('unsafe, absent, unscored and differently scored alternatives cannot claim a stronger option',()=>{
+ for(const f of [optimized([{performance:99,text:'Save 90% now'}]),optimized([{text:'Review your message before sending'}]),optimized([])])assert.equal(outcome(f).kind,'unavailable');
+ const f=optimized([{performance:99,scoringContext:'different',text:'Review this clear message before sending'}]);assert.equal(outcome(f).kind,'unavailable');
+ assert.equal(outcome({field:'subject_line',text:'Your next message is ready'}).kind,'unchecked');
+});
+test('applied is a separate UI state and never evidence of measured improvement',()=>{
+ const s=outcome(field(69),{applied:true});assert.equal(s.kind,'applied');assert.equal(s.label,'Applied to campaign');assert.equal(s.action,null);
+ assert.doesNotMatch(JSON.stringify(s),/lift|clicks|conversions|revenue|guarantee/);
+});
+test('recommendations precede pending work; subject and primary CTA break otherwise equal evidence ties',()=>{
+ const preview=optimized([{performance:69,text:'One preview before sending'}]);
+ const subject={...preview,field:'subject_line',touchpoint:'subject_line'};
+ const waiting={...field(20,{potential:potential(20,50)}),field:'body:b0',location:'html',applyDisabledReason:'Read only'};
+ const good={...field(87,{potential:potential(87,87,'healthy')}),field:'good'};
+ const unchecked={field:'new',text:'Review this new message'};
+ const r=organize([preview,waiting,subject,good,unchecked]);assert.equal(r.next,subject);assert.deepEqual(r.opportunities,[subject,preview,waiting]);assert.deepEqual(r.good,[good]);assert.deepEqual(r.unchecked,[unchecked]);assert.equal(r.checked,4);
+ const after=organize([subject,good,unchecked],{appliedField:'subject_line'});assert.equal(after.next,unchecked);assert.deepEqual(after.applied,[subject]);
 });

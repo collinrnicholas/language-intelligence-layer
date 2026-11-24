@@ -8,6 +8,12 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.11.2
+
+- Replaced primary score displays with evidence-backed content states, checked/remaining progress, one recommended action, and compact Looking good/Not checked groups. A scored opportunity without a generated version offers Find a better version (5 credits); only a genuine stronger eligible alternative offers Use this version. Missing recommendation evidence remains explicit.
+- No-change states use provider zero-headroom output or an actual no-improvement optimization result, never locally invented score thresholds. Unsafe rewrites are filtered using the existing guard while preserving original provider indices. Scores, bands, response fields, original copy and rationale remain in optional details.
+- Kept loading, failure, insufficient-credit, verified Apply and contextual Undo states distinct. Applying moves focus to the next meaningful section without spending credits. Public-page copy uses the same outcome presentation; local heuristic feedback stays secondary and clearly labelled. Existing motion, APIs, cached results and billing controls remain.
+
 ## 0.11.1
 
 - Lead optimization results with the highest comparable returned copy, its predicted score-point improvement, and Apply. Compare original and scored alternative selection use progressive disclosure; selections retain the server index and remain stable across view changes. No conversion-lift or theoretical-optimum claim is inferred.
