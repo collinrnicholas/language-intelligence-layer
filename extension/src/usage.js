@@ -1,4 +1,4 @@
-// ─── Persado Autopilot — Persado usage ledger ────────────────────────────────
+// ─── Persado Assist — Persado usage ledger ────────────────────────────────
 //
 // What this extension has spent against the saved Persado key, persisted in
 // chrome.storage.local so it survives restarts.

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Persado Autopilot",
-  "version": "0.11.2",
-  "description": "Persado inside the tools you already use: score and optimize page copy, and optimize Mailchimp drafts in place with the Persado API.",
+  "name": "Persado Assist",
+  "version": "0.11.3",
+  "description": "Language intelligence, wherever you work. Check and improve marketing copy on websites and in Mailchimp.",
   "permissions": [
     "storage",
     "activeTab",
@@ -28,7 +28,7 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "Persado Autopilot — Open Side Panel",
+    "default_title": "Persado Assist — Open Side Panel",
     "default_icon": {
       "16": "public/icon16.png",
       "32": "public/icon32.png",

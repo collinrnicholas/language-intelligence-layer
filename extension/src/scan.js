@@ -481,6 +481,32 @@
     return { ok: true };
   }
 
+  // ── Highlight on page ──────────────────────────────────────────
+  // Hovering a row in the panel outlines the element it describes. One outline
+  // at a time, using the same property the preview uses, so a preview's dashed
+  // border is never clobbered by a hover a second later.
+
+  let highlighted = null;   // { el, outline, outlineOffset }
+
+  function unhighlight() {
+    if (!highlighted) return;
+    highlighted.el.style.outline = highlighted.outline;
+    highlighted.el.style.outlineOffset = highlighted.outlineOffset;
+    highlighted = null;
+  }
+
+  function highlight(selector, on) {
+    unhighlight();
+    if (!on) return { ok: true };
+    let el = null;
+    try { el = document.querySelector(selector); } catch {}
+    if (!el) return { ok: false, error: 'That copy is no longer on the page.' };
+    highlighted = { el, outline: el.style.outline, outlineOffset: el.style.outlineOffset };
+    el.style.outline = '2px solid #DC2828';
+    el.style.outlineOffset = '3px';
+    return { ok: true };
+  }
+
   // ── Wiring ──────────────────────────────────────────────────────
 
   if (inPage && !self.__persadoScan) {
@@ -490,6 +516,7 @@
       if (msg.type === MSG.SCAN_PICK) { try { sendResponse(startPick()); } catch (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); } return false; }
       if (msg.type === MSG.SCAN_PREVIEW) { try { sendResponse(preview(msg.selector, msg.text, msg.original)); } catch (e) { sendResponse({ ok: false, error: String(e && e.message || e) }); } return false; }
       if (msg.type === MSG.SCAN_RESTORE) { try { sendResponse(restorePreview(msg.selector)); } catch (e) { sendResponse({ ok: false }); } return false; }
+      if (msg.type === MSG.SCAN_HIGHLIGHT) { try { sendResponse(highlight(msg.selector, msg.on)); } catch (e) { sendResponse({ ok: false }); } return false; }
       return false;
     };
     chrome.runtime.onMessage.addListener(listener);

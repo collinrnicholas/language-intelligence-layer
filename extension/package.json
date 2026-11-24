@@ -1,7 +1,7 @@
 {
   "name": "persado-autopilot-extension",
-  "version": "0.11.2",
-  "description": "Persado Autopilot Chrome extension (MV3, loaded unpacked; no build step)",
+  "version": "0.11.3",
+  "description": "Persado Assist — Language Intelligence Chrome extension (MV3, loaded unpacked)",
   "type": "module",
   "scripts": {
     "build": "node ../scripts/package-extension.mjs",

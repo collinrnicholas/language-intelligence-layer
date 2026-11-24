@@ -1,4 +1,4 @@
-# Persado Autopilot — native Mailchimp integration
+# Persado Assist — native Mailchimp integration
 
 Version 0.10.1. The existing extension remains the UI; no standalone editor is added.
 
@@ -75,7 +75,7 @@ For a fresh installation, load the current extension build, hard-reload Mailchim
 
 ## Sidebar UX verification — 0.10.1
 
-The native Chrome side-panel bar supplies the single Persado Autopilot brand title. Its content header has a small Mailchimp connection indicator and settings gear. API diagnostics and estimated usage appear in Settings. No current account balance is inferred.
+The native Chrome side-panel bar supplies the single Persado Assist brand title. Its content header has a small Mailchimp connection indicator and settings gear. API diagnostics and estimated usage appear in Settings. No current account balance is inferred.
 
 A compact campaign name and eligible count precede Subject line (open, Start here), Preview text, Email body and Button language. The latter sections collapse by default. Expanded rows reveal explicit Score (1 credit estimate) and Optimize (5 credit estimate) actions. Scoring is not a prerequisite for optimization. The first real alternative is shown in context; further alternatives use an additional disclosure. Template CTA classification is conservative: known Mailchimp template labels and a Mailchimp-hosted destination must both match. Custom buttons remain first.
 

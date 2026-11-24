@@ -1,4 +1,4 @@
-// ─── Persado Autopilot — Persado Martech API service ─────────────────────────
+// ─── Persado Assist — Persado Martech API service ─────────────────────────
 //
 // The ONLY code that talks to Persado. Every request shape, path, header and
 // response field below is taken from Persado's own published client,

@@ -1,6 +1,8 @@
-# Persado Autopilot
+# Persado Assist
 
-**Persado inside the tools marketers already use.** A Chrome extension (MV3) that
+**Language Intelligence**
+
+Language intelligence, wherever you work. A Chrome extension (MV3) that
 scores and optimizes copy with the real Persado API, on any web page and in
 Mailchimp draft campaigns. You do not copy and paste, and you do not open a separate
 app. Think of Grammarly, but for marketing performance. The extension is the first
@@ -8,7 +10,7 @@ surface and the development environment. The platform adapters and the Persado
 service behind them are built to be reused.
 
 Architecture, API sources, Mailchimp's limits, the security model and what has and
-has not been verified live: **[docs/AUTOPILOT.md](docs/AUTOPILOT.md)**.
+has not been verified live: **[docs/ASSIST.md](docs/ASSIST.md)**.
 The original brief-capture thesis is in `VISION.md`.
 
 ## Provenance
@@ -40,7 +42,7 @@ docs live in `docs/loupe/`.
 6. Explore impact with an explicitly labelled scenario calculator. User-selected assumptions are distinct from Persado model output and observed results. No score difference is converted to revenue.
 7. Body Apply is disabled to preserve the email structure. No send action is available.
 
-**Usage:** Mailchimp connection and usage diagnostics live in Settings. Account balance is unavailable; no assumed 100-credit balance is shown. Cached scoring of unchanged text avoids another paid request. Explanations use fields already returned by Persado, without an additional paid call. See [architecture and limits](docs/AUTOPILOT.md).
+**Usage:** Mailchimp connection and usage diagnostics live in Settings. Account balance is unavailable; no assumed 100-credit balance is shown. Cached scoring of unchanged text avoids another paid request. Explanations use fields already returned by Persado, without an additional paid call. See [architecture and limits](docs/ASSIST.md).
 
 Recording a narrated brief still works. Narration is transcribed by the local
 gateway (Whisper), and the variants now come from Persado's optimize run.
@@ -75,13 +77,13 @@ Provider keys stay in the gateway environment. The placeholder-only `.env.exampl
 3. Hard-reload the Mailchimp page after an extension reload. Open a regular draft, then Score → Optimize → Apply.
 4. Refresh Mailchimp to confirm persistence; use Undo in Persado to restore a previous value.
 
-Complete setup, API limitations, security, and verification details: [docs/AUTOPILOT.md](docs/AUTOPILOT.md).
+Complete setup, API limitations, security, and verification details: [docs/ASSIST.md](docs/ASSIST.md).
 
 ## Repo layout
 
 | Path | What it is |
 |---|---|
-| `extension/` | **The Persado Autopilot extension**: the new work in this repo. `src/persado-api.js`, `src/adapters/`, `src/optimizer.js`, `src/guard.js`, `src/usage.js`, `src/activity.js`, `test/`. |
+| `extension/` | **The Persado Assist extension**: the new work in this repo. `src/persado-api.js`, `src/adapters/`, `src/optimizer.js`, `src/guard.js`, `src/usage.js`, `src/activity.js`, `test/`. |
 | `gateway/` | Local gateway for narration transcription (Whisper). Never sees the Persado or Mailchimp key. |
 | `scripts/` | `smoke.mjs` static contract checks, version and hygiene tooling. |
 | `docs/` | `REGRESSION.md` is the manual test checklist; `docs/loupe/` holds inherited Loupe docs. |

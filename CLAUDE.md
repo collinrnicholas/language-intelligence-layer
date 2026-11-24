@@ -6,9 +6,9 @@ Read this before touching anything. It exists because this codebase has a specif
 
 ## 1. What this is
 
-**Language Intelligence Layer** — intake for Motivation AI. A marketer stands on the page they are worried about, narrates for a minute, and out comes a structured, grounded brief: the page, the on-page element and its current copy, the audience, the objective, and their intent verbatim. The Chrome extension (MV3) is the capture shell and is treated as disposable; **the brief is the durable artifact**. Variants are downstream and, in this prototype, come from a general-purpose model standing in for Motivation AI. See `VISION.md`.
+**Persado Assist — Language Intelligence.** Language intelligence, wherever you work. The original brief-capture pipeline is intake for Motivation AI. A marketer stands on the page they are worried about, narrates for a minute, and out comes a structured, grounded brief: the page, the on-page element and its current copy, the audience, the objective, and their intent verbatim. The Chrome extension (MV3) is the capture shell and is treated as disposable; **the brief is the durable artifact**. Variants are downstream and, in this prototype, come from a general-purpose model standing in for Motivation AI. See `VISION.md`.
 
-Branch: `feature/persado-autopilot` (Autopilot work). Extension version lives in `extension/manifest.json`.
+Branch: `feature/persado-autopilot` (Persado Assist work). Extension version lives in `extension/manifest.json`.
 
 **This repo is a fork of Loupe, the author's prior project.** See [Provenance](README.md#provenance) in the README — the fork is stated openly, and that section is why Loupe naming legitimately persists in the excluded directories below. Do not "clean it up".
 
@@ -45,7 +45,7 @@ Everything painful in this codebase comes from state being split across four JS 
 
 **`extension/src/background.js`** — service worker. Owns `chrome.tabs.captureVisibleTab` screenshots (FLAG-GATED behind `CAPTURE_SCREENSHOTS` in `config.js`, **default OFF** — when off, capture never runs and no `frames` are written), the DOM element extraction (`extractPageElements`, which runs in BOTH modes and is the PRIMARY grounding path), the session context in `chrome.storage.session` (`persado:pageContext` → `{ frames: [{full, thumb}], elements }`), gateway relay, and the toolbar `chrome.action` icon/badge state.
 
-**Persado Autopilot modules (service worker)** — `src/persado-api.js` (the only Persado client), `src/adapters/*.js` (platform adapters; Mailchimp first), `src/optimizer.js`, `src/guard.js` (safeguards), `src/usage.js`, `src/activity.js`. `gateway/integrations.mjs` is the ONLY runtime reader of the Persado and Mailchimp environment keys and calls the reused API clients; `background.js` relays authenticated requests to it. See `docs/AUTOPILOT.md`.
+**Persado Assist modules (service worker)** — `src/persado-api.js` (the only Persado client), `src/adapters/*.js` (platform adapters; Mailchimp first), `src/optimizer.js`, `src/guard.js` (safeguards), `src/usage.js`, `src/activity.js`. `gateway/integrations.mjs` is the ONLY runtime reader of the Persado and Mailchimp environment keys and calls the reused API clients; `background.js` relays authenticated requests to it. See `docs/ASSIST.md`.
 
 **`extension/src/mc-overlay.js`** — quiet change observer on `*.admin.mailchimp.com`; may only send read-only `MC_CONTEXT_CHANGED` hints (enforced by `senderAllowed` and smoke).
 

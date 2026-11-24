@@ -1,4 +1,4 @@
-// ─── Persado Autopilot — Mailchimp adapter ───────────────────────────────────
+// ─── Persado Assist — Mailchimp adapter ───────────────────────────────────
 //
 // Reads a DRAFT campaign through the Mailchimp Marketing API, says which of its
 // copy may be optimized, writes the chosen rewrites back, and re-reads the draft
@@ -18,7 +18,7 @@
 //   PUT   /campaigns/{id}/content { html }        body
 //   POST  /campaigns/{id}/actions/test            test send (Mailchimp's own flow)
 //
-// What the API can and cannot do (docs/AUTOPILOT.md §3):
+// What the API can and cannot do (docs/ASSIST.md §3):
 //   • There is no pre-send hook or webhook for "campaign saved/about to send", so
 //     optimization cannot intercept a send. It runs on an explicit action.
 //   • Only campaigns in status "save" (draft) are touched — never scheduled,

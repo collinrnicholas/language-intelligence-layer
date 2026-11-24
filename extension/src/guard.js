@@ -1,4 +1,4 @@
-// ─── Persado Autopilot — content safeguards ──────────────────────────────────
+// ─── Persado Assist — content safeguards ──────────────────────────────────
 //
 // Platform-neutral rules that decide what may be rewritten and whether a rewrite
 // is safe to write back. Nothing leaves the platform unless it passes

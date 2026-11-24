@@ -63,7 +63,7 @@
     if(potentialValid&&p.state==='healthy'&&p.headroomPoints===0)
       return {kind:'good',label:'Looking good',message:'No changes recommended.',action:null,reason:'provider_healthy_potential'};
     if(potentialValid&&p.headroomPoints>0)
-      return {kind:'opportunity',label:'Worth improving',message:'',action:'optimize',reason:'provider_headroom'};
+      return {kind:'opportunity',label:'Worth improving',message:'An opportunity to improve.',action:'optimize',reason:'provider_headroom'};
     if(field.score||info.evaluated)return {kind:'unavailable',label:'Recommendation unavailable',message:'Checked; no recommendation evidence returned.',action:'review',reason:'insufficient_evidence'};
     return {kind:'unchecked',label:'Not checked',message:'Ready to check.',action:'score'};
   }

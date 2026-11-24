@@ -1,4 +1,4 @@
-# Persado Chrome Extension — Design Reference
+# Persado Assist — Design Reference
 
 **Status:** Active. This document is the source of truth for the extension's visual identity.
 **Origin:** Direction set by Claude Design, reviewed 2026-07-25. Supersedes the purple/magenta gradient styling in `extension/sidepanel.html`.
@@ -7,6 +7,8 @@
 ---
 
 ## 1. Brand identity
+
+**Product:** Persado Assist. **Descriptor:** Language Intelligence. **Positioning:** Language intelligence, wherever you work. Chrome’s native side-panel bar provides the single product title; the compact descriptor sits beneath it. Standalone Settings uses the same title and secondary descriptor. Runtime configuration and protocol identifiers retain their existing names.
 
 The extension had drifted into its own purple/magenta gradient identity that matched nothing at persado.com. This document realigns it with the real Persado brand: a **black wordmark flanked by red brackets** — `[ Persado ]`.
 
@@ -100,11 +102,11 @@ The governing rule: **the mark itself never changes color.** It is always the in
 
 | State | Badge | Meaning | Tooltip |
 |---|---|---|---|
-| **Ready** | none | Default, idle | `Persado — ready` |
-| **Recording** | solid red dot, pulsing | Mic is live | `Persado — recording` |
-| **Working** | amber dot with `…` | AI generating | `Persado — working` |
-| **Results** | green dot with variant count (`3`) | Variants ready | `Persado — 3 variants ready` |
-| **Disabled** | none, mark at ~40% opacity | Unsupported page | `Persado — not available on this page` |
+| **Ready** | none | Default, idle | `Persado Assist — ready` |
+| **Recording** | solid red dot, pulsing | Mic is live | `Persado Assist — recording` |
+| **Working** | amber dot with `…` | AI generating | `Persado Assist — working` |
+| **Results** | green dot with variant count (`3`) | Variants ready | `Persado Assist — 3 variants ready` |
+| **Disabled** | none, mark at ~40% opacity | Unsupported page | `Persado Assist — not available on this page` |
 
 The badge sits at the **top-right corner** of the mark. At 16px it is a small dot roughly 6px across; the count numeral appears only when it fits legibly, and the badge falls back to a plain colored dot when it does not.
 

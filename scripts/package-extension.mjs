@@ -1,11 +1,11 @@
-// ─── Persado Autopilot — extension build ─────────────────────────
+// ─── Persado Assist — extension build ─────────────────────────
 //
 //   npm run build   (root)  →  agent build, then this
 //
 // The extension has no compile step: Chrome loads extension/ unpacked, exactly
 // as it is in the repo. "Building" therefore means: verify it, then copy the
 // files Chrome needs (no tests, no package.json) to extension/dist/unpacked and,
-// when the `zip` tool exists, write extension/dist/persado-autopilot-<v>.zip for
+// when the `zip` tool exists, write extension/dist/persado-assist-<v>.zip for
 // sideloading or the Chrome Web Store. dist/ is gitignored.
 
 import { rmSync, mkdirSync, readFileSync, existsSync, readdirSync, statSync, copyFileSync } from 'node:fs';
@@ -38,7 +38,7 @@ for (const p of ['manifest.json', 'sidepanel.html', 'sidepanel.js', 'options.htm
 let zipped = '';
 try {
   execFileSync('zip', ['-v'], { stdio: 'ignore' });
-  const zip = join(DIST, `persado-autopilot-${version}.zip`);
+  const zip = join(DIST, `persado-assist-${version}.zip`);
   execFileSync('zip', ['-qr', zip, '.'], { cwd: OUT });
   zipped = zip;
 } catch { /* zip not installed: the unpacked folder is the build */ }

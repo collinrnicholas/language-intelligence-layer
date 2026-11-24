@@ -1,4 +1,4 @@
-# Language Intelligence Layer
+# Persado Assist — original brief-capture vision
 
 **A front door for Motivation AI.** A marketer stands on the page they're worried about, talks for a minute, and Persado receives a structured, grounded brief — the page, the actual on-page copy, the audience, the objective, and the intent in their own words.
 
@@ -32,7 +32,7 @@ That last part matters: the tool does not just record input, it tells the market
 
 ## Where Motivation AI fits
 
-Language Intelligence Layer produces the brief. Motivation AI generates and scores against it.
+Persado Assist produces the brief. Motivation AI generates and scores against it.
 
 Today the prototype hands the brief to a general-purpose model as a stand-in, so the flow can be demonstrated end to end. Every variant it returns is unscored and every compliance flag is illustrative. The integration point is deliberately visible in the UI rather than hidden — there is an empty slot on each variant labelled as not connected, because the point of the prototype is the seam, not the placeholder behind it.
 

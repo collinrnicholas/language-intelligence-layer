@@ -424,17 +424,17 @@ async function paintAction() {
   // Badge text is ' ' (not '') for a badge with no numeral: non-empty text is
   // what makes Chrome draw the pill, and a space renders as a plain colored dot.
   const badge = {
-    ready:     { text: '', color: null, title: 'Persado — ready' },
-    recording: { text: ' ', color: RED, title: 'Persado — recording' },
-    working:   { text: '…', color: AMBER, title: 'Persado — working' },
+    ready:     { text: '', color: null, title: 'Persado Assist — ready' },
+    recording: { text: ' ', color: RED, title: 'Persado Assist — recording' },
+    working:   { text: '…', color: AMBER, title: 'Persado Assist — working' },
     results:   {
       // The numeral only goes in when it fits legibly; otherwise a plain dot.
       text: count > 0 && count <= 99 ? String(count) : ' ',
       color: GREEN,
-      title: `Persado — ${count} variant${count === 1 ? '' : 's'} ready`,
+      title: `Persado Assist — ${count} variant${count === 1 ? '' : 's'} ready`,
     },
-    disabled:  { text: '', color: null, title: 'Persado — not available on this page' },
-  }[state] || { text: '', color: null, title: 'Persado — ready' };
+    disabled:  { text: '', color: null, title: 'Persado Assist — not available on this page' },
+  }[state] || { text: '', color: null, title: 'Persado Assist — ready' };
 
   const wantIcon = state === 'disabled' ? 'dim' : 'normal';
   try {

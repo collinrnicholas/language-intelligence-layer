@@ -45,7 +45,8 @@ const resHeading=$('resHeading'),resCtx=$('resCtx'),resOrig=$('resOrig'),resOrig
 const btnSendPortal=$('btnSendPortal'),portalResult=$('portalResult'),portalPayload=$('portalPayload'),portalDismiss=$('portalDismiss');
 const headerStatus=$('headerStatus'),headerText=$('headerStatusText'),toast=$('toast');
 // Scan screen (the panel's front door).
-const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount'),hdrPage=$('hdrPage');
+const pnlScan=$('panelScan'),scanSub=$('scanSub'),scanUrl=$('scanUrl'),scanCount=$('scanCount'),ctxBar=$('ctxBar'),ctxTitle=$('ctxTitle'),scanProgress=$('scanProgress');
+const checkAllBar=$('checkAllBar'),checkAllTitle=$('checkAllTitle'),checkAllSub=$('checkAllSub'),btnCheckAll=$('btnCheckAll'),btnHdrClose=$('btnHdrClose');
 const btnBackScan=$('btnBackScan'),resStale=$('resStale'),btnRescanStale=$('btnRescanStale'),btnRescan=$('btnRescan'),scanPriority=$('scanPriority'),scanList=$('scanList'),scanDetail=$('scanDetail');
 const btnBackToScan=$('btnBackToScan'),pnlSettings=$('panelSettings'),btnSettings=$('btnSettings'),btnBackFromSettings=$('btnBackFromSettings'),apiKeyInput=$('apiKeyInput'),btnSaveKey=$('btnSaveKey'),btnClearKey=$('btnClearKey'),apiKeyState=$('apiKeyState'),btnOpenOptions=$('btnOpenOptions'),pickBar=$('pickBar'),btnCancelPick=$('btnCancelPick'),btnConfirm=$('btnConfirm'),btnOptimize=$('btnOptimize'),btnPick=$('btnPick');
 
@@ -150,7 +151,7 @@ function setUiState(state){
   st(s.header);
   // The scan screen knows what page it is on; "Ready" told the reader nothing, so the
   // URL takes that slot. Every other screen keeps the status chip (REC / working).
-  if(hdrPage)hdrPage.hidden=state!=='scan';
+  if(ctxBar)ctxBar.hidden=!(state==='scan'||state==='mailchimp');
   if(state!=='scan'&&pickBar)pickBar.hidden=true;
   headerStatus.style.display=state==='scan'?'none':'';
   recLive.classList.toggle('on',!!s.live);
@@ -536,7 +537,10 @@ const displayUrl=(u)=>(window.PERSADO_URL?window.PERSADO_URL.displayUrl(u):(u||'
 function showUrl(u){
   currentUrl=u;
   pageUrlEl.textContent=shortUrl(u);
-  if(scanUrl){scanUrl.textContent=displayUrl(u);scanUrl.title=u||'';}
+  // Context row: the domain is what a reader needs to know where they are; the full
+  // address (with its path) stays in the tooltip rather than eating the line.
+  if(scanUrl){let host=u||'';try{host=new URL(u).hostname.replace(/^www\./,'');}catch{}
+    scanUrl.textContent=host;scanUrl.title=u||'';}
 }
 
 async function dp(){
@@ -632,9 +636,12 @@ async function injectScanner(tabId){
 async function autoScan(){
   if(scanBusy)return;
   scanBusy=true;
-  if(btnRescan){btnRescan.disabled=true;btnRescan.textContent='Refreshing…';}
+  if(btnRescan){btnRescan.disabled=true;btnRescan.dataset.busy='true';btnRescan.setAttribute('aria-busy','true');}
   scanSub.textContent='Reading the page’s copy…';
+  if(ctxTitle)ctxTitle.textContent='Reading this page…';
+  if(scanProgress)scanProgress.textContent='';
   scanDetail.style.display='none';
+  checkAllBar.hidden=true;
   scanList.innerHTML='<div class="scan-empty">Scanning…</div>';
   try{
     const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
@@ -657,6 +664,7 @@ async function autoScan(){
     // The product line is no longer a question on the scan screen; the scanner's
     // detection still travels with the result and seeds the rewrite prompt.
     const ms=r.materials||[];
+    if(ctxTitle)ctxTitle.textContent=r.title||displayUrl(r.url||'')||'This page';
     scanCount.textContent=ms.length?`${ms.length} found`:'nothing found';
     scanSub.textContent=ms.length
       ?'Check the copy you want to improve.'
@@ -668,24 +676,110 @@ async function autoScan(){
     scanList.innerHTML=`<div class="scan-empty">${esc(e?.message||'Chrome does not allow scanning this page.')} Reload the page, or record a brief instead.</div>`;
   }finally{
     scanBusy=false;
-    if(btnRescan){btnRescan.disabled=false;btnRescan.textContent='Refresh';}
+    if(btnRescan){btnRescan.disabled=false;delete btnRescan.dataset.busy;btnRescan.removeAttribute('aria-busy');}
   }
+}
+
+// Three states, one vocabulary, in every context: exactly what the copy needs.
+const STATE_GROUPS=[{key:'worth',label:'Worth improving',dot:'worth'},{key:'good',label:'Looking good',dot:'good'},{key:'unchecked',label:'Not checked',dot:''}];
+const groupOf=(kind)=>kind==='good'?'good':(kind==='opportunity'||kind==='recommended')?'worth':'unchecked';
+
+/** Where the reader should start. Deterministic, local, and free — see src/priority.js. */
+function reviewOrder(ms){
+  if(self.PERSADO_PRIORITY)return self.PERSADO_PRIORITY.rank(ms,scanResult||{});
+  return ms.map((material,index)=>({index,material,startHere:index===0,reason:''}));
 }
 
 function renderScanList(){
   const ms=scanResult?.materials||[];
-  if(!ms.length){scanDetail.style.display='none';return;}
-  scanPriority.textContent='';
-  const checked=ms.filter(m=>m.evaluation).length;scanCount.textContent=`${checked} checked · ${ms.length-checked} remaining`;
-  scanList.innerHTML=ms.map((m,i)=>{const state=self.PERSADO_INTELLIGENCE.outcome(webField(m));return `<div class="scan-row" data-i="${i}" role="button" tabindex="0">`
-    +`<div class="scan-row-k">${esc(KIND_LABEL[m.kind]||m.kind)}</div><div class="scan-row-t">${esc(trunc(m.text,76))}</div>`
-    +`<div class="scan-row-s mc-outcome"><i class="mc-state-icon ${state.kind==='good'?'good':['recommended','opportunity'].includes(state.kind)?'worth':'neutral'}" aria-hidden="true"></i>${esc(state.label)}</div></div>`;}).join('');
-  selectMaterial(0);
+  if(!ms.length){scanDetail.style.display='none';checkAllBar.hidden=true;return;}
+  const order=reviewOrder(ms);
+  const checked=ms.filter(m=>m.evaluation).length;
+  scanCount.textContent=`${checked} of ${ms.length} checked`;
+  if(scanProgress)scanProgress.textContent='';
+
+  const groups={worth:[],good:[],unchecked:[]};
+  order.forEach(row=>{
+    const state=self.PERSADO_INTELLIGENCE.outcome(webField(row.material));
+    groups[groupOf(state.kind)].push({...row,state});
+  });
+
+  scanList.innerHTML=STATE_GROUPS.filter(g=>groups[g.key].length).map(g=>
+    `<div class="scan-group"><div class="scan-group-h"><span class="dot ${g.dot}"></span>${g.label}<span class="n">${groups[g.key].length}</span></div>`
+    +groups[g.key].map(({index,material,state,startHere})=>{
+      const icon=state.kind==='good'?'good':['recommended','opportunity'].includes(state.kind)?'worth':'neutral';
+      return `<div class="scan-row" data-i="${index}" role="button" tabindex="0">`
+        +`<div class="scan-row-k">${startHere?'<span class="scan-hit">Start here</span>':''}<span>${esc(KIND_LABEL[material.kind]||material.kind)}</span></div>`
+        +`<div class="scan-row-t">${esc(trunc(material.text,76))}</div>`
+        +`<div class="scan-row-s mc-outcome"><i class="mc-state-icon ${icon}" aria-hidden="true"></i>${esc(state.label)}</div></div>`;
+    }).join('')+'</div>').join('');
+
+  const top=order[0];
+  scanPriority.innerHTML=top
+    ?`<b>Start here:</b> ${esc((KIND_LABEL[top.material.kind]||'copy').toLowerCase())} “${esc(trunc(top.material.text,48))}”${top.reason?` — ${esc(top.reason)}`:''}`
+    :'';
+  renderCheckAll();
+  const keep=resMaterialIndex>=0&&ms[resMaterialIndex]?resMaterialIndex:top.index;
+  selectMaterial(keep);
 }
+
+// ── Check all ───────────────────────────────────────────────────
+// N is the number of items with no evaluation yet: a cached score is reused, never
+// re-bought. Optimization is never chained onto this — scoring and rewriting are
+// separate, separately-priced decisions.
+
+function checkAllPlan(){
+  const pending=(scanResult?.materials||[]).filter(m=>!m.evaluation);
+  return {pending,cost:pending.length};
+}
+
+function renderCheckAll(){
+  const {pending,cost}=checkAllPlan();
+  checkAllBar.hidden=!pending.length;
+  if(!pending.length)return;
+  const credits=`${cost} credit${cost===1?'':'s'}`;
+  // Say the cost once, on the button that spends it. The line above says what is left.
+  checkAllTitle.textContent=`${pending.length} item${pending.length===1?'':'s'} not checked`;
+  checkAllSub.textContent='1 credit each · scored once, then cached';
+  btnCheckAll.textContent=`Check all · ${credits}`;
+  btnCheckAll.disabled=checkAllBusy||!apiKey||!!lastUsage?.exhausted;
+}
+
+let checkAllBusy=false;
+async function checkAll(){
+  const {pending}=checkAllPlan();
+  if(!pending.length||checkAllBusy)return;
+  if(!apiKey){openSettings();return;}
+  checkAllBusy=true;
+  btnCheckAll.dataset.busy='true';btnCheckAll.setAttribute('aria-busy','true');btnCheckAll.disabled=true;
+  let scored=0,failed=0;
+  try{
+    for(const m of pending){
+      btnCheckAll.textContent=`Checking ${scored+failed+1} of ${pending.length}…`;
+      const r=await worker({type:MSG.PERSADO_SCORE,text:m.text,kind:m.kind,pageUrl:scanResult?.url||currentUrl,brand:brandFromPage(),
+        context:[scanResult?.title?`Page: ${scanResult.title}`:'',m.context?`Nearby copy: ${m.context}`:'',`Objective: ${goalValue}`].filter(Boolean).join('\n')});
+      if(r.usage)renderUsage(r.usage);
+      if(r.ok){
+        m.evaluation=r.result;m.evaluationTouchpoint=r.touchpoint;scored++;
+        renderScanList();
+      }else{
+        failed++;
+        if(r.kind==='no_key'||r.kind==='invalid_key'||r.kind==='exhausted'){tm(r.error||'Checking stopped','err');break;}
+      }
+    }
+  }finally{
+    checkAllBusy=false;
+    delete btnCheckAll.dataset.busy;btnCheckAll.removeAttribute('aria-busy');
+    renderCheckAll();
+    if(scored)tm(`${scored} checked${failed?` · ${failed} could not be checked`:''}`,'ok');
+  }
+}
+btnCheckAll.addEventListener('click',checkAll);
 
 function selectMaterial(i){
   const ms=scanResult?.materials||[];
   scanMaterial=ms[i]||null;
+  resMaterialIndex=scanMaterial?i:-1;
   scanList.querySelectorAll('.scan-row').forEach(r=>r.classList.toggle('sel',+r.dataset.i===i));
   renderScanDetail(scanMaterial);
 }
@@ -693,21 +787,50 @@ function selectMaterial(i){
 function renderScanDetail(m){
   if(!m){scanDetail.style.display='none';return;}
   const issues=(m.issues||[]).slice(0,5),state=self.PERSADO_INTELLIGENCE.outcome(webField(m));
+  const optimized=m.evaluation?.kind==='optimize';
   scanDetail.style.display='';
   scanDetail.innerHTML=`<p class="mc-state-message">${esc(state.message)}</p><div class="scan-d-copy">${esc(m.text)}</div>`
-    +`<details class="mc-compare"><summary>Local copy review</summary><p class="mc-meta">Heuristic review, not a Persado score.</p><div class="scan-why">${issues.length?issues.map(x=>`<div class="scan-why-i"><span><strong>${esc(x.label)}.</strong> ${esc(x.detail)}</span></div>`).join(''):'<p class="mc-meta">No local suggestions.</p>'}</div></details>`;
+    +`<details class="mc-compare"><summary>Copy review</summary><p class="mc-meta">Heuristic review, not a Persado score.</p><div class="scan-why">${issues.length?issues.map(x=>`<div class="scan-why-i"><span><strong>${esc(x.label)}.</strong> ${esc(x.detail)}</span></div>`).join(''):'<p class="mc-meta">No local suggestions.</p>'}</div></details>`;
   btnConfirm.textContent='Check · 1 credit';btnConfirm.hidden=state.kind!=='unchecked';
   btnConfirm.disabled=!apiKey||!!lastUsage?.exhausted;
-  btnOptimize.textContent=m.evaluation?.kind==='optimize'?'Review recommendation':'Find a better version · 5 credits';
-  btnOptimize.classList.toggle('btn-primary',state.kind==='opportunity'||state.kind==='recommended');
-  btnOptimize.classList.toggle('btn-outline',state.kind!=='opportunity'&&state.kind!=='recommended');
-  btnOptimize.disabled=!apiKey||(!!lastUsage?.exhausted&&m.evaluation?.kind!=='optimize');
+  btnOptimize.textContent=optimized?'Review recommendation':'Find a better version · 5 credits';
+  // One primary action: check while unchecked, otherwise the rewrite is the next step.
+  const rewritePrimary=state.kind==='opportunity'||state.kind==='recommended'||optimized;
+  btnOptimize.classList.toggle('btn-primary',rewritePrimary);
+  btnOptimize.classList.toggle('btn-outline',!rewritePrimary);
+  btnOptimize.disabled=!apiKey||(!!lastUsage?.exhausted&&!optimized);
 }
 
-scanList.addEventListener('click',(e)=>{
+// Hovering a row outlines the element it came from, so the list and the page are one
+// object. Pointer-only: keyboard selection already moves focus and scrolls.
+let highlightTimer=null,highlightedSelector=null;
+function highlightOn(selector){
+  if(!selector)return;
+  clearTimeout(highlightTimer);
+  highlightedSelector=selector;
+  highlightTimer=setTimeout(async()=>{
+    try{const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
+      if(tab?.id)await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_HIGHLIGHT,selector,on:true});}catch{}
+  },60);
+}
+async function highlightOff(){
+  clearTimeout(highlightTimer);
+  if(!highlightedSelector)return;
+  const selector=highlightedSelector;highlightedSelector=null;
+  try{const[tab]=await chrome.tabs.query({active:true,currentWindow:true});
+    if(tab?.id)await chrome.tabs.sendMessage(tab.id,{type:MSG.SCAN_HIGHLIGHT,selector,on:false});}catch{}
+}
+scanList.addEventListener('pointerover',(e)=>{
   const row=e.target.closest('.scan-row');if(!row)return;
-  selectMaterial(+row.dataset.i);
+  highlightOn((scanResult?.materials||[])[+row.dataset.i]?.selector);
 });
+scanList.addEventListener('pointerleave',highlightOff);
+scanList.addEventListener('focusin',(e)=>{
+  const row=e.target.closest('.scan-row');if(!row)return;
+  highlightOn((scanResult?.materials||[])[+row.dataset.i]?.selector);
+});
+scanList.addEventListener('focusout',highlightOff);
+
 scanList.addEventListener('keydown',(e)=>{
   const row=e.target.closest('.scan-row');if(!row)return;
   if(e.key==='Enter'||e.key===' '){e.preventDefault();selectMaterial(+row.dataset.i);}
@@ -815,7 +938,13 @@ function renderUsage(u){
     :{cls:'',t:'Persado API · Not tested'};
   usageDot.className='dot '+conn.cls;
   usageConn.textContent=conn.t;
-  usageNum.textContent=u.hasKey?`${u.used} credits used · estimate`:'';
+  // No balance endpoint, so no balance is shown. A running estimate in the primary
+  // flow reads as a balance and invites arithmetic nobody can verify; it belongs in
+  // Settings, where the ledger and its cost sources are spelled out.
+  const problem=!u.hasKey||u.exhausted||['invalid_key','error','quota'].includes(u.connection?.kind);
+  usageNum.textContent='';
+  $('usageBar').hidden=!problem;
+  if(!u.hasKey)usageConn.textContent='Persado API · Set up in Settings';
   usageFill.style.width='0';
   $('usageBar').title='Account balance unavailable. Costs are configured estimates; usage headers from Persado are shown in Settings.';
   if(useConn){
@@ -897,6 +1026,7 @@ btnConfirm.addEventListener('click',()=>persadoRun('score'));
 
 btnOptimize.addEventListener('click',()=>optimizeMaterial());
 if(btnRescan)btnRescan.addEventListener('click',()=>autoScan());
+if(btnHdrClose)btnHdrClose.addEventListener('click',()=>window.close());
 // The result card is a dead end unless it can go back to the page's copy list.
 function backToList(){
   clearPreview();
@@ -1727,7 +1857,15 @@ function mcNotice(text,error=false){
 }
 function mcContext(){
   mcSub.textContent=mcSel?.title||'Untitled draft';mcSub.title=mcSub.textContent;
-  const fields=mcSel?.fields||[],checked=intelligence.organize(fields).checked;mcCount.textContent=`${checked} checked · ${fields.length-checked} remaining`;
+  const fields=mcSel?.fields||[],checked=intelligence.organize(fields).checked;
+  // Same row as a public page, different facts: who we are connected to, which draft,
+  // and how far the checking has got.
+  if(uiState==='mailchimp'){
+    if(ctxTitle)ctxTitle.textContent=mcSel?.title||'Untitled draft';
+    if(scanUrl){const s=mcSel?.status||'draft';scanUrl.textContent=`Mailchimp · ${s}`;}
+    if(scanCount)scanCount.textContent=`${checked} of ${fields.length} checked`;
+  }
+  mcCount.textContent=`${checked} checked · ${fields.length-checked} remaining`;
   renderMcOverview();
 }
 const mcNumber=n=>new Intl.NumberFormat(undefined,n!==0&&Math.abs(n)<.01?{maximumSignificantDigits:3}:{maximumFractionDigits:2}).format(n);
@@ -2014,9 +2152,9 @@ async function init(){
   await dp();
   worker({type:MSG.USAGE_GET}).then(renderUsage);
   // The [Persado] wordmark was removed (Chrome's native side-panel bar already shows
-  // the mark); keep the version discoverable on hover via the header status chip and
+  // the Persado Assist title); keep the version discoverable on hover via the header status chip and
   // the results Done status, both of which persist.
-  const ver='Persado Autopilot v'+chrome.runtime.getManifest().version;
+  const ver='Persado Assist v'+chrome.runtime.getManifest().version;
   try{$('headerStatus').title=ver;}catch{}
   try{$('resStatus').title=ver;}catch{}
   refreshOfflineHint();

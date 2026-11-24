@@ -49,6 +49,7 @@
     // ── page preview (panel → tab, handled by src/scan.js). Temporary: the page's
     // own copy is restored on SCAN_RESTORE, on navigation, or on reload.
     SCAN_PREVIEW: 'SCAN_PREVIEW',
+    SCAN_HIGHLIGHT: 'SCAN_HIGHLIGHT',
     SCAN_RESTORE: 'SCAN_RESTORE',
 
     // ── Persado service (panel → worker). The worker is the only context that

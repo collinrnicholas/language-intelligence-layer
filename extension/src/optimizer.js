@@ -1,4 +1,4 @@
-// ─── Persado Autopilot — platform-neutral optimizer ──────────────────────────
+// ─── Persado Assist — platform-neutral optimizer ──────────────────────────
 //
 //   adapter.read()  →  eligible copy           (platform adapter)
 //   PERSADO_API.optimize()  →  ranked rewrites  (Persado service — one run)

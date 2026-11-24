@@ -1,4 +1,4 @@
-// ─── Persado Autopilot — activity log ────────────────────────────────────────
+// ─── Persado Assist — activity log ────────────────────────────────────────
 //
 // Every Persado run and every platform write is recorded here: what was read,
 // what Persado returned, what was written, and whether it verified. It is the

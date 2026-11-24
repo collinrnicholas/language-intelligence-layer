@@ -8,6 +8,11 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.11.3
+
+- Renamed the extension to Persado Assist with Language Intelligence as its supporting descriptor and “Language intelligence, wherever you work.” as its positioning. Updated manifest metadata, toolbar/status tooltips, Settings, documentation and ZIP filename while retaining internal package/protocol/configuration identifiers.
+- Preserved contextual website/Mailchimp routing, the three-state workflow, APIs, permissions, authentication, scoring, credits, cached recommendations, Apply/Undo and motion.
+
 ## 0.11.2
 
 - Replaced primary score displays with evidence-backed content states, checked/remaining progress, one recommended action, and compact Looking good/Not checked groups. A scored opportunity without a generated version offers Find a better version (5 credits); only a genuine stronger eligible alternative offers Use this version. Missing recommendation evidence remains explicit.
@@ -39,7 +44,7 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ## 0.10.1
 
-- Compact Mailchimp sidebar: one native Persado Autopilot title, connection indicator and settings gear, campaign context and eligible count, subject-first disclosure rows, and grouped button language with template buttons de-emphasized.
+- Compact Mailchimp sidebar: one native Persado Assist title, connection indicator and settings gear, campaign context and eligible count, subject-first disclosure rows, and grouped button language with template buttons de-emphasized.
 - Removed the main-view usage estimate, duplicate branding, floating detection panel, persistent explanatory footer, and empty Undo messaging. Scores, alternatives and Apply reveal in context; Undo appears after a saved change.
 - Optimize is available without a preceding Score request. All paid actions stay explicit.
 - Saved campaign content synchronizes on debounced edit/navigation signals and a visibility-aware read-only fallback. Concurrent status reads coalesce; unchanged data preserves disclosures, focus and scroll. Verified campaign IDs avoid repeated full draft-list lookups.
@@ -129,7 +134,7 @@ Fixes from the first in-browser run of 0.9.0.
 
 ## 0.9.0
 
-**Persado Autopilot.** The extension now calls the real Persado API, shows what it
+**Persado Assist.** The extension now calls the real Persado API, shows what it
 spends, and optimizes Mailchimp draft campaigns in place.
 
 - **Real Persado scoring and optimization.** Score and Optimize on a scanned page call
