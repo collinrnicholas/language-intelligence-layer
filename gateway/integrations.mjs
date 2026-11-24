@@ -77,19 +77,25 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
   async function campaign(msg) {
     const a = adapter();
     let id = msg.campaignId;
-    if (msg.webId) {
+    if (msg.webId && !id) {
       const match = await a.findByWebId(msg.webId);
       if (!match || (id && id !== match.id)) fail('not_found', 'The URL does not match a draft in the connected account. Select a draft explicitly.');
       id = match.id;
     }
     if (!id) fail('selection_required', 'Open a campaign draft or select one explicitly.');
     const draft = await a.read(id);
+    if (msg.webId && Number(draft.ref.webId) !== Number(msg.webId))
+      fail('not_found', 'The URL does not match the selected draft. Refresh before continuing.');
     // All builder types may be read. Body apply is deliberately unavailable.
     const fields = draft.fields.filter(f => f.location === 'settings');
     for (const block of G.htmlBlocks(draft.html)) {
       const touchpoint = block.cta ? 'cta' : block.kind;
       if (['headline', 'subheadline', 'body', 'cta'].includes(touchpoint) && G.eligible(block.text, touchpoint).ok) {
-        fields.push({ field: 'body:' + block.id, touchpoint, text: block.text, location: 'html',
+        const templateLabels = ['explore templates', 'manage contacts', 'upload to brand kit'];
+        let templateDefault = false;
+        try { templateDefault = touchpoint === 'cta' && templateLabels.includes(block.text.toLowerCase())
+          && /(^|\.)mailchimp\.com$/i.test(new URL(block.href).hostname); } catch {}
+        fields.push({ field: 'body:' + block.id, touchpoint, text: block.text, location: 'html', templateDefault,
           maxLength: Math.max(60, Math.ceil(block.text.length * 1.5)), applyDisabledReason: 'Body Apply is unavailable to preserve Mailchimp HTML, links, merge tags, and disclosures.' });
       }
     }
@@ -187,8 +193,6 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
           if (!field) fail('not_eligible', 'Choose an eligible copy block. Refresh if the draft changed.');
           if (msg.text !== field.text) fail('changed', 'The draft copy changed. Refresh before spending credits.');
           const acct = account(msg), op = msg.type === 'MC_SCORE' ? 'score' : 'optimize';
-          if (op === 'optimize' && field.field === 'subject_line' && !state.cache[runKey('score', field, acct, 'mailchimp')]?.result)
-            fail('score_required', 'Score this subject line before optimizing it.');
           const out = await paid(op, field, acct, 'mailchimp');
           const key = runKey(op, field, acct, 'mailchimp');
           state.cache[key].campaignIds = [...new Set([...(state.cache[key].campaignIds || []), id])]; save();

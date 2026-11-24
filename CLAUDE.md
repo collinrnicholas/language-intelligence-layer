@@ -47,7 +47,7 @@ Everything painful in this codebase comes from state being split across four JS 
 
 **Persado Autopilot modules (service worker)** — `src/persado-api.js` (the only Persado client), `src/adapters/*.js` (platform adapters; Mailchimp first), `src/optimizer.js`, `src/guard.js` (safeguards), `src/usage.js`, `src/activity.js`. `gateway/integrations.mjs` is the ONLY runtime reader of the Persado and Mailchimp environment keys and calls the reused API clients; `background.js` relays authenticated requests to it. See `docs/AUTOPILOT.md`.
 
-**`extension/src/mc-overlay.js`** — content script on `*.admin.mailchimp.com`; closed shadow root; may only send read-only `MC_STATUS` (enforced by `senderAllowed` and smoke).
+**`extension/src/mc-overlay.js`** — quiet change observer on `*.admin.mailchimp.com`; may only send read-only `MC_CONTEXT_CHANGED` hints (enforced by `senderAllowed` and smoke).
 
 **`gateway/server.mjs`** — the ONLY place model-provider API keys live. The extension uses it for transcription and authenticated provider integrations. Endpoints: `POST /v1/ai/transcribe` (Whisper) and `POST /v1/ai/recommend` (variants). Model tiers resolve via `PERSADO_MODEL_PREMIUM` (default `gpt-4o`, vision-capable) and `PERSADO_MODEL_STANDARD` (default `gpt-4o-mini`); the legacy `LOUPE_*` names still work as a fallback. An attached image routes the call to the premium/vision tier. Must be running (`npm run gateway`) or transcription and generation fail — a down gateway is NOT a microphone bug, do not conflate them.
 
@@ -103,13 +103,12 @@ The local gateway is a long-running process holding REAL provider API keys, ofte
 
 ## 8. Verification boundaries — what an agent genuinely cannot do here
 
-`chrome://extensions` cannot be reached by any browser automation. Chrome blocks extensions and automated tooling from scripting `chrome://` pages by design. That means **loading an unpacked extension, reading the service-worker console, and confirming a fix in the running browser are human steps.** No tool works around this.
+DOM browser automation cannot script `chrome://extensions`. Native CUA accessibility controls can reload an unpacked extension and inspect its actual docked side panel when that tool is available. Use the tools actually available; do not claim a verification boundary solely from older tooling limitations.
 
-Consequences for how work is reported:
-
-- Do not claim a fix is verified in-browser. State exactly what was verified statically (`npm run smoke`, code reading) and what still needs a human pass.
-- Hand back a short, ordered checklist the human can run in a couple of minutes, with the precise click path and what a pass looks like at each step.
-- Ask for the service-worker console output when a bug's root cause depends on it, rather than inferring and presenting the inference as fact.
+- Report exactly what was verified: source/tests, fixture-based browser tests, or native Chrome against the signed-in application.
+- Reload the extension and hard-reload the Mailchimp page before checking content-script changes.
+- If native CUA is unavailable, provide the short manual checklist and mark native UI checks unverified.
+- Never claim a successful live score, optimization or write unless that operation ran and its result was observed.
 
 ## 9. Definition of done
 

@@ -1,12 +1,12 @@
 # Persado Autopilot — native Mailchimp integration
 
-Version 0.10.0. The existing extension remains the UI; no standalone editor is added.
+Version 0.10.1. The existing extension remains the UI; no standalone editor is added.
 
 ## Architecture
 
 `sidepanel.html` / `sidepanel.js` → runtime messages → `src/background.js` → authenticated loopback `POST /v1/integrations` → `gateway/integrations.mjs`.
 
-The gateway reuses `extension/src/persado-api.js`, `guard.js`, `usage.js`, and `adapters/mailchimp.js` in an isolated Node VM. The worker no longer loads provider clients or reads provider keys. The legacy optimizer remains covered by regression tests but is not invoked by the current UI or proxy. The Mailchimp overlay is read-only; paid actions and writes are restricted to extension pages.
+The gateway reuses `extension/src/persado-api.js`, `guard.js`, `usage.js`, and `adapters/mailchimp.js` in an isolated Node VM. The worker no longer loads provider clients or reads provider keys. The legacy optimizer remains covered by regression tests but is not invoked by the current UI or proxy. The Mailchimp content script is a quiet change observer; paid actions and writes are restricted to extension pages.
 
 Public website scanning, scoring, optimization, preview, recording, and transcription keep their existing UI. Website scoring and optimization also use the authenticated gateway. No live-mode fixture responses exist in this route.
 
@@ -27,7 +27,7 @@ lokalite run --project language-intelligence-layer --keys MAILCHIMP_API_KEY,PERS
 4. Open the Persado side panel → Settings. Enter only the local gateway pairing token, then **Pair gateway**. Set your brand and industry. Use **Test Mailchimp connection**.
 5. Hard-reload the Mailchimp page after reloading the extension; existing content scripts otherwise remain stale.
 6. Open a regular draft URL such as `https://us5.admin.mailchimp.com/campaigns/show/?id=<web_id>`. The subject, preview and eligible body blocks should appear automatically.
-7. Score the subject (configured estimate: 1 credit), then Optimize (5 credits). Compare current and alternative copy. Apply saves only that selected field and reads it back. Refresh Mailchimp to observe persistence. Undo restores the previous field if no later edit conflicts.
+7. Choose Score (configured estimate: 1 credit) or Optimize (5 credits) independently. Compare current and alternative copy. Apply saves only that selected field and reads it back. Refresh Mailchimp to observe persistence. Undo restores the previous field if no later edit conflicts.
 
 Successful connection tests remove the corresponding legacy provider key from browser storage. Until tested, any old stored key remains a local security risk. Provider credentials should be rotated if they were ever exposed; removing a key from HEAD does not remove it from history.
 
@@ -61,7 +61,7 @@ The integration route requires a pairing token, a loopback peer and Host, JSON P
 
 Verified on November 24, 2026:
 
-- `npm run smoke`, `npm run lint` (typecheck), `npm run build`, `npm run repo:check`, `npm run version:check`, and `git diff --check` passed. `npm test`: 118 agent tests plus 54 extension tests passed. A broken local TypeScript executable link was repaired with `npm rebuild typescript`; no application source workaround was added.
+- `npm run smoke`, `npm run lint` (typecheck), `npm run build`, `npm run repo:check`, `npm run version:check`, and `git diff --check` passed. `npm test`: 118 agent tests plus 55 extension tests passed. A broken local TypeScript executable link was repaired with `npm rebuild typescript`; no application source workaround was added.
 - Real Mailchimp `/ping`, account metadata, draft list, draft settings and content reads succeeded using Keydeck credentials. The draft API ID `6e04c9077b` matched URL web_id `4750548`.
 - Real Persado catalogue, subject scoring (78), optimization (five alternatives; top score 84), cached duplicate Score, subject Apply, independent read-back, and Undo succeeded. The original subject was restored and verified. Score and Optimize used an estimated six credits total; duplicate scoring submitted no additional paid job.
 - Preview text: real scoring (51), optimization (five alternatives), Apply, independent read-back, and Undo succeeded. Subject remained unchanged by preview Apply. The original preview was restored and verified. Estimated six further credits.
@@ -69,6 +69,29 @@ Verified on November 24, 2026:
 - Headless Chromium loaded the real unpacked extension. Using an isolated gateway on port 8789, it displayed real Mailchimp data and cached live Persado results, applied a subject alternative through panel controls, and undid it through the visible Saved changes controls. Mailchimp URL navigation, unknown-draft selection, returning to the known draft, public-site content-script scanning, 390px and landscape layouts passed with no panel page errors. The test Mailchimp page supplied only the editor URL identity; the signed-in Mailchimp application was not exercised. No browser fixture replaced a live provider response. The temporary test gateway was stopped afterward; the existing gateway on 8788 was left running.
 - Exact current Persado key, Mailchimp key and pairing-token comparisons found no matches in 219 nonignored source files, the extension ZIP, or Git patch history. A separate scan of 112 commits found no common provider-key patterns. Local `.env` and gateway state files are ignored and mode 0600.
 
-Still unverified: the user's installed Chrome build/native docked side panel against the signed-in Mailchimp UI; its editor autosave behavior; microphone permission/recording/transcription; live body-block scoring and optimization; and live insufficient-credit behavior (quota errors are covered by automated fixtures). Public website provider request/response handling is tested with fixtures; public website scanning is checked in Chromium. Body Apply and all sending remain intentionally unavailable.
+Still unverified: microphone permission/recording/transcription; live body-block scoring and optimization; and live insufficient-credit behavior (quota errors are covered by automated fixtures). Public website provider request/response handling is tested with fixtures; public website scanning is checked in Chromium. Body Apply and all sending remain intentionally unavailable.
 
-Before testing in the user's Chrome, reload/load the final 0.10.0 extension, hard-reload Mailchimp, pair the local gateway and run the checklist above. Restart the existing gateway yourself if it predates the final files; only one gateway should use the state file at a time.
+Before testing in the user's Chrome, reload/load the final 0.10.1 extension, hard-reload Mailchimp, pair the local gateway and run the checklist above. Restart the existing gateway yourself if it predates the final files; only one gateway should use the state file at a time.
+
+## Sidebar UX verification — 0.10.1
+
+The native Chrome side-panel bar supplies the single Persado Autopilot brand title. Its content header has a small Mailchimp connection indicator and settings gear. API diagnostics and estimated usage appear in Settings. No current account balance is inferred.
+
+A compact campaign name and eligible count precede Subject line (open, Start here), Preview text, Email body and Button language. The latter sections collapse by default. Expanded rows reveal explicit Score (1 credit estimate) and Optimize (5 credit estimate) actions. Scoring is not a prerequisite for optimization. The first real alternative is shown in context; further alternatives use an additional disclosure. Template CTA classification is conservative: known Mailchimp template labels and a Mailchimp-hosted destination must both match. Custom buttons remain first.
+
+The observer sends no content and performs no API calls. Input/change/save/navigation hints are debounced; the panel makes read-only status calls after edits and a five-second settle check. A visible-panel fifteen-second fallback catches saved changes in iframes and other sessions. Concurrent status reads coalesce. Verified campaign IDs bypass repeated draft-list searches. Unchanged response data does not recreate content rows; expansion, scroll and action focus are retained when data changes. Unsaved Mailchimp edits cannot appear through the API until Mailchimp persists them. No automatic paid action is enabled.
+
+Verified in the user's actual signed-in Chrome and Mailchimp, November 24, 2026:
+
+- Reloaded the installed extension to 0.10.1 and hard-reloaded Mailchimp. The native docked sidebar displayed the correct draft, six eligible elements, subject-first actions, compact sections, connection indicator and settings gear without duplicate branding or a persistent usage/footer panel. Score/Optimize labels and Apply were fully readable at the current narrow docked-panel width.
+- Ran Optimize directly on the unscored subject through the actual sidebar. Persado returned four alternatives, the first with a real score of 87. Scoring remained at zero runs.
+- Applied that alternative through the refined Apply control. Mailchimp saved it and read-back verification succeeded. The contextual Undo appeared; Undo restored the original subject and then disappeared. No email was sent.
+- Temporarily edited and saved preview text in Mailchimp. The sidebar updated automatically without clicking Refresh. Restored and saved the original preview, which also appeared automatically.
+- Expanded Button language and confirmed its three default CTAs were nested under Template buttons. Left Preview text, Email body and Button language collapsed afterward.
+- Navigated from the open draft to the Mailchimp campaign list: stale draft actions cleared and explicit draft selection appeared. Returning to the draft automatically re-identified it with its persisted original subject and preview.
+- Opened the settings gear and confirmed connection/usage diagnostics lived there. The ledger showed exactly one optimization, zero scoring runs and one paid request (five estimated credits). All detection, refresh, navigation, Apply and Undo checks introduced no additional Persado requests.
+- With user approval, restarted only launchd service dev.persado.gateway to activate the tested gateway changes. Existing pairing and provider credentials remained in place.
+
+Automated validation: 118 agent tests and 55 extension tests, lint/typecheck, smoke, build and repository hygiene passed. Tests cover Optimize without scoring, concurrent status-read coalescing, trusted read-only change hints and rejection of untrusted senders, alongside existing billing/cache, draft-only Apply, read-back and Undo safeguards.
+
+Limitations retained: body Apply is unavailable; the API reads saved content only; the fallback may take up to roughly fifteen seconds plus API latency. Template recognition is a narrow heuristic, not proof of authorship. No ROI ranking, account balance, automatic scoring or sending is invented. Microphone behavior and live quota-exhaustion handling were not retested for this UX change.

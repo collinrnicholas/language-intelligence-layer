@@ -1719,95 +1719,164 @@ async function offerResume(){
 // Send test. Sending to an audience is never offered here.
 
 const MC_HOST=/^https:\/\/[^/]*\.admin\.mailchimp\.com\//i;
-const isMailchimpUrl=(u)=>MC_HOST.test(u||'');
-const webIdOf=(u)=>{try{const x=new URL(u);const id=x.searchParams.get('id');return /\/campaigns\//.test(x.pathname)&&/^\d+$/.test(id||'')?Number(id):null;}catch{return null;}};
-let mcSel=null,mcTabWebId=null,mcEpoch=0,mcBusyUi=false,mcUndo=[],mcFeedback='';
-const mcLabel=f=>({subject_line:'Subject line',preview_text:'Preview text'})[f.field]||({cta:'Button language',headline:'Headline',subheadline:'Subheadline',body:'Copy block'})[f.touchpoint]||'Copy block';
+const isMailchimpUrl=u=>MC_HOST.test(u||'');
+const webIdOf=u=>{try{const x=new URL(u),id=x.searchParams.get('id');return /\/campaigns\//.test(x.pathname)&&/^\d+$/.test(id||'')?Number(id):null;}catch{return null;}};
+let mcSel=null,mcTabWebId=null,mcTabId=null,mcEpoch=0,mcBusyUi=false,mcUndo=[],mcFeedback='',mcFeedbackError=false;
+let mcLoad=null,mcQueued=false,mcRefreshTimer=null,mcSettleTimer=null,mcFeedbackTimer=null,mcViewSignature='',mcWorkingField=null;
+const mcExpanded=new Set(['subject_line']);
+const mcConnection=$('mcConnection'),mcCount=$('mcCount');
+const mcLabel=f=>({subject_line:'Subject line',preview_text:'Preview text'})[f.field]||({cta:'Button',headline:'Headline',subheadline:'Subheadline',body:'Copy block'})[f.touchpoint]||'Copy block';
+function mcConnectionState(ok,label){mcConnection.classList.toggle('connected',ok);mcConnection.textContent=label||(ok?'Mailchimp connected':'Connection needs attention');}
+function mcNotice(text,error=false){
+  clearTimeout(mcFeedbackTimer);mcFeedback=text||'';mcFeedbackError=error;
+  mcSteps.textContent=mcFeedback;mcSteps.classList.toggle('error',error);
+  if(text&&!error)mcFeedbackTimer=setTimeout(()=>{mcFeedback='';mcSteps.textContent='';},4000);
+}
+function mcContext(){
+  mcSub.textContent=mcSel?.title||'Untitled draft';mcSub.title=mcSub.textContent;
+  const n=mcSel?.fields?.length||0;mcCount.textContent=`${n} eligible ${n===1?'element':'elements'}`;
+}
 async function showMailchimp(){
-  setUiState('mailchimp');
-  const epoch=++mcEpoch;mcSel=null;mcUndo=[];mcFeedback='';mcBusyUi=false;
-  mcDetail.hidden=true;mcList.innerHTML='';mcSub.textContent='Identifying the current campaign…';
-  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(epoch!==mcEpoch)return;mcTabWebId=webIdOf(t?.url);}catch{mcTabWebId=null;}
+  const epoch=++mcEpoch;clearTimeout(mcRefreshTimer);clearTimeout(mcSettleTimer);mcQueued=false;
+  mcSel=null;mcUndo=[];mcBusyUi=false;mcViewSignature='';mcExpanded.clear();mcExpanded.add('subject_line');
+  mcDetail.hidden=true;mcActivity.innerHTML='';mcList.innerHTML='';mcCount.textContent='';
+  mcSub.textContent='Identifying campaign…';mcNotice('');
+  mcConnectionState(false,'Connecting to Mailchimp');setUiState('mailchimp');
+  try{const[t]=await chrome.tabs.query({active:true,currentWindow:true});if(epoch!==mcEpoch)return;mcTabId=t?.id;mcTabWebId=webIdOf(t?.url);}catch{mcTabWebId=null;mcTabId=null;}
   await loadDrafts(epoch);
 }
-async function loadDrafts(epoch=mcEpoch){
-  const st=await worker({type:MSG.MC_STATUS,...(mcTabWebId?{webId:mcTabWebId}:mcSel?{campaignId:mcSel.id}:{})});
-  if(epoch!==mcEpoch||uiState!=='mailchimp')return;
-  if(st.usage)renderUsage(st.usage);
-  if(st.ok&&st.campaign){
-    mcSel=st.campaign;mcUndo=st.undo||[];mcList.innerHTML='';
-    mcSub.textContent=`${st.accountName||'Mailchimp'} · Connected · ${mcSel.title||'Untitled draft'}`;
-    renderMcDetail();return;
+function scheduleMcRefresh(delay=1200){
+  clearTimeout(mcRefreshTimer);
+  mcRefreshTimer=setTimeout(()=>{
+    if(uiState!=='mailchimp'||document.hidden)return;
+    if(mcBusyUi){mcQueued=true;return;}
+    loadDrafts(mcEpoch,true);
+  },delay);
+}
+async function loadDrafts(epoch=mcEpoch,quiet=false){
+  if(mcLoad?.epoch===epoch){mcQueued=true;return mcLoad.promise;}
+  if(mcBusyUi){mcQueued=true;return;}
+  const selectedId=mcSel?.id;
+  const task=(async()=>{
+    const st=await worker({type:MSG.MC_STATUS,...(selectedId?{campaignId:selectedId}:{}),...(mcTabWebId?{webId:mcTabWebId}:{})});
+    if(epoch!==mcEpoch||uiState!=='mailchimp')return;
+    if(st.usage)renderUsage(st.usage);
+    mcConnectionState(!!(st.ok&&st.connected));
+    if(st.ok&&st.campaign){
+      const previous=mcSel?.fingerprint;mcSel=st.campaign;mcUndo=st.undo||[];mcList.innerHTML='';mcContext();
+      const signature=JSON.stringify([mcSel,mcUndo]);
+      if(signature!==mcViewSignature){mcViewSignature=signature;renderMcDetail();}
+      if(quiet&&previous&&previous!==mcSel.fingerprint)mcNotice('Updated from Mailchimp.');
+      return;
+    }
+    // Keep a known draft visible during transient network failures. A campaign
+    // mismatch/non-draft must clear stale actions immediately.
+    if(quiet&&mcSel&&['gateway_down','rate_limited','unavailable','timeout','unreachable'].includes(st.kind)){
+      mcNotice(st.error||'Could not refresh. Try again shortly.',true);return;
+    }
+    mcSel=null;mcDetail.hidden=true;mcActivity.innerHTML='';mcCount.textContent='';
+    mcSub.textContent='Select a campaign';mcSub.title='';
+    mcNotice(st.error||(!st.connected?'Open Settings to connect Mailchimp.':'Choose a draft to review.'),!st.ok);
+    if(!st.ok&&!['not_found','selection_required','ambiguous','not_draft'].includes(st.kind))return;
+    const r=await worker({type:MSG.MC_DRAFTS});if(epoch!==mcEpoch)return;
+    if(!r.ok){mcNotice(r.error,true);return;}
+    mcList.innerHTML=(r.drafts||[]).map(d=>`<button class="mc-choice" data-campaign="${esc(d.id)}">${esc(d.title||d.subject||'Untitled draft')}</button>`).join('')||'<p class="mc-empty">No draft campaigns.</p>';
+  })();
+  mcLoad={epoch,promise:task};
+  try{await task;}finally{
+    if(mcLoad?.promise===task)mcLoad=null;
+    if(epoch===mcEpoch&&mcQueued){mcQueued=false;scheduleMcRefresh(2000);}
   }
-  mcSel=null;mcDetail.hidden=true;
-  mcSub.textContent=st.error||(!st.connected?'Connect Mailchimp through the gateway in Settings.':'Choose the draft you want to review.');
-  if(!st.ok&&st.kind!=='not_found'&&st.kind!=='selection_required'&&st.kind!=='ambiguous')return;
-  const r=await worker({type:MSG.MC_DRAFTS});if(epoch!==mcEpoch)return;
-  if(!r.ok){mcSub.textContent=r.error;return;}
-  mcList.innerHTML=(r.drafts||[]).map(d=>`<button class="mc-choice" data-campaign="${esc(d.id)}">${esc(d.title||d.subject||'Untitled draft')}</button>`).join('')||'<p class="mc-note">No drafts found in this account.</p>';
 }
 mcList.addEventListener('click',async e=>{
-  const button=e.target.closest('[data-campaign]');if(!button)return;
-  const epoch=++mcEpoch;mcTabWebId=null;mcFeedback='';
-  const r=await worker({type:MSG.MC_STATUS,campaignId:button.dataset.campaign});
-  if(epoch!==mcEpoch)return;
-  if(!r.ok){mcSub.textContent=r.error;return;}
-  mcSel=r.campaign;mcUndo=r.undo||[];mcList.innerHTML='';mcSub.textContent=`${r.accountName||'Mailchimp'} · Connected · ${mcSel.title}`;renderMcDetail();
+  const b=e.target.closest('[data-campaign]');if(!b)return;
+  ++mcEpoch;mcTabWebId=null;mcViewSignature='';mcExpanded.clear();mcExpanded.add('subject_line');
+  mcSel={id:b.dataset.campaign};mcNotice('');await loadDrafts(mcEpoch);
 });
 function renderMcDetail(){
   mcDetail.hidden=!mcSel;if(!mcSel)return;
   mcDetail.setAttribute('aria-busy',String(mcBusyUi));
-  mcSteps.textContent=mcBusyUi?'Waiting for the API…':mcFeedback;
-  const fields=mcSel.fields||[];
-  const section=f=>{
-    const score=f.score?.variants?.[0]?.performance;
-    const disabled=mcBusyUi||!lastUsage?.hasKey;
-    const alternatives=f.optimization?.result?.alternatives||[];
-    return `<section class="mc-chg"><h3>${esc(mcLabel(f))}</h3><p class="mc-current">${esc(f.text)}</p>`
-      +`<p class="mc-meta">${score!=null?'Persado score: '+esc(score):'Not scored'}${f.score?' · cached for this copy':''}</p>`
+  const focused=document.activeElement;
+  const focusKey=focused?.dataset?.op?{op:focused.dataset.op,field:focused.dataset.field,index:focused.dataset.index}:null;
+  const scroll=mcResult.closest('.mc-wrap')?.scrollTop||0;
+  const fields=mcSel.fields||[],disabled=mcBusyUi||!lastUsage?.hasKey;
+  const isOpen=key=>mcExpanded.has(key)?' open':'';
+  const row=f=>{
+    const score=f.score?.variants?.[0]?.performance,alternatives=f.optimization?.result?.alternatives||[];
+    const primary=f.field==='subject_line';
+    const alternative=(v,i)=>`<div class="mc-alternative"><div class="mc-alternative-label">${i===0?'Suggested alternative':'Alternative '+(i+1)}${v.performance!=null?' · Score '+esc(v.performance):''}</div>`
+      +`<p class="mc-alternative-copy">${esc(v.touchpoints?.[f.touchpoint]||v.text||'')}</p>`
+      +(!f.applyDisabledReason?`<button class="mc-apply" data-op="apply" data-field="${esc(f.field)}" data-index="${i}" ${disabled?'disabled':''}>Apply to Mailchimp</button>`:'')+'</div>';
+    return `<details class="mc-row${primary?' primary':''}" data-key="${esc(f.field)}"${isOpen(f.field)}>`
+      +`<summary><span class="mc-summary-copy"><span class="mc-heading">${esc(mcLabel(f))}</span><span class="mc-snippet">${esc(f.text)}</span></span>${primary?'<span class="mc-start">Start here</span>':''}</summary>`
+      +`<div class="mc-row-content"><p class="mc-current">${esc(f.text)}</p>`
+      +(score!=null?`<p class="mc-meta">Score ${esc(score)}</p>`:'')
       +`<div class="mc-actions"><button data-op="score" data-field="${esc(f.field)}" ${disabled||f.score?'disabled':''}>${f.score?'Scored':'Score · 1 credit'}</button>`
-      +`<button data-op="optimize" data-field="${esc(f.field)}" ${disabled||(f.field==='subject_line'&&!f.score)?'disabled':''}>Optimize · 5 credits</button></div>`
-      +(f.field==='subject_line'&&!f.score?'<p class="mc-meta">Score this subject line to enable Optimize.</p>':'')
-      +alternatives.map((v,i)=>{
-        const text=v.touchpoints?.[f.touchpoint]||v.text||'';
-        return `<div class="mc-alternative"><p class="mc-meta">Persado alternative${v.performance!=null?' · score '+esc(v.performance):' · revised score not returned'}</p><p>${esc(text)}</p>`
-        +`<button data-op="apply" data-field="${esc(f.field)}" data-index="${i}" ${disabled||f.applyDisabledReason?'disabled':''}>Apply to Mailchimp</button></div>`;
-      }).join('')
-      +(f.applyDisabledReason?`<p class="mc-meta">${esc(f.applyDisabledReason)}</p>`:'')+'</section>';
+      +`<button data-op="optimize" data-field="${esc(f.field)}" ${disabled?'disabled':''}>${mcBusyUi&&mcWorkingField===f.field?'Working…':'Optimize · 5 credits'}</button></div>`
+      +(alternatives.length?alternative(alternatives[0],0):'')
+      +(alternatives.length>1?`<details class="mc-more" data-key="more:${esc(f.field)}"${isOpen('more:'+f.field)}><summary>${alternatives.length-1} more alternatives</summary>${alternatives.slice(1).map((v,i)=>alternative(v,i+1)).join('')}</details>`:'')
+      +(alternatives.length&&f.applyDisabledReason?'<p class="mc-meta">Preview only. Body changes cannot be safely applied.</p>':'')+'</div></details>';
   };
+  const emptyRow=(key,label,text)=>`<details class="mc-row${key==='subject_line'?' primary':''}" data-key="${key}"${isOpen(key)}><summary><span class="mc-heading">${label}</span>${key==='subject_line'?'<span class="mc-start">Start here</span>':''}</summary><p class="mc-empty">${esc(text)||'No copy yet.'}</p></details>`;
   let html='';
-  for(const name of ['subject_line','preview_text']){
-    const f=fields.find(x=>x.field===name);
-    html+=f?section(f):`<section class="mc-chg"><h3>${name==='subject_line'?'Subject line':'Preview text'}</h3><p>${esc(name==='subject_line'?mcSel.subject:mcSel.previewText)||'No copy yet.'}</p><p class="mc-meta">This copy is not eligible for optimization.</p></section>`;
+  for(const key of ['subject_line','preview_text']){
+    const f=fields.find(x=>x.field===key);
+    html+=f?row(f):emptyRow(key,key==='subject_line'?'Subject line':'Preview text',key==='subject_line'?mcSel.subject:mcSel.previewText);
   }
-  html+='<h2 class="mc-body-title">Email body</h2>';
-  const blocks=fields.filter(f=>f.location==='html');
-  html+=blocks.length?blocks.map(section).join(''):'<p class="mc-meta">No safely extractable copy blocks. Nested markup, footer, and legal content are excluded.</p>';
+  const group=(key,label,items,body)=>`<details class="mc-group" data-key="${key}"${isOpen(key)}><summary><span class="mc-heading">${label}</span><span class="mc-count">${items.length}</span></summary>${body||'<p class="mc-empty">No eligible copy found.</p>'}</details>`;
+  const body=fields.filter(f=>f.location==='html'&&f.touchpoint!=='cta');
+  const buttons=fields.filter(f=>f.touchpoint==='cta');
+  const custom=buttons.filter(f=>!f.templateDefault),templates=buttons.filter(f=>f.templateDefault);
+  html+=group('body','Email body',body,body.map(row).join(''));
+  html+=group('buttons','Button language',buttons,custom.map(row).join('')+(templates.length?`<details class="mc-template" data-key="templates"${isOpen('templates')}><summary>Template buttons (${templates.length})</summary>${templates.map(row).join('')}</details>`:''));
   mcResult.innerHTML=html;
-  mcActivity.innerHTML=mcUndo.map(u=>`<button class="mc-choice" data-undo="${esc(u.undoId)}" ${mcBusyUi?'disabled':''}>Undo ${u.field==='subject_line'?'subject line':'preview text'}${u.pending?' (save needs verification)':''}</button>`).join('')||'<p class="mc-meta">No saved changes to undo.</p>';
+  mcActivity.innerHTML=mcUndo.length?mcUndo.slice(-1).map(u=>`<div class="mc-saved"><span>${u.pending?'Check save':'Saved'} · ${u.field==='subject_line'?'Subject line':'Preview text'}</span><button class="mc-undo" data-undo="${esc(u.undoId)}" ${mcBusyUi?'disabled':''}>Undo</button></div>`).join(''):'';
+  const wrap=mcResult.closest('.mc-wrap');if(wrap)wrap.scrollTop=scroll;
+  if(focusKey){
+    const selector=`[data-op="${CSS.escape(focusKey.op)}"][data-field="${CSS.escape(focusKey.field)}"]${focusKey.index!=null?`[data-index="${CSS.escape(focusKey.index)}"]`:''}`;
+    mcResult.querySelector(selector)?.focus({preventScroll:true});
+  }
 }
-async function mcAction(msg, success){
+mcResult.addEventListener('toggle',e=>{
+  const key=e.target.dataset?.key;if(!key)return;
+  if(e.target.open)mcExpanded.add(key);else mcExpanded.delete(key);
+},true);
+async function mcAction(msg,success){
   if(!mcSel||mcBusyUi)return;
-  const epoch=mcEpoch,id=mcSel.id;mcBusyUi=true;mcFeedback='';renderMcDetail();
+  const epoch=mcEpoch,id=mcSel.id;mcBusyUi=true;mcWorkingField=msg.field;mcExpanded.add(msg.field||'subject_line');
+  mcNotice('Working…');renderMcDetail();
   const r=await worker({...msg,campaignId:id,...(mcTabWebId?{webId:mcTabWebId}:{})});
   if(epoch!==mcEpoch||mcSel?.id!==id)return;
-  mcBusyUi=false;if(r.usage)renderUsage(r.usage);
-  mcFeedback=r.ok?success:r.error;
-  if(r.ok)await loadDrafts(epoch);
-  renderMcDetail();
+  mcBusyUi=false;mcWorkingField=null;if(r.usage)renderUsage(r.usage);
+  mcNotice(r.ok?success:r.error,!r.ok);
+  // Always re-read after an explicit action, including a stale-content error.
+  // A newer edit clears the old score/alternative without starting another job.
+  await loadDrafts(epoch);renderMcDetail();
+  if(mcQueued){mcQueued=false;scheduleMcRefresh(1200);}
 }
 mcResult.addEventListener('click',e=>{
   const b=e.target.closest('[data-op]');if(!b||b.disabled||!mcSel)return;
   const f=mcSel.fields.find(x=>x.field===b.dataset.field);if(!f)return;
   const op=b.dataset.op;
+  if(f.location==='html'){mcExpanded.add(f.touchpoint==='cta'?'buttons':'body');if(f.templateDefault)mcExpanded.add('templates');}
   mcAction({type:op==='score'?MSG.MC_SCORE:op==='optimize'?MSG.MC_OPTIMIZE:MSG.MC_APPLY,
     field:f.field,text:f.text,cacheId:f.optimization?.cacheId,alternativeIndex:Number(b.dataset.index||0)},
-    op==='apply'?'Saved and verified in Mailchimp. Refresh the Mailchimp editor to see the persisted copy.':op==='score'?'Persado scoring completed.':'Persado alternatives ready. Review and Apply to save.');
+    op==='apply'?'Saved to Mailchimp.':op==='score'?'Score ready.':'Alternative ready to review.');
 });
-mcActivity.addEventListener('click',e=>{const b=e.target.closest('[data-undo]');if(b)mcAction({type:MSG.MC_REVERT,undoId:b.dataset.undo},'Original restored and verified in Mailchimp.');});
-btnMcRefresh.addEventListener('click',()=>{if(!mcBusyUi)showMailchimp();});
+mcActivity.addEventListener('click',e=>{const b=e.target.closest('[data-undo]');if(b)mcAction({type:MSG.MC_REVERT,undoId:b.dataset.undo},'Original restored.');});
+btnMcRefresh.addEventListener('click',()=>{if(!mcBusyUi)loadDrafts(mcEpoch,true);});
 btnMcSettings.addEventListener('click',openSettings);
-chrome.runtime.onMessage.addListener(msg=>{if(msg.type===MSG.USAGE_UPDATED)renderUsage(msg.usage);});
+chrome.runtime.onMessage.addListener(msg=>{
+  if(msg.type===MSG.USAGE_UPDATED)renderUsage(msg.usage);
+  if(msg.type===MSG.MC_CONTEXT_CHANGED&&msg.tabId===mcTabId&&uiState==='mailchimp'){
+    scheduleMcRefresh();clearTimeout(mcSettleTimer);mcSettleTimer=setTimeout(()=>scheduleMcRefresh(0),5000);
+  }
+});
+// Read-only fallback for saves in iframes and changes outside this Chrome tab.
+// While hidden or performing a paid/write action, no refresh is submitted.
+setInterval(()=>{if(uiState==='mailchimp'&&!document.hidden&&!mcBusyUi&&mcSel)scheduleMcRefresh(0);},15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&uiState==='mailchimp')scheduleMcRefresh(300);});
+window.addEventListener('focus',()=>{if(uiState==='mailchimp')scheduleMcRefresh(300);});
 
 async function init(){
   syncCtxSummary();

@@ -530,7 +530,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // ═══ Authenticated local integration relay ═══════════════════════
 // Provider credentials are read only by gateway/integrations.mjs. A pairing
 // token authorizes this browser profile to use the local development gateway.
-const OVERLAY_ALLOWED = new Set([MSG.MC_STATUS]);
+const OVERLAY_ALLOWED = new Set([MSG.MC_STATUS, MSG.MC_CONTEXT_CHANGED]);
 function senderAllowed(msg, sender) {
   if (sender.id !== chrome.runtime.id) return false;
   const own = `chrome-extension://${chrome.runtime.id}/`;
@@ -567,8 +567,24 @@ async function integration(msg) {
   } catch { return { ok: false, kind: 'gateway_down', error: 'Cannot reach the local Persado gateway. Start it with provider credentials and the pairing token.' }; }
 }
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === MSG.MC_CONTEXT_CHANGED) {
+    if (!senderAllowed(msg, sender) || !sender.tab) { sendResponse({ ok: false }); return false; }
+    // Only a change hint crosses this boundary. The panel owns debouncing and
+    // reads persisted API content; the page never submits copy or paid work.
+    relay({ type: MSG.MC_CONTEXT_CHANGED, tabId: sender.tab.id });
+    sendResponse({ ok: true });
+    return false;
+  }
   if (!INTEGRATION_MESSAGES.has(msg?.type)) return false;
   if (!senderAllowed(msg, sender)) { sendResponse({ ok: false, error: 'Not allowed from this context.' }); return false; }
-  integration(msg).then(sendResponse).catch(() => sendResponse({ ok: false, error: 'The integration request failed.' }));
+  const key = msg.type === MSG.MC_STATUS ? JSON.stringify([msg.webId, msg.campaignId]) : null;
+  let request = key && mcStatusRequests.get(key);
+  if (!request) {
+    request = integration(msg);
+    if (key) { mcStatusRequests.set(key, request); request.finally(() => mcStatusRequests.delete(key)); }
+  }
+  request.then(sendResponse).catch(() => sendResponse({ ok: false, error: 'The integration request failed.' }));
   return true;
 });
+
+const mcStatusRequests = new Map();

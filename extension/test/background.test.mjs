@@ -23,8 +23,9 @@ function boot(fetchImpl) {
   });
   const listeners = [];
   const tabMsgs = [];
+  const relays = [];
   const chrome = {
-    runtime: { id: EXT_ID, onMessage: { addListener: (f) => listeners.push(f) }, sendMessage: async () => {},
+    runtime: { id: EXT_ID, onMessage: { addListener: (f) => listeners.push(f) }, sendMessage: async m => { relays.push(m); },
       onInstalled: { addListener() {} }, onStartup: { addListener() {} } },
     storage: { local: area(local), session: area(session), onChanged: { addListener() {} } },
     tabs: { query: async () => [], sendMessage: async (id, m) => { tabMsgs.push(m); }, onActivated: { addListener() {} }, onUpdated: { addListener() {} } },
@@ -44,7 +45,7 @@ function boot(fetchImpl) {
     for (const l of listeners) { const r = l(msg, sender, resolve); if (r === true) async = true; }
     if (!async) setTimeout(() => resolve(undefined), 0);
   });
-  return { send, local, MSG: ctx.PERSADO.MSG, KEYS: ctx.PERSADO.KEYS, tabMsgs };
+  return { send, local, MSG: ctx.PERSADO.MSG, KEYS: ctx.PERSADO.KEYS, tabMsgs, relays };
 }
 
 test('worker relays only to paired local gateway and never reads provider keys', async () => {
@@ -80,4 +81,17 @@ test('gateway failure produces actionable feedback without exposing pairing toke
   local[KEYS.PROXY_TOKEN]='private-pairing-token';
   const r=await send({type:MSG.MC_STATUS});assert.equal(r.kind,'gateway_down');
   assert.ok(!JSON.stringify(r).includes('private-pairing-token'));
+});
+
+test('concurrent status requests coalesce; edit hints relay without reading content or spending credits', async()=>{
+  let reads=0;
+  const {send,local,MSG,KEYS,relays}=boot(async()=>{reads++;await new Promise(r=>setTimeout(r,15));return json(200,{ok:true,campaign:{id:'abc'}});});
+  local[KEYS.PROXY_TOKEN]='paired';
+  const requests=await Promise.all([send({type:MSG.MC_STATUS,webId:42}),send({type:MSG.MC_STATUS,webId:42})]);
+  assert.ok(requests.every(r=>r.ok));assert.equal(reads,1);
+  const url='https://us5.admin.mailchimp.com/campaigns/edit?id=42';
+  const changed=await send({type:MSG.MC_CONTEXT_CHANGED},{id:EXT_ID,url,tab:{id:7,url}});
+  assert.equal(changed.ok,true);assert.equal(reads,1,'edit hints must not make an API request themselves');
+  assert.ok(relays.some(m=>m.type===MSG.MC_CONTEXT_CHANGED&&m.tabId===7));
+  assert.equal((await send({type:MSG.MC_CONTEXT_CHANGED},{id:EXT_ID,url:'https://evil.test',tab:{id:8}})).ok,false);
 });

@@ -8,6 +8,13 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.10.1
+
+- Compact Mailchimp sidebar: one native Persado Autopilot title, connection indicator and settings gear, campaign context and eligible count, subject-first disclosure rows, and grouped button language with template buttons de-emphasized.
+- Removed the main-view usage estimate, duplicate branding, floating detection panel, persistent explanatory footer, and empty Undo messaging. Scores, alternatives and Apply reveal in context; Undo appears after a saved change.
+- Optimize is available without a preceding Score request. All paid actions stay explicit.
+- Saved campaign content synchronizes on debounced edit/navigation signals and a visibility-aware read-only fallback. Concurrent status reads coalesce; unchanged data preserves disclosures, focus and scroll. Verified campaign IDs avoid repeated full draft-list lookups.
+
 ## 0.10.0
 
 Provider keys leave the browser, and Mailchimp campaigns become editable in place.

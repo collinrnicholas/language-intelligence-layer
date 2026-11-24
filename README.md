@@ -33,7 +33,7 @@ docs live in `docs/loupe/`.
 
 **In Mailchimp:**
 1. Open a regular campaign draft. The sidebar matches its URL to an API-verified campaign and displays actual subject, preview, and eligible body/CTA copy without spending credits.
-2. Score individual fields explicitly (1 credit estimate). Subject optimization requires scoring first.
+2. Score individual fields explicitly (1 credit estimate). Scoring and optimization are independent actions.
 3. Optimize a selected field (5 credits estimate), then review the real Persado alternatives. No changes are saved automatically.
 4. Apply an alternative to subject or preview. The gateway patches only the selected setting, checks draft status and verifies by re-reading. Undo restores that field if no later edit conflicts.
 5. Body Apply is disabled to preserve the email structure. No send action is available.

@@ -80,7 +80,9 @@ test('ambiguous identifiers never select a draft', async () => {
 
 test('manual score and optimize are separate, concurrent duplicate scoring coalesces and survives restart', async () => {
   const s = setup({ delay: true });
-  assert.equal((await s.send(s.field('MC_OPTIMIZE'))).kind, 'score_required');
+  const direct = await s.send(s.field('MC_OPTIMIZE'));
+  assert.equal(direct.ok, true, 'optimization is available without paying for scoring first');
+  assert.equal(s.calls.filter(c => c.url.includes('/v1/score')).length, 0);
   const scores = await Promise.all([s.send(s.field('MC_SCORE')), s.send(s.field('MC_SCORE'))]);
   assert.ok(scores.every(r => r.ok));assert.equal(scores[0].result.variants[0].performance, 63);
   assert.equal(s.calls.filter(c => c.url.includes('/v1/score')).length, 1);

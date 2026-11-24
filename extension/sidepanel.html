@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Language Intelligence Layer</title>
+  <title>Persado Autopilot</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -539,27 +539,61 @@
     .use-dl dt{color:var(--text-2);}
     .use-dl dd{color:var(--text-1);font-variant-numeric:tabular-nums;margin:0;}
     .use-dl dd .est{color:var(--text-3);font-size:11px;}
-    /* ── Mailchimp panel ────────────────────────────────────────────── */
-    #panelMailchimp.active{display:flex;flex-direction:column;flex:1;min-height:0;}
-    #panelMailchimp .start-foot{padding-top:12px;}
-    #panelSettings.active{flex:1;min-height:0;overflow-y:auto;}
-    .mc-wrap{flex:1;min-height:0;overflow-y:auto;}
-    .mc-detail{margin-top:14px;}
-    .mc-steps{display:flex;flex-direction:column;gap:4px;}
-    .mc-step{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);}
-    .mc-step .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;}
-    .mc-step.active{color:var(--amber-text);} .mc-step.done{color:var(--green-text);} .mc-step.err{color:var(--red);}
-    .mc-note{margin-top:12px;padding:9px 11px;border-radius:10px;background:var(--surface-2);font-size:12px;color:var(--text-2);}
-    .mc-note.ok{background:var(--green-bg);color:var(--green-text);} .mc-note.warn{background:var(--amber-bg);color:var(--amber-text);} .mc-note.err{background:#FEF2F2;color:#991B1B;}
-    .mc-chg{margin-top:10px;border:1px solid var(--border);border-radius:var(--rc);padding:10px 12px;}
-    .mc-chg-f{font-size:11px;font-weight:600;color:var(--text-3);}
-    .mc-was{color:var(--text-3);font-size:12.5px;margin-top:3px;}
-    .mc-now{color:var(--text-1);font-size:13px;font-weight:600;margin-top:2px;}
-    .mc-why{color:var(--amber-text);font-size:11.5px;margin-top:3px;}
-    .mc-act{margin-top:14px;border-top:1px solid var(--border);padding-top:10px;}
-    .mc-act summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--text-2);}
-    .mc-act-i{margin-top:8px;font-size:12px;color:var(--text-2);}
-    .mc-act-i .meta{font-family:var(--mono);font-size:10.5px;color:var(--text-3);word-break:break-all;}
+    /* Mailchimp: Chrome's native bar is the single brand title. */
+    body:has(#panelMailchimp.active)>.hdr,body:has(#panelMailchimp.active)>#usageBar{display:none}
+    #panelMailchimp.active{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden}
+    #panelSettings.active{flex:1;min-height:0;overflow-y:auto}
+    .mc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);flex:none}
+    .mc-connection{display:flex;align-items:center;gap:7px;min-width:0;color:var(--text-2);font-size:12px}
+    .mc-connection::before{content:'';width:6px;height:6px;background:var(--text-3);border-radius:50%;flex:none}
+    .mc-connection.connected::before{background:var(--green)}
+    .mc-toolbar button,.mc-icon{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;flex:none;border:0;background:none;color:var(--text-2);border-radius:6px;cursor:pointer}
+    .mc-icon svg{width:17px;height:17px}
+    .mc-toolbar button:hover,.mc-icon:hover{background:var(--surface-2)}
+    .mc-wrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 16px 16px}
+    .mc-context{display:flex;align-items:center;gap:8px;padding:14px 0 12px;min-width:0}
+    .mc-context-copy{min-width:0;flex:1}
+    #mcSub{font-size:13px;line-height:1.45;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-1)}
+    #mcCount{font-size:12px;color:var(--text-2);margin-top:3px}
+    #mcList:empty,#mcSteps:empty{display:none}
+    #mcSteps{font-size:12px;line-height:1.5;color:var(--text-2);margin-bottom:8px;overflow-wrap:anywhere}
+    #mcSteps.error{color:var(--red)}
+    .mc-row{border-top:1px solid var(--border);min-width:0}
+    .mc-row.primary{border-top:0;border-left:2px solid var(--red);padding-left:12px;margin-bottom:10px}
+    .mc-row>summary,.mc-group>summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:48px;cursor:pointer;min-width:0}
+    .mc-row>summary::-webkit-details-marker,.mc-group>summary::-webkit-details-marker{display:none}
+    .mc-row>summary::after,.mc-group>summary::after{content:'';width:6px;height:6px;flex:none;border-right:1.5px solid var(--text-2);border-bottom:1.5px solid var(--text-2);transform:rotate(45deg);margin-left:auto;margin-right:4px}
+    .mc-row[open]>summary::after,.mc-group[open]>summary::after{transform:rotate(225deg)}
+    .mc-heading{font-size:13px;font-weight:600;color:var(--text-1)}
+    .mc-start{font-size:11px;color:var(--red);font-weight:500;white-space:nowrap}
+    .mc-count{font-size:12px;color:var(--text-2);font-weight:400}
+    .mc-snippet{display:block;color:var(--text-2);font-size:12px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;max-width:100%}
+    .mc-summary-copy{min-width:0;flex:1}
+    .mc-row[open]>summary .mc-snippet{display:none}
+    .mc-row-content{padding:0 0 14px;min-width:0}
+    .mc-current,.mc-alternative-copy{font-size:13px;line-height:1.55;overflow-wrap:anywhere;white-space:pre-wrap}
+    .mc-meta{font-size:12px;line-height:1.5;color:var(--text-2);margin-top:8px}
+    .mc-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+    .mc-actions button,.mc-apply,.mc-undo{min-height:38px;max-width:100%;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-1);padding:8px 10px;font:600 12px var(--sans);cursor:pointer}
+    .mc-actions button{flex:1;white-space:nowrap}
+    .mc-actions button[data-op=optimize],.mc-apply{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+    .mc-actions button:hover,.mc-undo:hover{filter:brightness(.94)}
+    #panelMailchimp button:disabled{opacity:.5;cursor:default}
+    #panelMailchimp :is(button,summary):focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+    .mc-alternative{border-top:1px solid var(--border);margin-top:14px;padding-top:12px}
+    .mc-alternative-label{font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+    .mc-apply{margin-top:10px}
+    .mc-more>summary{font-size:12px;min-height:36px;cursor:pointer;color:var(--text-2)}
+    .mc-group{border-top:1px solid var(--border)}
+    .mc-group[open]>.mc-row{margin-left:8px;padding-left:10px;border-left:1px solid var(--border)}
+    .mc-template{margin:4px 0 0 8px}
+    .mc-template>summary{font-size:12px;min-height:36px;color:var(--text-2);cursor:pointer}
+    .mc-empty{padding:0 0 12px;font-size:12px;color:var(--text-2)}
+    .mc-choice{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--border);padding:12px 0;background:none;font:500 13px var(--sans);color:var(--text-1);cursor:pointer}
+    #mcActivity{padding:0 16px 10px;flex:none}
+    #mcActivity:empty{display:none}
+    .mc-saved{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--border);padding-top:10px;font-size:12px;color:var(--text-2)}
+    @media(max-width:300px){.mc-wrap{padding-inline:12px}.mc-toolbar{padding-inline:12px}.mc-actions button{flex-basis:100%}.mc-start{font-size:10px}}
     /* ── Persado result card additions ──────────────────────────────── */
     .p-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
     .p-tag{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--text-2);background:var(--surface);}
@@ -571,21 +605,6 @@
     .p-alt:last-child{border-bottom:none;}
     .p-alt b{font-family:var(--mono);}
     .p-alt button{flex:none;}
-    .mc-brand{font-weight:700;font-size:20px;margin-bottom:8px;color:var(--ink)}
-    .mc-brand span{color:var(--red)}
-    .mc-chg h3,.mc-body-title{font-size:15px;color:var(--text-1);margin-bottom:8px}
-    .mc-body-title{margin:20px 0 4px}
-    .mc-current,.mc-alternative p{font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
-    .mc-meta{font-size:12px;color:var(--text-2);margin:8px 0;line-height:1.5}
-    .mc-actions{display:flex;gap:8px;flex-wrap:wrap}
-    .mc-actions button,.mc-alternative button,.mc-choice{min-height:44px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-1);padding:8px 12px;font:600 12px var(--sans);cursor:pointer}
-    .mc-actions button:hover,.mc-choice:hover{background:var(--surface-2)}
-    .mc-actions button:disabled,.mc-alternative button:disabled{opacity:.55;cursor:default}
-    #panelMailchimp button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-    .mc-alternative{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
-    .mc-alternative button{margin-top:8px;background:var(--ink);color:var(--surface)}
-    .mc-choice{display:block;width:100%;text-align:left;margin:8px 0}
-    #mcSteps{font-size:13px;line-height:1.5;color:var(--text-2);overflow-wrap:anywhere}
   </style>
 </head>
 <body>
@@ -912,25 +931,22 @@
 
 <!-- ═══ MAILCHIMP ═══ -->
 <div class="panel view" id="panelMailchimp">
+  <div class="mc-toolbar">
+    <span class="mc-connection" id="mcConnection" role="status">Connecting to Mailchimp</span>
+    <button id="btnMcSettings" class="mc-icon" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m9 3-.6 2.4-2 .9L4 5.6 2.5 8.2l1.8 1.7-.2 2.2L2.5 14 4 16.6l2.5-.6 1.8 1.2L9 20h3l.7-2.8 1.8-1.2 2.5.6 1.5-2.6-1.6-1.9-.2-2.2 1.8-1.7L17 5.6l-2.4.7-2-.9L12 3Z" transform="translate(1 0)"/><circle cx="11.5" cy="11.5" r="3"/></svg></button>
+  </div>
   <div class="mc-wrap">
-    <div class="start-head scan-head">
-      <div>
-        <div class="mc-brand"><span>[</span> Persado <span>]</span></div><h1 class="scr-title">Language Intelligence</h1>
-        <div class="scr-sub" id="mcSub">Checking the connection…</div>
-      </div>
-      <div class="scan-acts">
-        <button class="scan-refresh" id="btnMcRefresh" title="Reload drafts">Refresh</button>
-        <button class="scan-refresh" id="btnMcSettings" title="Settings">Settings</button>
-      </div>
+    <div class="mc-context">
+      <div class="mc-context-copy"><div id="mcSub">Identifying campaign…</div><div id="mcCount"></div></div>
+      <button id="btnMcRefresh" class="mc-icon" title="Refresh campaign" aria-label="Refresh campaign"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 10a8 8 0 1 0-.5 6M20 4v6h-6"/></svg></button>
     </div>
-    <div id="mcList" class="scan-list"></div>
-    <div class="mc-detail" id="mcDetail" hidden>
-      <div class="mc-steps" id="mcSteps" role="status" aria-live="polite"></div>
+    <div id="mcList"></div>
+    <div id="mcDetail" hidden>
+      <div id="mcSteps" role="status" aria-live="polite"></div>
       <div id="mcResult"></div>
-      <div class="mc-act"><h2 class="mc-body-title">Saved changes</h2><div id="mcActivity"></div></div>
     </div>
   </div>
-  <div class="start-foot"><p class="privacy">Detection uses no Persado credits. Score: 1 credit; Optimize: 5 credits (configured estimates). No account balance is available. Apply saves only the field you select.</p></div>
+  <div id="mcActivity" aria-live="polite"></div>
 </div>
 
 <!-- ═══ RESULTS ═══ -->
