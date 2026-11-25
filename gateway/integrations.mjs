@@ -16,7 +16,10 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 const fail = (kind, message) => { throw Object.assign(new Error(message), { kind }); };
 
 export function createIntegrations({ env = process.env, fetchImpl = fetch,
-  statePath = new URL('./.integration-state.json', import.meta.url) } = {}) {
+  statePath = new URL('./.integration-state.json', import.meta.url),
+  // How long one browser request may wait for a run before getting a job to poll.
+  // Kept well under the ~30 s an MV3 service worker may wait on a fetch.
+  responseBudgetMs = 8000, statusTimeoutMs = 10000, staleAfterMs = 15 * 60000 } = {}) {
   const pkey = env.PERSADO_API_KEY || '', mkey = env.MAILCHIMP_API_KEY || '';
   const identity = hash([pkey, mkey, env.MAILCHIMP_SERVER_PREFIX]);
   let state = { identity, cache: {}, undo: {}, usage: U.fresh(hash(pkey), API.RUN_QUOTA) };
@@ -45,42 +48,145 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
     industry: msg.settings?.industry || undefined });
   const runKey = (op, field, acct, scope) => hash([identity, op, scope, field.touchpoint, field.text, field.maxLength || null, acct]);
 
-  async function paid(op, field, acct, scope) {
+  // ── Paid runs: a recoverable job lifecycle ─────────────────────
+  //
+  // A Persado optimize can take minutes. The browser must never hold one long
+  // request open (an MV3 service worker can be stopped while it waits), so a
+  // paid call answers within `responseBudgetMs`: either the finished result, or
+  // { status: 'running', cacheId } and the panel polls JOB_STATUS with short calls.
+  //
+  // Cache entry states (state.cache[key], persisted):
+  //   { result }                      finished — reused, never re-bought
+  //   { pending, jobId? }             submitted; jobId saved the moment Persado accepts
+  //   { failed: { kind, message } }   explicitly rejected — safe to retry, nothing charged
+  // A pending entry is NEVER resubmitted automatically. Without a job id (or when
+  // Persado no longer knows the job) the outcome is "unknown": the user may retry,
+  // but only with an explicit confirmation that a duplicate charge is possible.
+  const RUNNING = Symbol('running');
+  const statusInflight = new Map();
+  const withinBudget = (task, ms) => Promise.race([task,
+    new Promise(r => { const t = setTimeout(() => r(RUNNING), ms); t.unref?.(); })]);
+  const runMeta = (op, field, acct, scope) => ({ op, scope, acct, field: field.field, touchpoint: field.touchpoint,
+    original: field.text, maxLength: field.maxLength || null });
+  function running(key) {
+    const c = state.cache[key] || {};
+    return { status: 'running', cacheId: key, jobId: c.jobId || null, startedAt: c.at || null, cached: false };
+  }
+  function adopt(key, result, { usageHeaders } = {}) {
+    const prev = state.cache[key] || {};
+    state.cache[key] = { result, cached: false, at: Date.now(), field: prev.field, original: prev.original,
+      touchpoint: prev.touchpoint, maxLength: prev.maxLength || null, scope: prev.scope, op: prev.op, acct: prev.acct,
+      ...(prev.campaignIds ? { campaignIds: prev.campaignIds } : {}) };
+    record({ type: 'run', op: prev.op, ok: true, cost: API.COSTS[prev.op], usageHeaders });
+    save();
+    return { ...state.cache[key], status: 'done', cacheId: key };
+  }
+
+  async function paid(op, field, acct, scope, { onResult } = {}) {
     if (!pkey) fail('no_key', 'Set PERSADO_API_KEY in the gateway environment, then restart the gateway.');
     if (!acct.accountName) fail('invalid_request', 'Add your brand name in Settings.');
     const key = runKey(op, field, acct, scope);
-    if (inflight.has(key)) return inflight.get(key);
+    if (inflight.has(key)) return settle(inflight.get(key), key);
     const cached = state.cache[key];
-    if (cached?.result) return { ...cached, cached: true };
-    if (cached?.pending) fail('pending', 'This request may already have been charged. Check the Persado job before retrying; no duplicate was submitted.');
+    if (cached?.result) return { ...cached, status: 'done', cached: true, cacheId: key };
+    // Never resubmit a run that may already be charged: report its status instead.
+    if (cached?.pending) return jobStatus(key);
     // Quota is never inferred to be exhausted from our local estimate.
     if (usage().exhausted) fail('quota_exhausted', 'Persado reported insufficient credits. Raise the account quota before continuing.');
     const task = (async () => {
-      state.cache[key] = { pending: true, at: Date.now() }; save();
-      const common = { key: pkey, ...acct, channel: scope === 'web' ? 'WEB_PAGE' : 'EMAIL_SUBJECT_BODY', fetchImpl,
+      state.cache[key] = { pending: true, at: Date.now(), ...runMeta(op, field, acct, scope),
+        ...(cached?.campaignIds ? { campaignIds: cached.campaignIds } : {}) };
+      save();
+      const common = { key: pkey, ...acct, channel: scope === 'web' ? 'WEB_PAGE' : 'EMAIL_SUBJECT_BODY', fetchImpl, waitSeconds: 5,
         // Save the job id immediately. A crash or lost response cannot silently resubmit a paid run.
-        onProgress: ev => { if (ev.jobId) { state.cache[key].jobId = ev.jobId; save(); } } };
+        onProgress: ev => { if (ev.jobId && state.cache[key]?.pending && state.cache[key].jobId !== ev.jobId) { state.cache[key].jobId = ev.jobId; save(); } } };
       try {
         const out = op === 'score'
           ? await API.score({ ...common, variants: [{ [field.touchpoint]: field.text }] })
           : await API.optimize({ ...common, variant: { [field.touchpoint]: field.text },
               alwaysUse: G.protectedTokens(field.text).filter(t => t.length <= API.LIMITS.MAX_ALWAYS_USE_LENGTH).slice(0, API.LIMITS.MAX_ALWAYS_USE),
               characterLimits: field.maxLength ? { [field.touchpoint]: field.maxLength } : undefined });
-        state.cache[key] = { result: out.result, cached: false, at: Date.now(), field: field.field,
-          original: field.text, touchpoint: field.touchpoint, maxLength: field.maxLength || null, scope };
-        record({ type: 'run', op, ok: true, cost: API.COSTS[op], usageHeaders: out.usageHeaders });
-        return { ...state.cache[key], cacheId: key };
+        const done = adopt(key, out.result, out);
+        try { onResult?.(done); } catch {}
+        return done;
       } catch (e) {
-        // Explicit rejections are safe to retry. Transport errors and accepted jobs are not.
+        // Explicit rejections are safe to retry. Transport errors and accepted jobs are not:
+        // they stay pending (with the job id when we have one) for JOB_STATUS to resolve.
         const uncertain = !!state.cache[key]?.jobId || ['timeout', 'unreachable', 'server_error'].includes(e.kind);
-        if (!uncertain) delete state.cache[key];
+        if (!uncertain) state.cache[key] = { failed: { kind: e.kind || 'error', message: API.describeError(e) }, at: Date.now(), ...runMeta(op, field, acct, scope) };
         record({ type: 'run', op, ok: false, charged: uncertain, cost: API.COSTS[op],
           error: { kind: e.kind, message: API.describeError(e) }, usageHeaders: e.usageHeaders });
         throw e;
       }
     })();
     inflight.set(key, task);
-    try { return await task; } finally { inflight.delete(key); }
+    task.then(() => inflight.delete(key), () => inflight.delete(key));
+    return settle(task, key);
+  }
+
+  /** Wait briefly for a run; past the budget, hand the browser a job to poll. */
+  async function settle(task, key) {
+    let out;
+    try { out = await withinBudget(task, responseBudgetMs); }
+    catch (e) {
+      // A run that failed in a way that may have charged stays pending: say so, never throw it away.
+      if (state.cache[key]?.pending) return jobStatus(key);
+      throw e;
+    }
+    return out === RUNNING ? running(key) : out;
+  }
+
+  /**
+   * Short, free status check. Adopts a finished job by id (GET /v1/jobs/{id}),
+   * which is how a run survives a gateway restart, a closed panel or a browser restart.
+   */
+  async function jobStatus(key) {
+    const c = state.cache[key];
+    if (!c) return { status: 'not_found', cacheId: key, retry: 'safe', message: 'No run is recorded for this copy. Check or optimize again.' };
+    if (c.result) return { ...c, status: 'done', cached: true, cacheId: key };
+    if (c.failed) return { status: 'failed', cacheId: key, retry: 'safe', error: c.failed.message, kind: c.failed.kind };
+    if (inflight.has(key)) return running(key);
+    if (!c.jobId) return { status: 'unknown', cacheId: key, retry: 'confirm', startedAt: c.at,
+      message: 'Persado may have received this request, but no job id came back. Retrying could be charged again.' };
+    if (statusInflight.has(key)) return statusInflight.get(key);
+    const check = (async () => {
+      try {
+        const r = await API.request({ key: pkey, method: 'GET', path: '/v1/jobs/' + encodeURIComponent(c.jobId), fetchImpl, timeoutMs: statusTimeoutMs, sleepImpl: async () => {} });
+        const job = r.body || {};
+        if (job.status === 'completed' && job.result) return adopt(key, API.normalizeResult(job, { kind: c.op, requestId: r.requestId }), r);
+        if (job.status === 'failed') {
+          const message = API.describeError(new API.PersadoError(API.KIND.JOB_FAILED, job.error?.message || 'The run failed.'));
+          state.cache[key] = { failed: { kind: 'job_failed', message }, at: Date.now(), field: c.field, original: c.original,
+            touchpoint: c.touchpoint, maxLength: c.maxLength, scope: c.scope, op: c.op, acct: c.acct };
+          save();
+          return { status: 'failed', cacheId: key, retry: 'safe', error: message, kind: 'job_failed' };
+        }
+        return { ...running(key), stale: Date.now() - (c.at || 0) > staleAfterMs };
+      } catch (e) {
+        if (e.status === 404 || e.kind === 'not_found') return { status: 'unknown', cacheId: key, retry: 'confirm', jobId: c.jobId,
+          message: 'Persado no longer has this job, so its result cannot be retrieved. Retrying could be charged again.' };
+        // Could not ask right now: still pending, check again later.
+        return { ...running(key), checkFailed: true, error: API.describeError(e) };
+      }
+    })();
+    statusInflight.set(key, check);
+    try { return await check; } finally { statusInflight.delete(key); }
+  }
+
+  /** User-initiated retry. Uncertain runs require explicit confirmation. */
+  async function retryJob(msg) {
+    const key = msg.cacheId, c = state.cache[key];
+    if (!c) fail('not_found', 'Nothing to retry for this copy.');
+    if (c.result) return { ...c, status: 'done', cached: true, cacheId: key };
+    if (inflight.has(key)) return running(key);
+    if (c.pending) {
+      const st = await jobStatus(key);
+      if (st.status !== 'unknown') return st;   // finished, failed, or still running: no resubmit
+      if (msg.confirmUncertain !== true) fail('confirm_required', st.message);
+    }
+    if (!c.op || !c.acct) fail('not_found', 'This run is from an older gateway version. Check or optimize the copy again.');
+    delete state.cache[key]; save();
+    return paid(c.op, { field: c.field, touchpoint: c.touchpoint, text: c.original, maxLength: c.maxLength }, c.acct, c.scope);
   }
 
   async function campaign(msg) {
@@ -149,8 +255,15 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
       status:draft.campaignMetadata?.status||'save',reach:impact.reach(draft.campaignMetadata||{}),
       fields: draft.fields.map(f => {
         const score=scoreForField(f,acct,draft.ref.id);
-        const key = runKey('optimize', f, acct, 'mailchimp');
-        return { ...f, score,
+        const key = runKey('optimize', f, acct, 'mailchimp'), scoreKey = runKey('score', f, acct, 'mailchimp');
+        // An unfinished run shows on its field so a reopened panel can resume it.
+        const job = [['optimize', key], ['score', scoreKey]].map(([op, k]) => {
+          const c = state.cache[k];
+          if (c?.pending) return { op, cacheId: k, status: inflight.has(k) ? 'running' : c.jobId ? 'running' : 'unknown', startedAt: c.at };
+          if (c?.failed) return { op, cacheId: k, status: 'failed', error: c.failed.message };
+          return null;
+        }).find(Boolean) || null;
+        return { ...f, score, job,
           optimization: state.cache[key]?.result ? { ...state.cache[key], cacheId: key } : null };
       }), canRevert: Object.values(state.undo).some(u => u.id === draft.ref.id && !u.reverted) };
   }
@@ -263,7 +376,12 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
           if (!mkey) return { ok: true, connected: false, persadoKey: !!pkey, usage: usage() };
           if (!mcConnection) mcConnection = await adapter().test();
           const out = { ok: true, connected: true, accountName: mcConnection.accountName, dc: mcConnection.dc, persadoKey: !!pkey, usage: usage() };
-          if (msg.webId || msg.campaignId) { const { draft } = await campaign(msg); out.campaign = view(draft, msg);
+          if (msg.webId || msg.campaignId) { const { draft } = await campaign(msg);
+            // Adopt runs that finished while nobody was watching (free job GETs, never a resubmit).
+            const acct = account(msg);
+            await Promise.all(draft.fields.flatMap(f => ['score', 'optimize'].map(op => runKey(op, f, acct, 'mailchimp')))
+              .filter(k => state.cache[k]?.pending && !inflight.has(k) && state.cache[k].jobId).map(k => jobStatus(k).catch(() => null)));
+            out.campaign = view(draft, msg);
             out.undo = Object.entries(state.undo).filter(([, u]) => u.id === draft.ref.id && !u.reverted).map(([undoId, u]) => ({ undoId, field: u.field, pending: u.pending })); }
           return out;
         }
@@ -273,13 +391,24 @@ export function createIntegrations({ env = process.env, fetchImpl = fetch,
           if (!field) fail('not_eligible', 'Choose an eligible copy block. Refresh if the draft changed.');
           if (msg.text !== field.text) fail('changed', 'The draft copy changed. Refresh before spending credits.');
           const acct = account(msg), op = msg.type === 'MC_SCORE' ? 'score' : 'optimize';
-          const out = await paid(op, field, acct, 'mailchimp');
           const key = runKey(op, field, acct, 'mailchimp');
-          state.cache[key].campaignIds = [...new Set([...(state.cache[key].campaignIds || []), id])]; save();
-          if(!out.cached)recordOutcome({campaignId:id,field:field.field,original:field.text,persadoJobId:out.result.jobId,
-            ...(op==='score'?{scoredAt:out.at,originalScore:out.result.variants[0]?.performance??null}:{optimizedAt:out.at,
-              variants:out.result.alternatives.map(v=>({index:v.index,rank:v.rank,text:v.touchpoints?.[field.touchpoint]||v.text,score:v.performance}))})});
+          // Tag the run with this campaign before it starts, so a result that lands
+          // after the panel closed still shows on the right draft.
+          if (state.cache[key]) { state.cache[key].campaignIds = [...new Set([...(state.cache[key].campaignIds || []), id])]; save(); }
+          const outcome = done => recordOutcome({campaignId:id,field:field.field,original:field.text,persadoJobId:done.result.jobId,
+            ...(op==='score'?{scoredAt:done.at,originalScore:done.result.variants[0]?.performance??null}:{optimizedAt:done.at,
+              variants:done.result.alternatives.map(v=>({index:v.index,rank:v.rank,text:v.touchpoints?.[field.touchpoint]||v.text,score:v.performance}))})});
+          const out = await paid(op, field, acct, 'mailchimp', { onResult: outcome });
+          if (state.cache[key]) { state.cache[key].campaignIds = [...new Set([...(state.cache[key].campaignIds || []), id])]; save(); }
           return { ok: true, ...out, cacheId: key, usage: usage() };
+        }
+        case 'JOB_STATUS': {
+          if (typeof msg.cacheId !== 'string' || !/^[0-9a-f]{64}$/.test(msg.cacheId)) fail('invalid_request', 'A job reference is required.');
+          return { ok: true, ...(await jobStatus(msg.cacheId)), usage: usage() };
+        }
+        case 'JOB_RETRY': {
+          if (typeof msg.cacheId !== 'string' || !/^[0-9a-f]{64}$/.test(msg.cacheId)) fail('invalid_request', 'A job reference is required.');
+          return { ok: true, ...(await retryJob(msg)), usage: usage() };
         }
         case 'MC_APPLY': return await apply(msg);
         case 'MC_REVERT': return await apply(msg, true);

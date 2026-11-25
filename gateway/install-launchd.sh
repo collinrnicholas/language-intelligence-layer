@@ -1,19 +1,17 @@
 #!/usr/bin/env bash
 #
-# Install the Persado Capture gateway as a per-user launchd agent so it starts at
+# Install the Persado Assist gateway as a per-user launchd agent so it starts at
 # login and stays alive (auto-restarts if it crashes). macOS only, no hosting.
 #
-# The provider key is read from ~/.loupe/gateway.env (chmod 600, never committed
+# Credentials are read from ~/.persado/gateway.env (chmod 600, never committed
 # and never seen by the client) — it is NOT baked into the plist.
 #
 #   ./gateway/install-launchd.sh          # install + load
-#   launchctl unload ~/Library/LaunchAgents/dev.loupe.gateway.plist   # stop/disable
+#   launchctl unload ~/Library/LaunchAgents/dev.persado.gateway.plist   # stop/disable
 #
-# OWN LABEL, OWN PORT. Loupe's gateway (dev.loupe.gateway) already owns 8787 on
-# this machine and serves a different API — it has no /v1/ai/recommend, so the
-# Persado panel's Optimize call 404'd against it. Persado therefore installs as
-# dev.persado.gateway on 8788. The env file stays ~/.loupe/gateway.env on purpose:
-# it holds the provider keys both gateways read. See CLAUDE.md §1.
+# OWN LABEL, OWN PORT: dev.persado.gateway on 8788, separate from Loupe's
+# gateway on 8787. The env file is ~/.persado/gateway.env (0.12.0+). Model-provider
+# keys (OPENAI_API_KEY etc.) are no longer read by this gateway.
 #
 set -euo pipefail
 
@@ -21,27 +19,29 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LABEL="dev.persado.gateway"
 PORT="${PERSADO_GATEWAY_PORT:-8788}"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-ENV_FILE="$HOME/.loupe/gateway.env"
+ENV_FILE="$HOME/.persado/gateway.env"
+# Existing installs kept credentials in ~/.loupe/gateway.env; keep using it until moved.
+if [ ! -f "$ENV_FILE" ] && [ -f "$HOME/.loupe/gateway.env" ]; then
+  ENV_FILE="$HOME/.loupe/gateway.env"
+  echo "→ Using legacy $ENV_FILE. Move it to ~/.persado/gateway.env when convenient."
+fi
 LOG_DIR="$HOME/.persado/logs"
 NODE_BIN="$(command -v node)"
 
-mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR" "$HOME/.loupe"
+mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR" "$HOME/.persado"
 
 if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<'EOF'
-# Persado Capture gateway environment — gateway-side ONLY, never read by the client.
-# Fill in a provider key, then re-run install-launchd.sh:
-# OPENAI_API_KEY=sk-...
-#
-# Optional model routing. PERSADO_* are the current names; the LOUPE_*
-# equivalents still work if you already have them set.
-# PERSADO_MODEL_PREMIUM=gpt-4o
-# PERSADO_MODEL_STANDARD=gpt-4o-mini
-# PERSADO_GATEWAY_PORT=8788
-# PERSADO_GATEWAY_HOST=127.0.0.1
+# Persado Assist gateway environment — gateway-side ONLY, never read by the extension.
+# Fill these in, then re-run install-launchd.sh:
+# PERSADO_API_KEY=...
+# PERSADO_PROXY_TOKEN=...            # openssl rand -hex 32; paste into the extension's Settings
+# MAILCHIMP_API_KEY=...              # optional
+# MAILCHIMP_SERVER_PREFIX=us21       # optional override of the key suffix
+# PERSADO_EXTENSION_IDS=             # optional allowlist of extension ids
 EOF
   chmod 600 "$ENV_FILE"
-  echo "→ Created $ENV_FILE — add your provider key, then re-run this script."
+  echo "→ Created $ENV_FILE — add your credentials, then re-run this script."
   exit 0
 fi
 

@@ -8,6 +8,20 @@ Bump with `npm run bump` (patch), `npm run bump:minor`, `npm run bump:major`.
 
 ---
 
+## 0.12.0
+
+Remediation pass from the independent audit (findings #2–#8, #10, #13).
+
+- **Security.** Removed the gateway's unauthenticated `/v1/ai/transcribe`, `/v1/ai/complete` and `/v1/ai/recommend` routes, which could spend OpenAI/Anthropic credits for any local caller. `/health` no longer reports credential presence or model ids; logs omit query strings. Dropped the provider API host permissions the browser no longer uses. Added `test/gateway-security.test.mjs`.
+- **Recoverable paid runs.** Score/Optimize answer within ~8 s with a result or a job to poll (`JOB_STATUS`, free). Jobs are adopted by Persado job id after a closed panel, browser restart or gateway restart, and never resubmitted automatically. Uncertain runs need explicit confirmation to retry (`JOB_RETRY`). The panel shows In progress / Still processing — check again / Unable to retrieve result, using real status only. The worker relay now times out after 20 s.
+- **Mailchimp Apply.** Warns before Apply when the campaign editor is open. Re-checks for 10 minutes after Apply and reports if the previous text returns or the field changes. Offers Reload Mailchimp. Existing draft-only, compare-before-write, read-back and safe-Undo checks are unchanged.
+- **Removed prototype features.** Recording, brief, processing and "Send to Motivation AI" screens; options page and screen capture; `content.js`, `config.js`, `optimizer.js`, `activity.js`; adapter test-email send. Empty states point to Pick on page.
+- **Recommendations.** Recommended copy, one reason when Persado gave one, then the action (Use this version in Mailchimp; Copy this version / Preview on page on websites). Original copy and other versions are one click away. Scores and raw responses moved under Technical details. "Worth improving" needs at least 5 points of headroom or a gain of at least 3 points. Copy Persado could not judge is grouped under "Needs review" with a next step.
+- **Credits.** Costs shown on the buttons that spend them. Saved results are labelled "no credits used". Mailchimp body/button optimizations are labelled review only before spending, and offer Copy.
+- **Detection eligibility.** New `src/eligibility.js` decides what may enter the Persado workflow: cookie/consent, language and locale, auth/MFA, accessibility, legal/regulatory, CAPTCHA, personal-information fields and system errors are hard exclusions, dropped during scanning and refused again at the billable request boundary even when a user selects them by hand. Only content with affirmative marketing evidence is queued by Check All; ambiguous copy stays selectable. Page type comes from structure rather than hostnames. Wired through `scan.js`, `priority.js`, `sidepanel.js` and `background.js`; measured in `test/eligibility.test.mjs` with a labelled set across seven verticals and an authenticated app shell (0 hard exclusions billable, precision 1.000 recall 1.000 tuned / 0.846 held-out, primary-CTA accuracy 18/18). See `docs/ELIGIBILITY.md`.
+- **Analytics.** Local-only, allowlisted adoption events (`src/analytics.js`).
+- Docs: README, release checklist and launchd installer describe Persado Assist.
+
 ## 0.11.3
 
 - Renamed the extension to Persado Assist with Language Intelligence as its supporting descriptor and “Language intelligence, wherever you work.” as its positioning. Updated manifest metadata, toolbar/status tooltips, Settings, documentation and ZIP filename while retaining internal package/protocol/configuration identifiers.

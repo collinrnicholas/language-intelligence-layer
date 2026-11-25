@@ -216,7 +216,9 @@ test('invalid keys and insufficient credits are actionable; uncertain paid reque
   assert.equal(quota.calls.filter(c => c.url.includes('/v1/score')).length, 1);
   const uncertain = setup({ transport: true });
   await uncertain.send(uncertain.field('MC_SCORE'));
-  assert.equal((await uncertain.send(uncertain.field('MC_SCORE'))).kind, 'pending');
+  const again = await uncertain.send(uncertain.field('MC_SCORE'));
+  assert.equal(again.status, 'unknown');
+  assert.equal(again.retry, 'confirm');
   assert.equal(uncertain.calls.filter(c => c.url.includes('/v1/score')).length, 1);
 });
 

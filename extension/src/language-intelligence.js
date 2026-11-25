@@ -47,24 +47,29 @@
     const scored=fields.filter(f=>describe(f).inRange).sort((a,b)=>Number(!!a.templateDefault)-Number(!!b.templateDefault)||describe(a).score-describe(b).score);
     return {scored,unscored:fields.filter(f=>!describe(f).inRange),next:scored[0]||null};
   }
+  // A difference this small is not worth a marketer's attention or credits. Product
+  // settings, to be tuned with Persado; they gate wording only, never the data shown.
+  const MIN_HEADROOM_POINTS=5;     // score headroom before "Worth improving" is said
+  const MIN_IMPROVEMENT_POINTS=3;  // comparable gain before an alternative is recommended
   function outcome(field,{applied=false}={}){
     const info=describe(field),result=field.optimization?.result,choice=comparison(field);
     if(applied)return {kind:'applied',label:'Applied to campaign',message:'',action:null};
-    if(choice.variant&&choice.options[0]?.valid===true&&choice.delta>0)
+    if(choice.variant&&choice.options[0]?.valid===true&&choice.delta>=MIN_IMPROVEMENT_POINTS)
       return {kind:'recommended',label:'Worth improving',message:'A stronger option is available.',action:'apply',reason:'higher_comparable_score'};
     if(result){
       if(result.notice?.code==='performance_floor')return {kind:'good',label:'Looking good',message:'No changes recommended.',action:null,reason:'performance_floor'};
-      if(choice.options.length&&choice.options.every(o=>o.valid===true&&o.comparable&&o.score!==null&&o.score>=0&&o.score<=100&&choice.originalScore!==null&&choice.originalScore>=0&&choice.originalScore<=100&&o.score<=choice.originalScore))
-        return {kind:'good',label:'Looking good',message:'No changes recommended.',action:null,reason:'no_higher_returned_score'};
-      return {kind:'unavailable',label:'Recommendation unavailable',message:choice.options.length?'Options need review.':'No usable recommendation returned.',action:'review',reason:'unverified_alternatives'};
+      const scored=choice.options.length&&choice.options.every(o=>o.valid===true&&o.comparable&&o.score!==null&&o.score>=0&&o.score<=100)&&choice.originalScore!==null&&choice.originalScore>=0&&choice.originalScore<=100;
+      if(scored&&choice.options.every(o=>o.score-choice.originalScore<MIN_IMPROVEMENT_POINTS))
+        return {kind:'good',label:'Looking good',message:'No changes recommended. The versions Persado returned are no stronger.',action:null,reason:choice.options.some(o=>o.score>choice.originalScore)?'marginal_gain':'no_higher_returned_score'};
+      return {kind:'unavailable',label:'Recommendation unavailable',message:choice.options.length?'Persado returned versions it could not compare with your copy. You can review them below.':'Persado returned no usable version for this copy.',action:'review',reason:'unverified_alternatives'};
     }
     const variant=field.score?.variants?.[0],p=variant?.potential;
     const potentialValid=p&&info.inRange&&p.current===info.score&&typeof p.projected==='number'&&p.projected>=0&&p.projected<=100&&p.headroomPoints===p.projected-p.current;
-    if(potentialValid&&p.state==='healthy'&&p.headroomPoints===0)
-      return {kind:'good',label:'Looking good',message:'No changes recommended.',action:null,reason:'provider_healthy_potential'};
-    if(potentialValid&&p.headroomPoints>0)
-      return {kind:'opportunity',label:'Worth improving',message:'An opportunity to improve.',action:'optimize',reason:'provider_headroom'};
-    if(field.score||info.evaluated)return {kind:'unavailable',label:'Recommendation unavailable',message:'Checked; no recommendation evidence returned.',action:'review',reason:'insufficient_evidence'};
+    if(potentialValid&&p.headroomPoints<MIN_HEADROOM_POINTS&&(p.state==='healthy'||p.headroomPoints>=0))
+      return {kind:'good',label:'Looking good',message:'No changes recommended.',action:null,reason:p.headroomPoints===0?'provider_healthy_potential':'marginal_headroom'};
+    if(potentialValid&&p.headroomPoints>=MIN_HEADROOM_POINTS)
+      return {kind:'opportunity',label:'Worth improving',message:'Persado sees room to improve this copy.',action:'optimize',reason:'provider_headroom'};
+    if(field.score||info.evaluated)return {kind:'unavailable',label:'Recommendation unavailable',message:'Checked, but Persado gave no signal either way. You can still ask for a better version.',action:'optimize',reason:'insufficient_evidence'};
     return {kind:'unchecked',label:'Not checked',message:'Ready to check.',action:'score'};
   }
   function organize(fields,{appliedField=null}={}){
@@ -81,5 +86,5 @@
     return {states,opportunities,good:ofKind('good'),unchecked,unavailable,applied:ofKind('applied'),
       checked:fields.filter(f=>describe(f).inRange).length,next:opportunities[0]||unchecked[0]||unavailable[0]||null};
   }
-  root.PERSADO_INTELLIGENCE=Object.freeze({describe,prioritize,comparison,outcome,organize,label});
+  root.PERSADO_INTELLIGENCE=Object.freeze({describe,prioritize,comparison,outcome,organize,label,MIN_HEADROOM_POINTS,MIN_IMPROVEMENT_POINTS});
 })(typeof self!=='undefined'?self:globalThis);

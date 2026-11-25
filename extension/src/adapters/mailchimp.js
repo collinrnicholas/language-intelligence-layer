@@ -16,7 +16,6 @@
 //   GET   /campaigns/{id}/content                 html, plain_text
 //   PATCH /campaigns/{id}        { settings }     subject line, preview text
 //   PUT   /campaigns/{id}/content { html }        body
-//   POST  /campaigns/{id}/actions/test            test send (Mailchimp's own flow)
 //
 // What the API can and cannot do (docs/ASSIST.md §3):
 //   • There is no pre-send hook or webhook for "campaign saved/about to send", so
@@ -280,16 +279,7 @@
       return { ok: true };
     }
 
-    /** Mailchimp's own test send — to the addresses given, never to the list. */
-    async function sendTest(id, emails) {
-      const list = (emails || []).map(e => String(e).trim()).filter(Boolean);
-      if (!list.length) throw new MailchimpError('invalid_config', 'Add a test e-mail address in Settings first.');
-      if (list.some(e => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e))) throw new MailchimpError('invalid_config', 'One of the test addresses is not an e-mail address.');
-      await call('POST', `/campaigns/${encodeURIComponent(id)}/actions/test`, { test_emails: list, send_type: 'html' });
-      return { ok: true, sentTo: list };
-    }
-
-    return { id: 'mailchimp', label: 'Mailchimp', dc, channel: 'EMAIL_SUBJECT_BODY', test, listDrafts, findByWebId, read, write, verify, restore, sendTest, updateSetting,
+    return { id: 'mailchimp', label: 'Mailchimp', dc, channel: 'EMAIL_SUBJECT_BODY', test, listDrafts, findByWebId, read, write, verify, restore, updateSetting,
       getCampaign, listSentCampaigns, listReports, getReport };
   }
 

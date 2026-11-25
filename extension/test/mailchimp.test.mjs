@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { load, fakeFetch, json, noSleep, memoryStorage, optimizeJob } from './helpers.mjs';
-await load('guard.js', 'persado-api.js', 'activity.js', 'usage.js', 'adapters/mailchimp.js', 'optimizer.js');
+import { load, fakeFetch, json } from './helpers.mjs';
+await load('guard.js', 'persado-api.js', 'usage.js', 'adapters/mailchimp.js');
 const MC = globalThis.PERSADO_ADAPTERS.mailchimp;
-const OPT = globalThis.PERSADO_OPTIMIZER;
 
 const HTML = `<!DOCTYPE html><html><head><title>Spring</title></head><body><table><tr><td>
 <h1>Our spring collection has landed</h1>
@@ -62,90 +61,11 @@ test('builder campaigns: body write-back is off unless enabled', async () => {
   assert.match(d.skipped.find(s => s.field === 'body').reason, /builder/);
 });
 
-function persado(alternatives) {
-  const id = 'job_' + 'd'.repeat(32);
-  return fakeFetch([{ method: 'POST', match: /api\.persado\.com\/api\/v1\/optimize/, reply: (r) => { persado.lastBody = r.body; return json(200, optimizeJob(id, alternatives, { touchpoints: r.body.variant, performance: 61 })); } }]);
-}
-
-async function run(mc, pf, extra = {}) {
-  const usage = memoryStorage(), act = memoryStorage();
-  const ledger = globalThis.PERSADO_USAGE.makeStore({ storageKey: 'u', quota: 100, storage: usage });
-  const log = globalThis.PERSADO_ACTIVITY.makeLog({ storageKey: 'a', storage: act });
-  const adapter = MC.create({ apiKey: 'k-us21', fetchImpl: mc, ...extra });
-  const both = async (url, init) => (String(url).includes('persado.com') ? pf : mc)(url, init);
-  const snaps = [];
-  const out = await OPT.optimizeDraft({ id: 'abc123' }, { adapter, persadoKey: 'pk', account: { accountName: 'Acme' }, fetchImpl: both,
-    usage: (ev) => ledger.record('fp', ev), log: (e) => log.add(e), snapshot: (d) => snaps.push(d) });
-  return { out, ledger: await ledger.get('fp'), activity: await log.list(), snaps };
-}
-
-test('end to end: one Persado run, safe rewrites written back and verified', async () => {
-  const mc = fakeMailchimp();
-  const pf = persado([{ rank: 1, performance: 84, touchpoints: {
-    subject_line: 'Fresh spring arrivals, picked for you', preheader: 'New-season favourites are waiting for you',
-    headline: 'Spring is here, and so are your new favourites', body: 'Hi *|FNAME|*, we hand-picked new arrivals for your season ahead.',
-    cta: 'See the new arrivals' } }]);
-  const { out, ledger, activity, snaps } = await run(mc, pf);
-  assert.equal(out.status, 'ok');
-  assert.equal(pf.calls.length, 1);
-  // Only the field strings went to Persado — never the HTML document.
-  const sent = JSON.stringify(pf.calls[0].body);
-  assert.ok(!sent.includes('<html') && !sent.includes('UNSUB'));
-  assert.deepEqual(pf.calls[0].body.alwaysUse, ['*|FNAME|*']);
-  assert.equal(mc.state.campaign.settings.subject_line, 'Fresh spring arrivals, picked for you');
-  assert.ok(mc.state.html.includes('<h1>Spring is here, and so are your new favourites</h1>'));
-  assert.ok(mc.state.html.includes('href="https://shop.example.com/spring?utm=x">See the new arrivals</a>'));
-  assert.ok(mc.state.html.includes('*|UNSUB|*'));
-  assert.equal(out.verify.ok, true);
-  assert.equal(ledger.optimizeRuns, 1); assert.equal(ledger.used, 5);
-  assert.equal(activity[0].persado.jobId, 'job_' + 'd'.repeat(32));
-  assert.equal(activity[0].persado.chosenPerformance, 84);
-  assert.equal(snaps.length, 1);
-  assert.ok(!mc.calls.some(c => /\/actions\/send/.test(c.url)), 'never sends');
-});
-
-test('a rewrite that drops a merge tag or adds a figure is not written; the rest is', async () => {
-  const mc = fakeMailchimp();
-  const pf = persado([{ rank: 1, performance: 80, touchpoints: {
-    subject_line: 'Save 40% on spring arrivals', preheader: 'New-season favourites are waiting for you',
-    headline: 'Spring is here, and so are your new favourites', body: 'Hello friend, new arrivals await.', cta: 'See the new arrivals' } }]);
-  const { out } = await run(mc, pf);
-  assert.equal(out.status, 'partial');
-  assert.equal(mc.state.campaign.settings.subject_line, 'Our spring collection is here');
-  assert.ok(mc.state.html.includes('Hi *|FNAME|*, we picked new arrivals'));
-  const why = out.changes.filter(c => !c.applied).flatMap(c => c.reasons).join(' ');
-  assert.match(why, /40%/); assert.match(why, /FNAME/);
-});
-
-test('nothing safe → nothing written', async () => {
-  const mc = fakeMailchimp();
-  const pf = persado([]);
-  const { out } = await run(mc, pf);
-  assert.equal(out.status, 'no_change');
-  assert.ok(!mc.calls.some(c => c.method === 'PATCH' || c.method === 'PUT'));
-});
-
-test('a failed body write rolls the subject line back', async () => {
-  const mc = fakeMailchimp({ failPut: true });
-  const pf = persado([{ rank: 1, performance: 84, touchpoints: { subject_line: 'Fresh spring arrivals, picked for you', preheader: 'New-season favourites are waiting for you', headline: 'Spring is here, and so are your new favourites', body: 'Hi *|FNAME|*, we hand-picked new arrivals for your season ahead.', cta: 'See the new arrivals' } }]);
-  await assert.rejects(run(mc, pf), /content rejected/);
-  assert.equal(mc.state.campaign.settings.subject_line, 'Our spring collection is here');
-});
-
-test('non-drafts are refused before Persado is called', async () => {
-  const mc = fakeMailchimp(); mc.state.campaign.status = 'schedule';
-  const pf = persado([]);
-  await assert.rejects(run(mc, pf), /not a draft/);
-  assert.equal(pf.calls.length, 0);
-});
-
-test('restore puts the original back; test send uses /actions/test only', async () => {
+test('restore puts the original back; sending is not part of the adapter', async () => {
   const mc = fakeMailchimp();
   const a = MC.create({ apiKey: 'k-us21', fetchImpl: mc });
   const orig = mc.state.html;
   await a.restore({ id: 'abc123', settings: { subject_line: 'Back', preview_text: 'Before preview text' }, html: orig, bodyWritten: true });
   assert.equal(mc.state.campaign.settings.subject_line, 'Back');
-  const r = await a.sendTest('abc123', ['me@acme.test']);
-  assert.deepEqual(r.sentTo, ['me@acme.test']);
-  await assert.rejects(a.sendTest('abc123', []), /test e-mail/);
+  assert.equal(a.sendTest, undefined);
 });

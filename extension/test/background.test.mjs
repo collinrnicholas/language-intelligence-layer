@@ -69,7 +69,7 @@ test('sender gating: page contexts have read-only Mailchimp status; paid calls a
   const tab=url=>({id:EXT_ID,tab:{id:1,url},url});
   assert.equal((await send({type:MSG.MC_STATUS,webId:42},tab('https://us21.admin.mailchimp.com/campaigns/edit?id=42'))).ok,true);
   assert.equal((await send({type:MSG.MC_STATUS},tab('https://evil.test'))).ok,false);
-  for(const type of [MSG.MC_SCORE,MSG.MC_OPTIMIZE,MSG.MC_APPLY,MSG.MC_REVERT,MSG.MC_TEST_SEND]){
+  for(const type of [MSG.MC_SCORE,MSG.MC_OPTIMIZE,MSG.MC_APPLY,MSG.MC_REVERT,MSG.JOB_RETRY]){
     assert.equal((await send({type},tab('https://us21.admin.mailchimp.com/'))).ok,false);
   }
   assert.equal((await send({type:MSG.PERSADO_SCORE},{id:'another-extension'})).ok,false);
@@ -94,4 +94,92 @@ test('concurrent status requests coalesce; edit hints relay without reading cont
   assert.equal(changed.ok,true);assert.equal(reads,1,'edit hints must not make an API request themselves');
   assert.ok(relays.some(m=>m.type===MSG.MC_CONTEXT_CHANGED&&m.tabId===7));
   assert.equal((await send({type:MSG.MC_CONTEXT_CHANGED},{id:EXT_ID,url:'https://evil.test',tab:{id:8}})).ok,false);
+});
+
+test('job status reads are relayed and coalesced; a stalled gateway reports a timeout, not a lost run', async()=>{
+  let reads=0;
+  const {send,local,MSG,KEYS}=boot(async(url,init)=>{reads++;assert.equal(JSON.parse(init.body).type,'JOB_STATUS');assert.ok(init.signal);await new Promise(r=>setTimeout(r,10));return json(200,{ok:true,status:'running'});});
+  local[KEYS.PROXY_TOKEN]='paired';
+  const both=await Promise.all([send({type:MSG.JOB_STATUS,cacheId:'a'.repeat(64)}),send({type:MSG.JOB_STATUS,cacheId:'a'.repeat(64)})]);
+  assert.ok(both.every(r=>r.status==='running'));assert.equal(reads,1);
+  const stalled=boot(async()=>{throw Object.assign(new Error('aborted'),{name:'AbortError'});});
+  stalled.local[stalled.KEYS.PROXY_TOKEN]='paired';
+  const r=await stalled.send({type:stalled.MSG.PERSADO_OPTIMIZE,text:'Hi'});
+  assert.equal(r.kind,'gateway_timeout');assert.match(r.error,/kept/);
+});
+
+test('removed prototype messages are not relayed', async()=>{
+  const {send,local,KEYS}=boot(async()=>json(200,{ok:true}));local[KEYS.PROXY_TOKEN]='paired';
+  for(const type of ['TRANSCRIBE_AUDIO','CAPTURE_PAGE_CONTEXT','MC_TEST_SEND','USAGE_RESET'])assert.equal(await send({type}),undefined);
+});
+
+// The user's guarantee: manual page selection may be more ambitious than the
+// automatic rules, but it is not a policy override. These payloads are exactly
+// what a manually selected cookie banner, language switcher or legal notice
+// would send — including a stale/forged `eligibility` object claiming the copy is
+// a primary CTA — and none of them may produce a gateway call.
+test('manual selection cannot force cookie, language or legal copy into a billable request', async () => {
+  let calls = 0;
+  const { send, local, MSG, KEYS } = boot(async () => { calls++; return json(200, { ok: true, result: {} }); });
+  local[KEYS.PROXY_TOKEN] = 'paired';
+
+  const protectedCopy = [
+    ['Accept all', 'consent'],
+    ['Reject all', 'consent'],
+    ['Manage cookie preferences', 'consent'],
+    ['Cookie settings', 'consent'],
+    ['English', 'language'],
+    ['Español', 'language'],
+    ['EN / ES', 'language'],
+    ['Choose your language', 'language'],
+    ['USD', 'language'],
+    ['Terms of service', 'legal'],
+    ['Privacy policy', 'legal'],
+    ['Read our privacy policy', 'legal'],
+    ['Subject to credit approval. Rates and terms vary by state.', 'legal'],
+    ['This notice describes how medical information about you may be used and disclosed.', 'legal'],
+    ['I agree to receive marketing emails', 'consent'],
+  ];
+  const forged = { category: 'primary_cta', autoEligible: true, hardExcluded: false, confidence: 1 };
+
+  for (const [text, category] of protectedCopy) {
+    for (const payload of [
+      { manual: true, kind: 'cta' },
+      { manual: true, kind: 'body' },
+      { manual: true, kind: 'cta', eligibility: forged },   // decision laundered
+      { manual: false, kind: 'cta' },
+      { batch: true, kind: 'cta', eligibility: forged },    // batch laundered
+    ]) {
+      const r = await send({ type: MSG.PERSADO_SCORE, text, pageUrl: 'https://example.test/', ...payload });
+      assert.equal(r.ok, false, `${text} was accepted as ${r.category}`);
+      assert.equal(r.kind, 'ineligible', text);
+      assert.equal(r.category, category, `${text} reported ${r.category}`);
+      assert.equal(calls, 0, `${text} reached the gateway`);
+    }
+  }
+
+  // The same manual path still works for genuine conversion copy...
+  const good = await send({ type: MSG.PERSADO_SCORE, text: 'Apply now', kind: 'cta', manual: true,
+    pageUrl: 'https://example.test/apply' });
+  assert.equal(good.ok, true);
+  // ...and for ambiguous copy the user deliberately chose.
+  const ambiguous = await send({ type: MSG.PERSADO_SCORE, text: 'Learn more', kind: 'cta', manual: true,
+    pageUrl: 'https://example.test/pricing' });
+  assert.equal(ambiguous.ok, true);
+  assert.equal(calls, 2);
+});
+
+test('an automatic batch cannot carry ambiguous or unclassified copy', async () => {
+  let calls = 0;
+  const { send, local, MSG, KEYS } = boot(async () => { calls++; return json(200, { ok: true, result: {} }); });
+  local[KEYS.PROXY_TOKEN] = 'paired';
+  const ambiguous = await send({ type: MSG.PERSADO_SCORE, text: 'Learn more', kind: 'cta', batch: true,
+    eligibility: { category: 'unknown', autoEligible: false, hardExcluded: false } });
+  assert.equal(ambiguous.ok, false);
+  assert.equal(ambiguous.kind, 'needs_selection');
+  assert.equal(calls, 0);
+  const cleared = await send({ type: MSG.PERSADO_SCORE, text: 'Start free trial', kind: 'cta', batch: true,
+    eligibility: { category: 'primary_cta', autoEligible: true, hardExcluded: false } });
+  assert.equal(cleared.ok, true);
+  assert.equal(calls, 1);
 });

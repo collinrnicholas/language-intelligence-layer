@@ -29,9 +29,7 @@
     }
     *{margin:0;padding:0;box-sizing:border-box;}
     /* Flex column with a DEFINITE height: panels get a real box to size against,
-       so the recording screen's transcript can flex and scroll inside itself
-       instead of pushing the pinned action row past the bottom edge. Each panel
-       owns its own scrolling (see #panelConfigure / #panelRecord below). */
+       and each panel owns its own scrolling. */
     html,body{height:100%;}
     body{font-family:var(--sans);background:var(--surface);color:var(--text-1);font-size:13px;line-height:1.5;display:flex;flex-direction:column;overflow:hidden;}
 
@@ -145,7 +143,6 @@
     .emotion{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#B22222;background:#FDF1F1;border:none;border-radius:4px;padding:3px 7px;}
     /* TOP PICK chip — sits beside the score on the highest-scoring card. */
     .toppick{font-family:var(--mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#fff;background:#141310;border-radius:4px;padding:3px 7px;line-height:1;}
-    /* Mock Motivation AI score — "SCORE 87": mono label + prominent figure. */
     .vc-score{display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap;}
     .vc-score .mark{font-family:var(--mono);font-size:11px;font-weight:600;color:#8B8880;letter-spacing:.04em;}
     .vc-score b{font-size:16px;font-weight:700;color:#141310;font-variant-numeric:tabular-nums;line-height:1;}
@@ -220,217 +217,13 @@
 
     .empty-state{text-align:center;padding:32px 12px;color:var(--tm);font-size:13px;line-height:1.5;}
 
-    /* ─── Start screen (1a) — claude-design.md §5 ─── */
-    /* Flex column + .start-main{flex:1} pins the action block to the bottom by
-       layout, so it never overlaps content on a short viewport. */
-    #panelConfigure.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;}
-    .start-main{flex:1;}
-    .start-head{margin-bottom:24px;}
-    .scr-title{font-size:24px;font-weight:700;color:var(--ink);line-height:1.2;letter-spacing:-.02em;margin-bottom:8px;}
-    .scr-sub{font-size:13.5px;color:var(--text-2);line-height:1.6;}
-
-    /* Capture chip — read-only display of the tab being captured. */
-    .cap-chip{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rctl);padding:10px 12px;}
-    .cap-dot{width:7px;height:7px;border-radius:2px;background:var(--red);flex:none;}
-    .cap-url{flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .cap-tag{flex:none;font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
-
-    /* Choice chip — single-select, wraps, never scrolls (§2). */
-    /* Context disclosure — defaults are set, so recording is the immediate action. */
-    .ctx{margin-top:4px;border:1px solid var(--border);border-radius:var(--rctl);}
-    .ctx-s{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;list-style:none;}
-    .ctx-s::-webkit-details-marker{display:none;}
-    .ctx-s::after{content:'';margin-left:auto;width:6px;height:6px;border-right:1.5px solid var(--text-3);border-bottom:1.5px solid var(--text-3);transform:rotate(45deg);transition:transform var(--motion-standard) var(--motion-ease);}
-    .ctx[open] .ctx-s::after{transform:rotate(-135deg);}
-    .ctx-t{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
-    .ctx-v{font-size:12.5px;color:var(--text-1);}
-    .ctx-b{padding:0 14px 14px;}
-
-    .chips{display:flex;flex-wrap:wrap;gap:8px;}
-    .chip{font-family:var(--sans);font-size:13px;font-weight:500;color:var(--text-1);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:10px 16px;cursor:pointer;transition:color var(--motion-fast) var(--motion-ease),border-color var(--motion-fast) var(--motion-ease);}
-    .chip:hover{border-color:var(--text-3);}
-    .chip.selected{color:var(--red);border-color:var(--red);}
-    .help{margin-top:10px;font-size:12px;color:var(--text-3);line-height:1.5;}
-
-    .start-foot{flex:none;padding-top:24px;}
-    .rec-dot{width:10px;height:10px;border-radius:50%;background:var(--red);flex:none;}
-    .privacy{margin-top:12px;text-align:center;font-size:11.5px;color:var(--text-3);line-height:1.5;}
-    /* First-run proof stat — a footer pinned to the very bottom of the panel (flex:none
-       sibling after .start-main{flex:1}). One line, centered, hairline divider above.
-       Full-bleed to the panel edges: the negative side margins cancel the .view gutters
-       so the exact 13/12.5px sizes fit one line at 360px; the negative bottom margin
-       cancels the .view bottom padding so the line sits at the very edge. */
-    .proof{flex:none;margin:0 -20px -24px;padding:14px 0 18px;border-top:1px solid var(--border);text-align:center;white-space:nowrap;}
-    .proof-fig{font-family:var(--mono);font-size:13px;font-weight:700;color:#D62828;}
-    .proof-txt{font-size:12.5px;color:#6B6862;}
-
-    /* ─── Recording screen (1b) — claude-design.md §5 ─── */
-    /* Column fills the panel; the transcript is the only flexing row, so the
-       action buttons land on the bottom edge by layout (never position:fixed). */
-    /* overflow-y is the safety net: if the panel is dragged shorter than the
-       fixed rows can fit, this degrades to scrolling rather than clipping the
-       action row out of reach. */
-    #panelRecord.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;}
-    .rec-live{display:none;flex-direction:column;flex:1;min-height:0;}
-    .rec-live.on{display:flex;}
-
-    .sec-label{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
-
-    /* Timer — hero element. tabular-nums stops digits jittering as they tick. */
-    .rec-time{font-family:var(--mono);font-size:40px;font-weight:700;color:var(--ink);text-align:center;font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;line-height:1.1;letter-spacing:-.02em;flex:none;}
-
-    /* Waveform — bar heights are driven by real mic amplitude (AUDIO_LEVELS). */
-    .wave{display:flex;align-items:center;justify-content:center;gap:2px;height:56px;margin:16px 0 12px;flex:none;transition:opacity var(--motion-standard) var(--motion-ease);}
-    .wave .bar{width:3px;border-radius:2px;background:var(--red);height:3px;}
-    .wave.paused{opacity:.4;}
-    /* Reduced motion: one static meter instead of 40 animating bars. */
-    .wave-static{display:none;height:8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;margin:16px 0 12px;flex:none;}
-    .wave-static i{display:block;height:100%;background:var(--red);width:4%;}
-
-    .rec-status{font-size:13px;color:var(--text-2);line-height:1.5;text-align:center;margin-bottom:20px;flex:none;}
-
-    /* Transcript — the dominant element; it is the row that flexes. */
-    .tr-box{flex:1 1 0;min-height:72px;overflow-y:auto;margin-top:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rc);padding:16px;font-size:15px;line-height:1.7;color:var(--text-1);text-align:left;white-space:pre-wrap;word-break:break-word;}
-    .tr-box .interim{color:var(--text-2);}
-    .tr-box .ph{color:var(--text-3);}
-    .caret{display:inline-block;width:2px;height:1.1em;background:var(--red);vertical-align:-.18em;margin-left:2px;animation:blink 1.1s step-end infinite;}
-
-    .shots-head{display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px;flex:none;}
-    .shots-n{font-size:13px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;}
-    .shots{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex:none;}
-    .shots img,.shots .ph-tile{width:64px;height:40px;flex:none;border-radius:8px;border:1px solid var(--border);object-fit:cover;background:var(--surface-2);}
-    .shots img.newest{border-color:var(--red);}
-    .shots .ph-tile{display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;}
-
-    .rec-actions{display:flex;gap:10px;padding-top:20px;flex:none;}
-    .rec-actions #btnPause{flex:0 0 38%;background:var(--surface);border:1px solid var(--border);color:var(--text-1);}
-    .rec-actions #btnPause:hover{border-color:var(--text-3);}
-    .btn-stop{flex:1;background:var(--red);color:#fff;font-size:15px;font-weight:700;}
-    .btn-stop:hover:not(:disabled){opacity:.9;}
-    .stop-glyph{width:10px;height:10px;background:#fff;border-radius:2px;flex:none;}
-
-    .rec-retry{padding-top:8px;}
-
-    /* ─── Processing screen (1c) — claude-design.md §5 ─── */
-    /* Heading, bar and checklist at the top; the brief card pinned to the bottom.
-       The gap between them is intentional — the checklist is not stretched. */
-    #panelProcess.active{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;}
-    .proc-main{flex:1;}
-
-    /* Progress bar — width comes from the real stage, never from a timer. */
-    .pbar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin:20px 0 4px;}
-    .pbar i{display:block;height:100%;width:0;border-radius:3px;background:var(--red);transition:width var(--motion-layout) var(--motion-ease);}
-
-    .steps{margin-top:12px;}
-    .step{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-top:1px solid var(--border);}
-    .step:first-child{border-top:0;}
-    .step-l{font-size:13px;line-height:1.4;color:var(--text-3);}
-    .step-r{font-size:11.5px;line-height:1.4;margin-top:3px;color:var(--text-3);}
-    /* 22px indicator. Every state is a CSS shape — no emoji, no icon font. */
-    .ind{position:relative;flex:none;width:22px;height:22px;margin-top:1px;border-radius:50%;box-sizing:border-box;border:2px solid var(--border);}
-
-    .step.active .ind{border-color:var(--red);}
-    .step.active .ind::after{content:'';position:absolute;inset:4px;border-radius:50%;background:var(--red);animation:indPulse 1.4s ease-in-out infinite;}
-    .step.active .step-l{color:var(--ink);font-weight:700;}
-
-    .step.done .ind{border-color:var(--green);background:var(--green);}
-    .step.done .ind::after{content:'';position:absolute;left:5px;top:6px;width:8px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg);}
-    .step.done .step-l{color:var(--text-2);}
-
-    .step.failed .ind{border-color:var(--red);}
-    .step.failed .ind::before,.step.failed .ind::after{content:'';position:absolute;left:4px;top:8px;width:10px;height:2px;border-radius:1px;background:var(--red);}
-    .step.failed .ind::before{transform:rotate(45deg);}
-    .step.failed .ind::after{transform:rotate(-45deg);}
-    .step.failed .step-l{color:var(--ink);font-weight:600;}
-    .step.failed .step-r{color:var(--red);}
-
-    .step.skipped .ind::after{content:'';position:absolute;left:4px;top:8px;width:10px;height:2px;border-radius:1px;background:var(--border);}
-    .step.skipped .step-l{color:var(--text-3);text-decoration:line-through;}
-
-    .proc-err{display:flex;align-items:center;gap:12px;margin-top:20px;}
+    /* Shared by the scan footer and result cards. */
     .btn-quiet{background:none;border:none;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text-3);cursor:pointer;padding:6px 2px;}
     .btn-quiet:hover{color:var(--text-1);}
-
-    /* Retained-recording note under a failed step, and the resume offer on 1a. */
-    .retain-note{margin-top:12px;font-size:11.5px;line-height:1.5;color:var(--text-3);}
-    .resume{margin-bottom:20px;padding:14px 16px;border:1px solid var(--amber);border-radius:var(--rc);background:var(--amber-bg);}
-    .resume-m{margin:6px 0 12px;font-size:12.5px;line-height:1.5;color:var(--amber-text);}
-    .resume-a{display:flex;align-items:center;gap:10px;}
-    .offline{margin-bottom:20px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--rctl);background:var(--surface-2);font-size:11.5px;line-height:1.5;color:var(--text-2);}
-
-    .brief-card{flex:none;margin-top:24px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rc);padding:16px;}
-    .brief-line{margin-top:6px;font-size:11.5px;line-height:1.45;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-
-    /* ─── Brief view — the captured artifact ─── */
-    /* Same treatment as results: the main area scrolls, the footer is pinned by
-       layout (flex:none), not position:fixed. */
-    #panelBrief.active{display:flex;flex-direction:column;flex:1;min-height:0;}
-    .brief-main{flex:1;min-height:0;overflow-y:auto;}
-    .brief-foot{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;border-top:1px solid var(--border);}
-    .brief-foot>*{flex:none;height:34px;white-space:nowrap;}
-    .brief-foot .btn-quiet{display:inline-flex;align-items:center;}
-
-    .bfields{margin-top:14px;border-top:1px solid var(--border);}
-    .bf{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);}
-    .bf-k{flex:0 0 96px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;padding-top:2px;}
-    .bf-v{flex:1;min-width:0;font-size:13px;line-height:1.5;color:var(--text-1);word-break:break-word;}
-    .bf-v .mono{font-family:var(--mono);font-size:12px;}
-    .bf-v .bf-el{font-weight:600;}
-    .bf-v .sub{display:block;font-size:11.5px;color:var(--text-3);margin-top:2px;}
-    .asset-sel{font-family:var(--sans);font-size:12.5px;color:var(--text-1);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;outline:none;}
-    .asset-sel:focus{border-color:var(--ink);}
-    .bnarr{margin-top:8px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rc);font-size:13.5px;line-height:1.6;color:var(--text-1);}
-    .bnarr.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
-    .bnarr-more{margin-top:6px;background:none;border:none;padding:0;font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text-2);cursor:pointer;}
-    .bnarr-more:hover{color:var(--text-1);}
-
-    /* Coverage checklist — green when covered, muted with an Add when not. */
-    .coverage{margin-top:14px;}
-    /* Collapsed one-line summary shown when every item is covered. */
-    .cov-sum{display:flex;align-items:center;gap:10px;width:100%;padding:7px 0;background:none;border:none;font-family:var(--sans);text-align:left;cursor:pointer;}
-    .cov-sum .cov-i{background:var(--green);border-color:var(--green);}
-    .cov-sum .cov-i::after{content:'';position:absolute;left:3px;top:4px;width:6px;height:3px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg);}
-    .cov-sum-l{flex:1;font-size:12.5px;font-weight:600;color:var(--text-1);}
-    .cov-caret{flex:none;width:7px;height:7px;border-right:2px solid var(--text-3);border-bottom:2px solid var(--text-3);transform:rotate(45deg);}
-    .cov-sum[aria-expanded="true"] .cov-caret{transform:rotate(-135deg);}
-    .cov-list{margin-top:8px;display:flex;flex-direction:column;gap:2px;}
-    .cov{display:flex;align-items:center;gap:10px;padding:7px 0;}
-    .cov-i{position:relative;flex:none;width:16px;height:16px;border-radius:50%;box-sizing:border-box;border:2px solid var(--border);}
-    .cov.yes .cov-i{background:var(--green);border-color:var(--green);}
-    .cov.yes .cov-i::after{content:'';position:absolute;left:3px;top:4px;width:6px;height:3px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg);}
-    .cov-l{flex:1;font-size:12.5px;color:var(--text-3);}
-    .cov.yes .cov-l{color:var(--text-1);}
-    .cov-add{flex:none;background:none;border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text-2);cursor:pointer;}
-    .cov-add:hover{border-color:var(--text-3);color:var(--text-1);}
-
-    /* Inline gap-filler: type the missing piece, or re-record just that piece. */
-    .covfill{margin-top:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--rctl);}
-    .covfill textarea{width:100%;min-height:56px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--sans);font-size:13px;line-height:1.5;color:var(--text-1);resize:vertical;outline:none;}
-    .covfill textarea:focus{border-color:var(--ink);}
-    .covfill-a{display:flex;gap:8px;align-items:center;margin-top:8px;}
-
-    /* Short panel: trim the hero rows so the whole screen still fits without
-       scrolling when the user drags the side panel down. */
-    @media (max-height: 640px) {
-      #panelRecord.active{padding-top:16px;padding-bottom:16px;}
-      .rec-time{font-size:30px;}
-      .wave{height:36px;margin:10px 0 8px;}
-      .rec-status{margin-bottom:12px;}
-      .shots-head{margin:12px 0 8px;}
-      .shots img,.shots .ph-tile{width:52px;height:33px;}
-      .rec-actions{padding-top:12px;}
-      #panelProcess.active{padding-top:16px;padding-bottom:16px;}
-      .step{padding:10px 0;}
-      .brief-card{margin-top:16px;padding:12px;}
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .wave{display:none;}
-      .wave-static{display:block;}
-      .caret,.hdr-st.rec .dot{animation:none;}
-      .step.active .ind::after{animation:none;}
-      .pbar i{transition:none;}
-    }
+    .cap-tag{flex:none;font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
+    .start-foot{flex:none;padding-top:24px;}
+    .privacy{margin-top:12px;text-align:center;font-size:11.5px;color:var(--text-3);line-height:1.5;}
+    .sec-label{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;}
 
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -701,8 +494,6 @@
     <div class="hdr-desc">Language Intelligence</div>
   </div>
   <div class="hdr-right">
-    <span class="hdr-flag capture" id="captureFlag" style="display:none;"><span class="cap-i"></span>Screen capture on</span>
-    <span class="hdr-flag demo" id="demoFlag" style="display:none;">Demo mode</span>
     <span class="hdr-st" id="headerStatus"><span class="dot"></span><span id="headerStatusText">Ready</span></span>
     <div class="hdr-acts">
       <button class="ico" id="btnRescan" aria-label="Rescan this page" title="Rescan this page — no credits"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M13.5 2.5V6H10"/></svg></button>
@@ -738,8 +529,6 @@
   <!-- Status only. The visible context lives in the row under the header; this stays
        for screen readers so the sentence is never lost when the heading is gone. -->
   <p class="sr-only" id="scanSub" role="status" aria-live="polite">Reading the page’s copy…</p>
-  <input id="productLine" type="hidden">
-  <span id="productHint" hidden></span>
 
   <div class="pick-bar" id="pickBar" hidden>
     <span class="pick-t">Click any copy on the page — Esc cancels</span>
@@ -764,193 +553,10 @@
     <div class="scan-alt">
       <button class="btn-quiet" id="btnPick">Pick on page</button>
     </div>
-    <div class="privacy">Only the selected line is sent to Persado. Previews change this tab only, never the site.</div>
+    <div class="privacy">Finding copy on the page is free. Only the line you check is sent to Persado. Previews change this tab only, never your site.</div>
   </div>
 </div>
 
-<!-- ═══ START (1a) ═══ -->
-<div class="panel view" id="panelConfigure">
-  <div class="start-main">
-    <div class="start-head">
-      <button class="btn-quiet back-scan" id="btnBackToScan">Scan this page instead</button>
-      <div class="scr-title">Record your brief</div>
-      <div class="scr-sub">Talk through the page and what you want it to do. It listens, captures the screen, and returns compliant copy scored to perform.</div>
-    </div>
-
-    <div class="resume" id="resumeCard" style="display:none;">
-      <div class="sec-label">Unsent brief</div>
-      <div class="resume-m" id="resumeMsg"></div>
-      <div class="resume-a">
-        <button class="btn btn-outline btn-sm" id="btnResume">Try again</button>
-        <button class="btn-quiet" id="btnSaveAudio2">Save audio</button>
-        <button class="btn-quiet" id="btnDiscard">Discard</button>
-      </div>
-    </div>
-    <div class="offline" id="offlineHint" style="display:none;"></div>
-
-    <div class="field">
-      <label>Capturing</label>
-      <div class="cap-chip">
-        <span class="cap-dot"></span>
-        <span class="cap-url" id="pageUrl">detecting…</span>
-        <span class="cap-tag">This page</span>
-      </div>
-    </div>
-
-    <details class="ctx" id="ctxBox">
-      <summary class="ctx-s">
-        <span class="ctx-t">Context</span>
-        <span class="ctx-v" id="ctxSummary">Retail Banking · Cross-sell</span>
-      </summary>
-      <div class="ctx-b">
-        <div class="field">
-          <label for="audience">Product line</label>
-          <select id="audience">
-            <option value="retail">Retail Banking</option>
-            <option value="cards">Credit Cards</option>
-            <option value="mortgage">Mortgage &amp; Lending</option>
-            <option value="wealth">Wealth Management</option>
-            <option value="business">Small Business Banking</option>
-          </select>
-        </div>
-        <div class="field" style="margin-bottom:0;">
-          <label>Objective</label>
-          <div class="chips" id="goalChips" role="radiogroup" aria-label="Objective">
-            <button type="button" class="chip selected" data-value="cross-sell" role="radio" aria-checked="true">Cross-sell</button>
-            <button type="button" class="chip" data-value="acquisition" role="radio" aria-checked="false">Acquisition</button>
-            <button type="button" class="chip" data-value="engagement" role="radio" aria-checked="false">Engagement</button>
-            <button type="button" class="chip" data-value="conversion" role="radio" aria-checked="false">Conversion</button>
-            <button type="button" class="chip" data-value="retention" role="radio" aria-checked="false">Retention</button>
-          </div>
-          <div class="help">Or just say it — your narration overrides the selection.</div>
-        </div>
-      </div>
-    </details>
-
-  <div class="start-foot">
-    <button class="btn btn-primary btn-block" id="btnStart"><span class="rec-dot"></span>Record marketing brief</button>
-    <div class="privacy" id="privacyNote">Audio and screens stay on this device until you review the results.</div>
-  </div>
-</div>
-  <!-- Credibility line, pinned to the very BOTTOM of the ready screen as a footer
-       (a flex:none sibling of .start-main, not part of the button group, so the empty
-       space falls between the button cluster and this line). It lives only in
-       #panelConfigure, so it shows on the ready screen and never on the recording or
-       results panels. -->
-  <div class="proof" id="proofStat"><span class="proof-fig">↑ 40%</span> <span class="proof-txt">average engagement lift · Powered by Motivation AI</span></div>
-</div>
-
-<!-- ═══ RECORDING (1b) ═══ -->
-<div class="panel view" id="panelRecord">
-  <div class="rec-live" id="recLive">
-    <div class="rec-time" id="recTimer">00:00</div>
-    <div class="wave" id="wave"></div>
-    <div class="wave-static" id="waveStatic"><i id="waveStaticFill"></i></div>
-    <div class="rec-status" id="recStatus">Listening — describe the problem and the audience.</div>
-
-    <div class="sec-label">Live transcript</div>
-    <div class="tr-box" id="liveTranscript"></div>
-
-    <div id="recScreens">
-      <div class="shots-head">
-        <span class="sec-label">Screens captured</span>
-        <span class="shots-n" id="shotCount">0</span>
-      </div>
-      <div class="shots" id="shotStrip"></div>
-    </div>
-
-    <div class="rec-actions">
-      <button class="btn btn-outline" id="btnPause">Pause</button>
-      <button class="btn btn-stop" id="btnStopRec"><span class="stop-glyph"></span>Stop &amp; review</button>
-    </div>
-  </div>
-
-  <!-- Shown only if the mic could not be started; keeps a retry path. -->
-  <div class="rec-retry" id="recRetry" style="display:none;">
-    <div class="scr-title">Microphone needed</div>
-    <div class="scr-sub" id="recRetryMsg">The panel needs microphone access to hear your brief.</div>
-    <button class="btn btn-primary btn-block" id="btnRecord" style="margin-top:20px;">Try again</button>
-  </div>
-
-  <div class="narr-block" id="transcriptBlock" style="display:none;">
-    <div class="nl">Your Brief</div>
-    <div class="nt" id="transcriptText"></div>
-  </div>
-
-</div>
-
-<!-- ═══ PROCESSING (1c) ═══ -->
-<div class="panel view" id="panelProcess">
-  <div class="proc-main">
-    <div class="scr-title">Writing your variants</div>
-    <div class="scr-sub" id="procSub"></div>
-
-    <div class="pbar"><i id="pbarFill"></i></div>
-
-    <div class="steps">
-      <div class="step" id="stepTranscribe">
-        <span class="ind"></span>
-        <div><div class="step-l">Transcribed your narration</div><div class="step-r"></div></div>
-      </div>
-      <div class="step" id="stepScreens">
-        <span class="ind"></span>
-        <div><div class="step-l" id="stepScreensLabel">Read the captured screens</div><div class="step-r"></div></div>
-      </div>
-      <div class="step" id="stepGenerate">
-        <span class="ind"></span>
-        <div><div class="step-l" id="stepGenerateLabel">Generating variants</div><div class="step-r"></div></div>
-      </div>
-      <div class="step" id="stepCompliance">
-        <span class="ind"></span>
-        <div><div class="step-l" id="stepComplianceLabel">Compliance check</div><div class="step-r"></div></div>
-      </div>
-      <div class="step" id="stepScore">
-        <span class="ind"></span>
-        <div><div class="step-l" id="stepScoreLabel">Scoring — Motivation AI (not connected)</div><div class="step-r"></div></div>
-      </div>
-    </div>
-
-    <div class="proc-err" id="procErr" style="display:none;">
-      <button class="btn btn-outline btn-sm" id="btnRetry">Try again</button>
-      <button class="btn-quiet" id="btnSaveAudio" style="display:none;">Save audio</button>
-      <button class="btn-quiet" id="btnStartOver">Start over</button>
-    </div>
-    <div class="retain-note" id="retainNote" style="display:none;"></div>
-  </div>
-
-  <div class="brief-card">
-    <div class="sec-label">Your brief</div>
-    <div class="brief-line" id="briefLine"></div>
-  </div>
-</div>
-
-<!-- ═══ BRIEF (the captured artifact) ═══ -->
-<div class="panel view" id="panelBrief">
-  <div class="brief-main">
-    <div class="scr-title">Brief captured</div>
-    <div class="scr-sub" id="briefSub"></div>
-
-    <div class="coverage" id="briefCoverage" style="display:none;"></div>
-
-    <div class="bfields" id="briefFields"></div>
-
-    <div class="sec-label" style="margin-top:14px;">In your words</div>
-    <div class="bnarr" id="briefNarration"></div>
-    <button class="bnarr-more" id="btnNarrMore" style="display:none;">Show more</button>
-
-    <div id="briefScreens">
-      <div class="shots-head"><span class="sec-label">Screens captured</span><span class="shots-n" id="briefShotCount">0</span></div>
-      <div class="shots" id="briefShots"></div>
-    </div>
-  </div>
-
-  <div class="brief-foot">
-    <button class="btn btn-primary btn-sm" id="btnBriefContinue">Back to variants</button>
-    <button class="btn-quiet" id="btnCopyJson">Copy brief as JSON</button>
-  </div>
-</div>
-
-<!-- ═══ SETTINGS ═══ -->
 <div class="panel view" id="panelSettings">
   <div class="set-wrap">
     <div class="res-head set-head">
@@ -1011,10 +617,6 @@
       <div class="set-state" id="mcState">Not connected.</div>
     </div>
 
-    <p class="set-foot">
-      Screen-capture and other administrator settings live in
-      <button class="set-link as-btn" id="btnOpenOptions">the extension’s options</button>.
-    </p>
   </div>
 </div>
 
@@ -1049,10 +651,6 @@
         <div class="res-h" id="resHeading">Variants ready</div>
         <div class="res-ctx" id="resCtx"></div>
       </div>
-      <div class="res-head-r">
-        <button class="btn-quiet view-brief" id="btnViewBrief">View brief</button>
-        <span class="res-status" id="resStatus"><span class="dot"></span>Done</span>
-      </div>
     </div>
     <div class="stale-note" id="resStale" hidden>
       <span>You moved to a different page.</span>
@@ -1060,29 +658,18 @@
     </div>
     <div class="res-cap" id="capLine"></div>
 
-    <div class="res-orig" id="resOrig" style="display:none;">
-      <div class="sec-label">Original — from your page</div>
-      <div class="res-orig-t" id="resOrigText"></div>
-    </div>
+    <div class="res-orig" id="resOrig" style="display:none;"></div>
 
     <div id="resultsContainer"></div>
     <div class="res-note" id="resNote" style="display:none;"></div>
   </div>
 
-  <div class="portal-ok" id="portalResult" style="display:none;">
-    <div class="portal-h"><span class="portal-dot"></span><span>Would deliver this payload</span><button class="portal-x" id="portalDismiss">Dismiss</button></div>
-    <div class="portal-note">Not connected in this prototype</div>
-    <pre class="portal-p" id="portalPayload"></pre>
-  </div>
-
   <div class="res-foot">
     <button class="btn-quiet re-record" id="btnNewBrief">Back to list</button>
-    <button class="btn btn-outline btn-sm" id="btnSendPortal">Send to Motivation AI</button>
   </div>
 </div>
 
 <script src="src/messages.js"></script>
-<script src="src/config.js"></script>
 <script src="src/page-noise.js"></script>
 <script src="src/url-display.js"></script>
 <script src="src/guard.js"></script>
@@ -1090,6 +677,9 @@
 <script src="src/campaign-impact.js"></script>
 <script src="src/interactions.js"></script>
 <script src="src/priority.js"></script>
+<script src="src/eligibility.js"></script>
+<script src="src/jobs.js"></script>
+<script src="src/analytics.js"></script>
 <script src="src/scan.js"></script>
 <script src="src/boot.js"></script>
 <script src="sidepanel.js" type="module"></script>

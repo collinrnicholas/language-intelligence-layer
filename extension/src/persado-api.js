@@ -252,7 +252,10 @@
   async function runJob(opts) {
     const { kind, body, onProgress = () => {}, jobTimeoutMs = JOB_TIMEOUT_MS, sleepImpl = sleep, now = Date.now } = opts;
     const started = now();
-    const first = await request({ ...opts, method: 'POST', path: '/v1/' + kind, query: { wait: String(LIMITS.MAX_WAIT_SECONDS) }, body });
+    // A short wait gets Persado's job id back sooner, so a crash or lost response
+    // leaves a job that can be adopted by id rather than an "unknown" charge.
+    const wait = Math.min(LIMITS.MAX_WAIT_SECONDS, Math.max(1, Number(opts.waitSeconds) || LIMITS.MAX_WAIT_SECONDS));
+    const first = await request({ ...opts, method: 'POST', path: '/v1/' + kind, query: { wait: String(wait) }, body });
     let job = first.body;
     const requestId = first.requestId;
     let lastHeaders = first.usageHeaders;

@@ -1,116 +1,78 @@
 # Persado Assist
 
-**Language Intelligence**
+**Language intelligence, wherever you work.** A Chrome extension (Manifest V3) that checks and improves marketing copy with the Persado API, on any web page and in Mailchimp draft campaigns.
 
-Language intelligence, wherever you work. A Chrome extension (MV3) that
-scores and optimizes copy with the real Persado API, on any web page and in
-Mailchimp draft campaigns. You do not copy and paste, and you do not open a separate
-app. Think of Grammarly, but for marketing performance. The extension is the first
-surface and the development environment. The platform adapters and the Persado
-service behind them are built to be reused.
+> **Status: developer preview.** Every Persado and Mailchimp call goes through a small gateway you run on your own machine (`gateway/`), which holds the provider keys. A hosted service is required before people outside the team can use it. See "Limits" below.
 
-Architecture, API sources, Mailchimp's limits, the security model and what has and
-has not been verified live: **[docs/ASSIST.md](docs/ASSIST.md)**.
-The original brief-capture thesis is in `VISION.md`.
-
-## Provenance
-
-This project grew out of [Loupe](docs/loupe/VISION.md), the author's own earlier
-project, and reuses Loupe's capture and gateway infrastructure. The extension in
-`extension/` is the new work. `agent/`, `analyzer/` and the surrounding research and
-spec directories are Loupe code, kept under their original names. Loupe's product
-docs live in `docs/loupe/`.
+Architecture, API sources, security model and live-verification notes: **[docs/ASSIST.md](docs/ASSIST.md)**.
 
 ## What it does
 
-**On any web page:**
-1. **Scan.** The side panel reads the page's headlines and calls to action. Local
-   copy-review suggestions remain optional and clearly labelled.
-2. **Score.** Sends the selected line to Persado (`POST /v1/score`, 1 run) and shows
-   an evidence-backed content state. Actual scores and response details are optional.
-3. **Optimize.** Sends it to Persado (`POST /v1/optimize`, 5 runs) and shows the
-   strongest eligible, comparably scored version. Original copy and other options stay secondary.
-4. **Preview on page.** Swaps the optimized line into the page in place, then
-   restores it. Nothing is saved to the site.
+Each piece of copy is in one of three states: **Looking good**, **Worth improving** or **Not checked**. Copy Persado could not judge is listed separately under **Needs review**.
 
-**In Mailchimp:**
-1. Open a regular campaign draft. The sidebar matches its URL to an API-verified campaign and displays actual subject, preview, and eligible body/CTA copy without spending credits.
-2. See the campaign title and checked/remaining progress. Campaign details retain supported reach, historical baselines and observed reports.
-3. Check individual fields explicitly (1 credit). One recommended action opens first; Looking good and Not checked content remain grouped. Scoring and optimization are independent actions.
-4. Find a better version (5 credits). Only a valid higher-scoring returned alternative offers Use this version. Up to three choices, original copy, rationale and scores remain optional. No changes are saved automatically; scores do not establish conversion lift.
-5. Apply an alternative to subject or preview. The gateway patches only the selected setting, checks draft status and verifies by re-reading. Undo restores that field if no later edit conflicts.
-6. Explore impact with an explicitly labelled scenario calculator. User-selected assumptions are distinct from Persado model output and observed results. No score difference is converted to revenue.
-7. Body Apply is disabled to preserve the email structure. No send action is available.
+**On any web page**
 
-**Usage:** Mailchimp connection and usage diagnostics live in Settings. Account balance is unavailable; no assumed 100-credit balance is shown. Cached scoring of unchanged text avoids another paid request. Explanations use fields already returned by Persado, without an additional paid call. See [architecture and limits](docs/ASSIST.md).
+1. **Detect (free).** The side panel lists the page's headlines and calls to action. **Pick on page** chooses anything else.
+2. **Check (1 credit).** Sends one line to Persado (`POST /v1/score`). A checked line is saved, so checking it again is free.
+3. **Find a better version (5 credits).** Sends it to Persado (`POST /v1/optimize`). This can take a few minutes. You can close the panel; the result is picked up when you return.
+4. **Use it.** The recommendation shows the new copy and a short reason when Persado gave one. **Copy this version** copies it to paste into your site's editor. **Preview on page** swaps it into this tab only; nothing is saved to the site.
 
-Recording a narrated brief still works. Narration is transcribed by the local
-gateway (Whisper), and the variants now come from Persado's optimize run.
+**In Mailchimp**
 
-## Running it
+1. Open a regular draft. The panel matches the URL to the campaign through the API and lists subject line, preview text and eligible body and button copy. Reading is free.
+2. Check (1 credit) and Find a better version (5 credits), per field.
+3. **Use this version** writes subject line or preview text only. The gateway checks the campaign is still a draft and the field is unchanged, PATCHes that one setting, and reads it back to verify. **Undo** restores it if nobody changed it since.
+4. Body and button copy are **review only**: the panel says so before you spend credits and offers **Copy**. Nothing is ever sent to an audience.
 
-From a fork, clone the repo and work on the feature branch:
+## Running it (developers)
 
 ```bash
-git clone https://github.com/collinrnicholas/language-intelligence-layer.git
-cd language-intelligence-layer
-git checkout feature/persado-autopilot
 npm install
+npm run build        # smoke checks, then writes extension/dist/unpacked (+ a zip if `zip` exists)
 ```
 
-Then build it:
-
-```bash
-npm run build        # verifies, then writes extension/dist/unpacked (+ a zip if `zip` exists)
-```
-
-Start the local gateway with provider credentials injected from your secret manager:
+Start the gateway with credentials from your secret manager (placeholders in `.env.example`):
 
 ```sh
-lokalite run --project language-intelligence-layer --keys MAILCHIMP_API_KEY,PERSADO_API_KEY,PERSADO_PROXY_TOKEN -- npm run gateway
+# required: PERSADO_API_KEY, PERSADO_PROXY_TOKEN (openssl rand -hex 32)
+# for Mailchimp: MAILCHIMP_API_KEY (optional MAILCHIMP_SERVER_PREFIX)
+npm run gateway      # http://127.0.0.1:8788
 ```
 
-Provider keys stay in the gateway environment. The placeholder-only `.env.example` documents the configuration. Stop/restart an older gateway on port 8788 yourself if needed.
+1. In `chrome://extensions`, enable Developer mode and **Load unpacked** → `extension/dist/unpacked`.
+2. Open the side panel → Settings. Paste the **pairing token** (`PERSADO_PROXY_TOKEN`, not a provider key) → Pair gateway. Set Brand name. Test Mailchimp.
+3. On a website: Check → Find a better version → Copy. In Mailchimp: open a draft → Check → Find a better version → Use this version → refresh Mailchimp to confirm.
 
-1. In `chrome://extensions`, enable Developer mode and load `extension/dist/unpacked` or `extension/`.
-2. Open Persado Settings, enter the local **gateway pairing token** (not a provider key), then Pair gateway. Set Brand name and test Mailchimp.
-3. Hard-reload the Mailchimp page after an extension reload. Open a regular draft, then Score → Optimize → Apply.
-4. Refresh Mailchimp to confirm persistence; use Undo in Persado to restore a previous value.
+The gateway only serves `GET /health` and the authenticated `POST /v1/integrations` (loopback Host, extension Origin, pairing token, JSON only).
 
-Complete setup, API limitations, security, and verification details: [docs/ASSIST.md](docs/ASSIST.md).
+## Checks
+
+```bash
+npm test               # gateway, jobs, security and extension suites (+ inherited agent suite)
+npm run smoke          # static cross-context contract checks
+npm run typecheck      # syntax-checks every extension script
+npm run build          # smoke + package
+```
+
+Release steps, including the live checks static tests cannot cover: [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).
+
+## Analytics
+
+`extension/src/analytics.js` records a fixed set of adoption events (panel opened, return visit, content detected, check and optimization started/completed, recommendation applied, undo, API error, insufficient credits). Properties are allowlisted tokens. No copy, URLs, campaign ids, email addresses or keys are recorded. By default events stay in the browser profile (`ANALYTICS_ENDPOINT` is empty). Inspect them from the side panel console with `await PERSADO_ANALYTICS.dump()`.
+
+## Limits
+
+- Needs the local gateway. No hosted authentication yet.
+- Credit balance is an estimate. Persado documents no balance endpoint, so the panel never shows an invented figure.
+- Mailchimp body and button copy cannot be applied automatically.
+- Whether Mailchimp's open editor can save stale text over an applied change has not been verified live. The panel warns before Apply when the campaign is open, and re-checks afterwards.
+- Language scores are model predictions, not measured campaign outcomes.
 
 ## Repo layout
 
 | Path | What it is |
 |---|---|
-| `extension/` | **The Persado Assist extension**: the new work in this repo. `src/persado-api.js`, `src/adapters/`, `src/optimizer.js`, `src/guard.js`, `src/usage.js`, `src/activity.js`, `test/`. |
-| `gateway/` | Local gateway for narration transcription (Whisper). Never sees the Persado or Mailchimp key. |
-| `scripts/` | `smoke.mjs` static contract checks, version and hygiene tooling. |
-| `docs/` | `REGRESSION.md` is the manual test checklist; `docs/loupe/` holds inherited Loupe docs. |
-| `agent/`, `analyzer/`, `app/` | Inherited Loupe code — capture, vision and analysis pipeline. |
-| `benchmarks/`, `evals/`, `research/`, `specs/`, `prompts/`, `changelog/` | Inherited Loupe surface area. |
-
-Only `extension/` and `gateway/` are live for this demo.
-
-## Checks
-
-```bash
-npm run smoke          # static cross-context contract checks — before every commit
-npm run version:check  # shipped changes need a version bump + changelog entry
-npm run repo:check     # repo hygiene
-npm run typecheck      # syntax-checks every extension script
-npm test               # inherited agent suite + extension tests (Persado, Mailchimp, safeguards, usage, worker)
-npm run build          # smoke + package extension/dist/unpacked
-```
-
-Before declaring extension work done, walk `docs/REGRESSION.md`. It covers what
-static checks cannot see: the mic prompt, stale content scripts after a reload,
-and the waveform responding to real audio.
-
-## Contributing
-
-`VISION.md` for what this is and what would disprove it. `CONTRIBUTING.md` for
-file discipline — in particular the anti-sprawl rule:
-implementation work produces source and tests, and generated output goes to
-`~/.loupe`, never the repo. `CLAUDE.md` is the operating manual agents read
-first; `claude-design.md` is the design source of truth.
+| `extension/` | The Persado Assist extension: side panel, worker, page scanner, Mailchimp change observer, and the shared Persado/Mailchimp clients the gateway loads. |
+| `gateway/` | Local development gateway. The only process that holds provider keys. |
+| `scripts/` | Smoke checks, packaging, version and hygiene tooling. |
+| `agent/`, `docs/loupe/`, `benchmarks/`, `evals/`, `research/`, `specs/`, `prompts/` | Inherited from the earlier Loupe project. Not part of the extension. |

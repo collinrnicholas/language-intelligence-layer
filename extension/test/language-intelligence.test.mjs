@@ -101,3 +101,18 @@ test('recommendations precede pending work; subject and primary CTA break otherw
  const r=organize([preview,waiting,subject,good,unchecked]);assert.equal(r.next,subject);assert.deepEqual(r.opportunities,[subject,preview,waiting]);assert.deepEqual(r.good,[good]);assert.deepEqual(r.unchecked,[unchecked]);assert.equal(r.checked,4);
  const after=organize([subject,good,unchecked],{appliedField:'subject_line'});assert.equal(after.next,unchecked);assert.deepEqual(after.applied,[subject]);
 });
+
+test('small headroom and small gains are not called opportunities (audit #7)',()=>{
+ const {MIN_HEADROOM_POINTS:h,MIN_IMPROVEMENT_POINTS:g}=globalThis.PERSADO_INTELLIGENCE;
+ assert.equal(outcome(field(60,{potential:potential(60,60+h-1)})).kind,'good');
+ assert.equal(outcome(field(60,{potential:potential(60,60+h)})).kind,'opportunity');
+ const opt=d=>optimized([{performance:51+d,text:'Review your message before you send it'}]);
+ assert.equal(outcome(opt(g-1)).kind,'good');
+ assert.equal(outcome(opt(g-1)).reason,'marginal_gain');
+ assert.equal(outcome(opt(g)).kind,'recommended');
+});
+
+test('unavailable is explicit and recoverable, never grouped as unchecked',()=>{
+ const s=outcome(field(51,{performanceBand:'fair'}));
+ assert.equal(s.kind,'unavailable');assert.equal(s.action,'optimize');assert.notEqual(s.label,'Not checked');
+});

@@ -26,13 +26,17 @@ rmSync(DIST, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 // Plain file-by-file copy: fs.cpSync tries to preserve directory modes, which
 // fails on some mounted/synced folders.
+// Provider clients run only inside the local gateway (gateway/integrations.mjs
+// loads them from extension/src); the browser bundle never ships them.
+const GATEWAY_ONLY = new Set([join(EXT, 'src', 'persado-api.js'), join(EXT, 'src', 'usage.js'), join(EXT, 'src', 'adapters')]);
 function copy(from, to) {
+  if (GATEWAY_ONLY.has(from)) return;
   if (statSync(from).isDirectory()) {
     mkdirSync(to, { recursive: true });
     for (const n of readdirSync(from)) copy(join(from, n), join(to, n));
   } else copyFileSync(from, to);
 }
-for (const p of ['manifest.json', 'sidepanel.html', 'sidepanel.js', 'options.html', 'options.js', 'public', 'src']) {
+for (const p of ['manifest.json', 'sidepanel.html', 'sidepanel.js', 'public', 'src']) {
   copy(join(EXT, p), join(OUT, p));
 }
 let zipped = '';

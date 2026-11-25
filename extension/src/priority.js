@@ -71,6 +71,9 @@
     }
     if (purpose && kind === 'headline' && m.aboveFold) score += 4;
     if (typeof m.top === 'number' && m.top < 700) score += 3;
+    // Ambiguous content never becomes the suggested starting point: a rule the
+    // scan could not settle is not a recommendation, it is a question.
+    if (m.eligibility && m.eligibility.autoEligible === false) score -= 40;
 
     return { score: Math.round(score), reason: reasons.slice(0, 2).join(' · ') };
   }
@@ -82,10 +85,12 @@
    */
   function rank(materials, page) {
     const purpose = pagePurpose(page || {});
-    return (materials || [])
+    const rows = (materials || [])
       .map((material, index) => ({ index, material, ...scoreOf(material, page, purpose) }))
-      .sort((a, b) => b.score - a.score || a.index - b.index)
-      .map((row, i) => ({ ...row, rank: i + 1, startHere: i === 0 }));
+      .sort((a, b) => b.score - a.score || a.index - b.index);
+    // Exactly one starting point, and only if the policy cleared it.
+    const first = rows.findIndex((r) => !(r.material && r.material.eligibility && r.material.eligibility.autoEligible === false));
+    return rows.map((row, i) => ({ ...row, rank: i + 1, startHere: i === first }));
   }
 
   scope.PERSADO_PRIORITY = { rank, pagePurpose };

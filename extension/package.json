@@ -1,11 +1,11 @@
 {
   "name": "persado-autopilot-extension",
-  "version": "0.11.3",
+  "version": "0.12.0",
   "description": "Persado Assist — Language Intelligence Chrome extension (MV3, loaded unpacked)",
   "type": "module",
   "scripts": {
     "build": "node ../scripts/package-extension.mjs",
-    "typecheck": "for f in src/*.js src/adapters/*.js sidepanel.js options.js; do node --check \"$f\" || exit 1; done",
+    "typecheck": "for f in src/*.js src/adapters/*.js sidepanel.js; do node --check \"$f\" || exit 1; done",
     "test": "node --test test/*.test.mjs"
   },
   "keywords": [],

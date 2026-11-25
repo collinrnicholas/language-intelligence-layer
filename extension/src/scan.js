@@ -10,7 +10,7 @@
 // no "Motivation AI" score here and nothing in this file claims to be one.
 //
 // Loaded two ways:
-//   • content script  executeScript({ files: ['src/messages.js', 'src/scan.js'] })
+//   • content script  executeScript({ files: ['src/messages.js', 'src/eligibility.js', 'src/scan.js'] })
 //   • side panel      <script src="src/scan.js"> — for scoreCopy() on variants
 //
 // Idempotent: re-injecting replaces the previous listener instead of stacking.
@@ -273,6 +273,74 @@
     return NOISE.isNoise({ text, hint: containerHint(el), control: isControl(el), kind });
   }
 
+  // ── Page context and eligibility ────────────────────────────────
+  // What kind of page this is, from structure rather than hostnames, so an
+  // application page and an app shell are not treated like a landing page.
+  // src/eligibility.js owns the policy; this only gathers what it looks at.
+
+  const ELIG = self.PERSADO_ELIGIBILITY || null;
+
+  function pageSignals() {
+    const body = clean(document.body?.innerText || '').slice(0, 4000);
+    const forms = [...document.querySelectorAll('form')];
+    const hasType = (t) => forms.some(f => f.querySelector('input[type="' + t + '"]'));
+    const schemaTypes = [];
+    for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
+      try {
+        const j = JSON.parse(s.textContent || '{}');
+        for (const n of (Array.isArray(j) ? j : (j['@graph'] || [j]))) {
+          if (n && n['@type']) schemaTypes.push(String(n['@type']));
+        }
+      } catch {}
+    }
+    const navLabels = [...document.querySelectorAll('nav a, nav button, [role="navigation"] a, [role="navigation"] button, aside a, aside button')]
+      .slice(0, 20).map(textOf).filter(Boolean);
+    return {
+      url: location.href, path: location.pathname, title: document.title,
+      h1: clean(document.querySelector('h1')?.innerText || ''),
+      ogType: document.querySelector('meta[property="og:type"]')?.content || '',
+      price: /[$£€]\s?\d/.test(body.slice(0, 1500)),
+      cart: /\b(add to (cart|bag)|view cart|cart \(\d+\))\b/i.test(body.slice(0, 2000)),
+      checkout: /\b(pay now|place order|order summary)\b/i.test(body.slice(0, 2000)),
+      leadForm: forms.some(f => f.querySelector('input[type="email"], input[type="tel"]')),
+      applicationForm: /apply|application|admission/i.test(document.title + ' ' + location.pathname) && forms.length > 0,
+      donation: /donate|donation/i.test(document.title + ' ' + location.pathname),
+      marketingHero: !!document.querySelector('h1') && !document.querySelector('[aria-current="page"]'),
+      form: forms.length > 0,
+      article: !!document.querySelector('article'),
+      ariaCurrent: !!document.querySelector('[aria-current="page"], [aria-selected="true"]'),
+      navLabels, schemaTypes,
+    };
+  }
+
+  function landmarksOf(el) {
+    return {
+      nav: !!el.closest('nav, [role="navigation"]'),
+      header: !!el.closest('header, [role="banner"]'),
+      footer: !!el.closest('footer, [role="contentinfo"]'),
+      main: !!el.closest('main, [role="main"], article, section'),
+      form: !!el.closest('form, [role="form"]'),
+      aside: !!el.closest('aside'),
+      dialog: !!el.closest('dialog, [role="dialog"], [aria-modal="true"]'),
+    };
+  }
+
+  function eligibilityOf(el, text, kind, pageType, aboveFold) {
+    if (!ELIG) return null;
+    const rect = el.getBoundingClientRect();
+    return ELIG.classify({
+      text, kind, pageType, aboveFold,
+      tag: el.tagName, role: el.getAttribute('role') || '', type: el.getAttribute('type') || '',
+      inputType: el.tagName === 'INPUT' ? el.getAttribute('type') || '' : '',
+      ariaLabel: el.getAttribute('aria-label') || '',
+      name: el.getAttribute('name') || '', id: el.id || '',
+      className: typeof el.className === 'string' ? el.className : '',
+      hint: containerHint(el), landmarks: landmarksOf(el),
+      buttonLike: /^(BUTTON|INPUT)$/.test(el.tagName) || el.getAttribute('role') === 'button',
+      aboveFold: aboveFold === undefined ? rect.top + window.scrollY < window.innerHeight : aboveFold,
+    });
+  }
+
   function scan() {
     const maxFont = Math.max(16, ...[...document.querySelectorAll('h1,h2,h3,button,a')]
       .slice(0, 400).map(el => parseFloat(getComputedStyle(el).fontSize) || 0));
@@ -280,11 +348,18 @@
     const found = [];
     const seen = new Set();
 
+    const PAGE = pageSignals();
+    const TYPE = ELIG ? ELIG.pageType(PAGE) : 'unknown';
+
     const add = (el, kind) => {
       if (!el || el.nodeType !== 1 || !isVisible(el)) return;
       const text = textOf(el);
       if (!text || text.length < 2 || text.length > 220) return;
       if (isNoise(el, text, kind)) return;
+      // The policy decides first. A hard exclusion is never detected, so it can
+      // never be ranked, queued, picked or sent.
+      const eligibility = eligibilityOf(el, text, kind, TYPE);
+      if (eligibility && eligibility.hardExcluded) return;
       const key = kind + ':' + text.toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
@@ -314,6 +389,7 @@
         opportunity: Math.round((prom / 100) * (100 - score)),
         aboveFold: rect.top + window.scrollY < window.innerHeight,
         top: Math.round(rect.top + window.scrollY),
+        eligibility,
         issues,
       });
     };
@@ -329,18 +405,27 @@
     });
 
     const materials = found
-      .sort((a, b) => b.opportunity - a.opportunity)
+      .sort((a, b) => Number(!!b.eligibility?.autoEligible) - Number(!!a.eligibility?.autoEligible)
+        || b.opportunity - a.opportunity)
       .slice(0, 6)
       .map((m, i) => ({ ...m, id: i }));
 
     const product = productLineFor();
-    const cta = [...document.querySelectorAll('button, [role="button"], a')]
-      .filter(el => !isNoise(el, textOf(el), 'cta'))
-      .map(el => textOf(el)).find(t => t && t.length <= 40 && ACTION_VERB.test(t)) || '';
+    // The page's primary action is the one the policy called a primary CTA, not
+    // simply the first link whose label opens with a verb.
+    const primaries = found.filter(m => m.eligibility?.category === 'primary_cta' && m.eligibility.autoEligible);
+    // Several primary CTAs can coexist ("Apply now" and "Book a tour"). The page's
+    // own action wins: on an application page that is the apply control, not the
+    // secondary tour link that happened to score higher.
+    const primary = (ELIG && primaries.find(m => ELIG.clickIntent(m.text, TYPE))) || primaries[0];
+    // No primary CTA is a valid answer (an app shell has none). An upsell is not
+    // the page's conversion action, so the category decides, not the verb.
+    const cta = (primary?.text || '').slice(0, 60);
     return {
       ok: true,
       url: location.href,
       title: clean(document.title),
+      pageType: TYPE,
       productLine: product.value,
       productSource: product.source,
       primaryCta: cta,
@@ -366,9 +451,10 @@
     picker = null;
   }
 
-  function describe(el, textOverride) {
+  function describe(el, textOverride, pageType) {
     const text = clean(textOverride || textOf(el));
     const kind = /^(BUTTON|A|INPUT)$/i.test(el.tagName) ? 'cta' : (/^H[1-3]$/i.test(el.tagName) ? 'headline' : 'body');
+    const eligibility = eligibilityOf(el, text, kind, pageType || (ELIG ? ELIG.pageType(pageSignals()) : 'unknown'));
     const rect = el.getBoundingClientRect();
     const { score, issues } = scoreCopy(text, kind, {
       height: rect.height,
@@ -379,8 +465,20 @@
       id: 0, kind, type: kind, tag: el.tagName.toLowerCase(), text,
       selector: selectorFor(el), context: nearby(el), score, prominence: 100,
       opportunity: 100 - score, aboveFold: rect.top < window.innerHeight,
-      top: Math.round(rect.top + window.scrollY), issues,
+      top: Math.round(rect.top + window.scrollY), eligibility, issues,
     };
+  }
+
+  /** A blocked pick explains itself on the page and sends nothing. */
+  function pickBlocked(el, text) {
+    if (!ELIG) return null;
+    const kind = /^(BUTTON|A|INPUT)$/i.test(el.tagName) ? 'cta' : (/^H[1-3]$/i.test(el.tagName) ? 'headline' : 'body');
+    const d = eligibilityOf(el, text, kind, ELIG.pageType(pageSignals()));
+    if (d && d.hardExcluded) {
+      chrome.runtime.sendMessage({ type: MSG.SCAN_BLOCKED, category: d.category, message: ELIG.blockMessage(d.category) }).catch(() => {});
+      return d;
+    }
+    return null;
   }
 
   function startPick() {
@@ -390,6 +488,8 @@
     if (sel.length >= 2) {
       const node = window.getSelection().anchorNode;
       const el = (node?.nodeType === 3 ? node.parentElement : node) || document.body;
+      const blocked = pickBlocked(el, sel);
+      if (blocked) return { ok: false, blocked: blocked.category, error: ELIG.blockMessage(blocked.category) };
       const picked = describe(el, sel);
       chrome.runtime.sendMessage({ type: MSG.SCAN_PICKED, material: picked }).catch(() => {});
       return { ok: true, selection: true };
@@ -418,6 +518,12 @@
       const el = document.elementFromPoint(e.clientX, e.clientY);
       if (!el) return;
       e.preventDefault(); e.stopPropagation();
+      // Manual selection cannot unlock a hard exclusion: say so and keep picking.
+      const blocked = pickBlocked(el, textOf(el));
+      if (blocked) {
+        endPick();
+        return;
+      }
       const picked = describe(el);
       endPick();
       chrome.runtime.sendMessage({ type: MSG.SCAN_PICKED, material: picked }).catch(() => {});

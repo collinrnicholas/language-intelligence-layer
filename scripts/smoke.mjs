@@ -1,9 +1,9 @@
-// ─── Persado Capture — static smoke test ─────────────────────────
+// ─── Persado Assist — static smoke test ─────────────────────────
 //
 //   npm run smoke
 //
 // Catches the class of regression that keeps biting this extension: contracts
-// spread across sidepanel.html / sidepanel.js / src/background.js / src/content.js
+// spread across sidepanel.html / sidepanel.js / src/background.js / src/scan.js
 // with nothing checking that both ends still agree. No browser required.
 //
 // Exits non-zero on any failure so it can gate a commit.
@@ -21,12 +21,11 @@ const read = (p) => readFileSync(join(EXT, p), 'utf8');
 const HTML = read('sidepanel.html');
 const PANEL = read('sidepanel.js');
 const BG = read('src/background.js');
-const CONTENT = read('src/content.js');
 const SCAN = read('src/scan.js');
 const OVERLAY = read('src/mc-overlay.js');
+const JOBS = read('src/jobs.js');
 const MESSAGES = read('src/messages.js');
 const BOOT = read('src/boot.js');
-const CONFIG = read('src/config.js');
 const MANIFEST = JSON.parse(read('manifest.json'));
 const GATEWAY_SRC = readFileSync(join(ROOT, 'gateway/server.mjs'), 'utf8');
 
@@ -38,7 +37,7 @@ const all = (re, s) => [...s.matchAll(re)].map(m => m[1]);
 /** Strip comments so documentation prose never counts as code. */
 const code = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C = code(SCAN), OVERLAY_C = code(OVERLAY);
+const PANEL_C = code(PANEL), BG_C = code(BG), SCAN_C = code(SCAN), OVERLAY_C = code(OVERLAY), JOBS_C = code(JOBS);
 
 // ── 1. every $('id') in the panel exists in the HTML ──────────────
 {
@@ -78,7 +77,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
 // ── 4. message contract: declared / sent / handled ────────────────
 {
   const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'/gm, MESSAGES));
-  const files = { 'sidepanel.js': PANEL_C, 'src/background.js': BG_C, 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C };
+  const files = { 'sidepanel.js': PANEL_C, 'src/background.js': BG_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C, 'src/jobs.js': JOBS_C };
 
   // Any MSG.X referenced anywhere must exist in messages.js.
   for (const [name, src] of Object.entries(files)) {
@@ -98,8 +97,6 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   const integrationSource = readFileSync(join(ROOT, 'gateway/integrations.mjs'), 'utf8');
   const relayed = (BG_C.match(/INTEGRATION_MESSAGES\s*=\s*new Set\(\[([\s\S]*?)\]/) || [, ''])[1];
   for (const k of all(/MSG\.([A-Z_]+)/g, relayed)) {
-    // Legacy messages explicitly rejected by the gateway have no UI producer.
-    if (k === 'MC_TEST_SEND' || k === 'MC_DISCONNECT' || k === 'USAGE_RESET') continue;
     if (!integrationSource.includes(`case '${k}':`)) fail('gateway relay', `gateway has no handler for ${k}`);
     handled.add(k);
   }
@@ -121,45 +118,10 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   notes.push(`${declared.length} message types declared, ${sent.size} sent, ${handled.size} handled`);
 }
 
-// ── 5. page-context field contract (the ctx.frames regression) ────
-{
-  const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'/gm, MESSAGES.slice(MESSAGES.indexOf('const CTX'))));
-  const written = uniq(all(/\[CTX\.([A-Z_]+)\]\s*:/g, BG_C));
-  const readBg = uniq(all(/ctx\[CTX\.([A-Z_]+)\]/g, BG_C));
-  const readPanel = uniq(all(/(?:ctx|c)\??\.?\[CTX\.([A-Z_]+)\]/g, PANEL_C));
-
-  const unknown = [...written, ...readBg, ...readPanel].filter(k => !declared.includes(k));
-  if (unknown.length) fail('unknown context field', `CTX.${uniq(unknown).join(', CTX.')} not declared`);
-
-  const orphanReads = readPanel.filter(k => !written.includes(k));
-  if (orphanReads.length) {
-    fail('context field read but never written',
-      `panel reads CTX.${orphanReads.join(', CTX.')} but background never writes it — this is the ctx.startShot/ctx.frames bug`);
-  }
-  // A bare literal read of the stored context object bypasses the contract.
-  const bare = uniq(all(/\bctx\.([a-z][A-Za-z]*)/g, PANEL_C).concat(all(/\bctx\.([a-z][A-Za-z]*)/g, BG_C)));
-  if (bare.length) fail('bare context field access', `use ctx[CTX.*] instead of ctx.${bare.join(', ctx.')}`);
-
-  // EVERY key written into the stored object must go through CTX, or a partial
-  // rename at one of several writeCtx call sites slips through the set comparison
-  // above (the other sites keep the old name "written", masking the break).
-  for (const m of BG_C.matchAll(/writeCtx\(\{([^}]*)\}\)/g)) {
-    const body = m[1];
-    for (const part of body.split(',')) {
-      const key = part.trim();
-      if (!key || key.startsWith('...')) continue;
-      if (!/^\[CTX\.[A-Z_]+\]\s*:/.test(key)) {
-        fail('unkeyed context write', `writeCtx({ ${key.slice(0, 40)} }) must use [CTX.*] as its key`);
-      }
-    }
-  }
-  notes.push(`context fields written=${written.join(',')} readByPanel=${readPanel.join(',')}`);
-}
-
 // ── 6. storage keys go through the contract ───────────────────────
 {
   const declared = uniq(all(/^\s{4}([A-Z_]+):\s*'persado:/gm, MESSAGES));
-  for (const [name, src] of [['sidepanel.js', PANEL_C], ['src/background.js', BG_C], ['src/content.js', CONTENT_C]]) {
+  for (const [name, src] of [['sidepanel.js', PANEL_C], ['src/background.js', BG_C]]) {
     const raw = uniq(all(/'(persado:[A-Za-z]+)'/g, src));
     if (raw.length) fail('raw storage key', `${name} hardcodes ${raw.join(', ')} — use KEYS.*`);
     const used = uniq(all(/\bKEYS\.([A-Z_]+)/g, src));
@@ -176,7 +138,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   const NEEDS = { storage: 'storage', scripting: 'scripting', sidePanel: 'sidePanel', tabs: 'tabs',
                   alarms: 'alarms', offscreen: 'offscreen', notifications: 'notifications',
                   webNavigation: 'webNavigation', cookies: 'cookies', downloads: 'downloads' };
-  const used = uniq(all(/\bchrome\.([A-Za-z]+)/g, PANEL_C + BG_C + CONTENT_C));
+  const used = uniq(all(/\bchrome\.([A-Za-z]+)/g, PANEL_C + BG_C));
   for (const ns of used) {
     const need = NEEDS[ns];
     if (need && !perms.has(need)) fail('missing permission', `chrome.${ns} used but "${need}" not in manifest.permissions`);
@@ -229,28 +191,6 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   }
 }
 
-// ── 10. content script is idempotent and version-stamped ─────────
-{
-  if (/^(let|var)\s/m.test(CONTENT_C)) {
-    fail('content script', 'has top-level let/var — re-injection will throw "already been declared"');
-  }
-  if (!/self\.__persadoContent/.test(CONTENT_C)) fail('content script', 'missing the __persadoContent re-injection guard');
-  if (!/MSG\.PING/.test(CONTENT_C)) fail('content script', 'does not answer PING — the panel cannot verify its version');
-  if (/catch\s*\(\s*e\s*=>\s*\{\s*report\(e\);\s*sendResponse/.test(CONTENT_C)) {
-    fail('content script', 'command failures must return to the retry UI, not emit CONTENT_ERROR/fatal');
-  }
-
-  // Changing content.js without bumping CONTENT_VERSION leaves stale copies live.
-  const hash = createHash('sha256').update(CONTENT).digest('hex').slice(0, 12);
-  const version = (MESSAGES.match(/CONTENT_VERSION\s*=\s*(\d+)/) || [])[1];
-  const recorded = (MESSAGES.match(/CONTENT_HASH\s*=\s*'([a-f0-9]+)'/) || [])[1];
-  if (!version) fail('content version', 'CONTENT_VERSION not found in src/messages.js');
-  else if (!recorded) fail('content version', `CONTENT_HASH missing in src/messages.js — add: const CONTENT_HASH = '${hash}';`);
-  else if (recorded !== hash) {
-    fail('content version', `src/content.js changed (hash ${hash}, recorded ${recorded}). Bump CONTENT_VERSION (now ${version}) and set CONTENT_HASH = '${hash}'.`);
-  }
-}
-
 // ── 11. no deprecated purple survives on rebuilt surfaces ─────────
 {
   // Every screen is now rebuilt on the token system — the whole file is covered,
@@ -266,49 +206,27 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   if (HTML.indexOf('</style>') < 0) fail('sidepanel.html', 'no </style> found');
 }
 
-// ── 12. gateway URL lives in exactly one place ────────────────────
+// ── 12. gateway URL lives in exactly one place; its route exists ──
 {
   // Two hardcoded copies of the base URL is how a port change becomes an
-  // unexplainable "Failed to fetch". manifest host_permissions are allowed to
-  // name it (they must), so only .js sources are counted.
-  const sources = { 'src/config.js': CONFIG, 'sidepanel.js': PANEL, 'src/background.js': BG,
-                    'src/content.js': CONTENT, 'src/scan.js': SCAN, 'src/messages.js': MESSAGES, 'src/boot.js': BOOT };
+  // unexplainable "Failed to fetch". Only .js sources are counted.
+  const sources = { 'sidepanel.js': PANEL, 'src/background.js': BG, 'src/scan.js': SCAN, 'src/messages.js': MESSAGES, 'src/boot.js': BOOT };
   const hits = [];
   for (const [name, src] of Object.entries(sources)) {
-    const n = (src.match(/https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/g) || []).length;
+    const n = (code(src).match(/https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/g) || []).length;
     if (n) hits.push(`${name} (${n})`);
   }
-  if (hits.length !== 1 || !hits[0].startsWith('src/config.js')) {
-    fail('gateway url', `must appear ONLY in src/config.js — found in ${hits.join(', ') || 'nowhere'}`);
+  if (hits.length !== 1 || !hits[0].startsWith('src/background.js')) {
+    fail('gateway url', `must appear ONLY in src/background.js — found in ${hits.join(', ') || 'nowhere'}`);
   }
-  if (!/GATEWAY_URL\s*=\s*'http:\/\/127\.0\.0\.1:/.test(CONFIG)) {
-    fail('gateway url', 'config.js should target 127.0.0.1 (not localhost) to avoid IPv6/IPv4 drift');
-  }
-  // ...and the manifest must actually permit it.
-  const port = (CONFIG.match(/127\.0\.0\.1:(\d+)/) || [])[1];
-  const host = MANIFEST.host_permissions || [];
-  for (const h of [`http://127.0.0.1:${port}/*`, `http://localhost:${port}/*`]) {
-    if (!host.includes(h)) fail('gateway url', `manifest host_permissions is missing ${h}`);
-  }
-  notes.push(`gateway url declared once in src/config.js (port ${port})`);
-}
-
-// ── 13. every endpoint the extension calls has a gateway route ────
-{
-  const declared = [...CONFIG.matchAll(/^\s{4}[A-Z_]+:\s*'(\/[^']+)'/gm)].map(m => m[1]);
-  if (!declared.length) fail('endpoints', 'no ENDPOINTS found in src/config.js');
-  for (const ep of declared) {
-    // Routes look like: req.url === '/health'  /  req.url === '/v1/ai/recommend'
-    if (!new RegExp(`['"\`]${ep.replace(/\//g, '\\/')}['"\`]`).test(GATEWAY_SRC)) {
-      fail('endpoint drift', `extension calls ${ep} but gateway/server.mjs has no route for it`);
-    }
-  }
-  // And every ENDPOINTS entry should actually be used by the extension.
-  const used = uniq(all(/ENDPOINTS\.([A-Z_]+)/g, PANEL_C + BG_C));
-  const names = [...CONFIG.matchAll(/^\s{4}([A-Z_]+):\s*'\//gm)].map(m => m[1]);
-  const unused = names.filter(n => !used.includes(n));
-  if (unused.length) notes.push(`endpoints declared but unused: ${unused.join(', ')}`);
-  notes.push(`${declared.length} endpoints checked against gateway routes`);
+  if (!/GATEWAY_URL\s*=\s*'http:\/\/127\.0\.0\.1:/.test(BG_C)) fail('gateway url', 'background.js should target 127.0.0.1 (not localhost)');
+  const port = (BG_C.match(/127\.0\.0\.1:(\d+)/) || [])[1];
+  if (!(MANIFEST.host_permissions || []).includes(`http://127.0.0.1:${port}/*`)) fail('gateway url', `manifest host_permissions is missing http://127.0.0.1:${port}/*`);
+  const path = (BG_C.match(/INTEGRATIONS_PATH\s*=\s*'([^']+)'/) || [])[1];
+  if (!path || !GATEWAY_SRC.includes(`'${path}'`)) fail('endpoint drift', `extension calls ${path} but gateway/server.mjs has no route for it`);
+  // Legacy unauthenticated model routes must not come back (audit finding #2).
+  if (/\/v1\/ai\//.test(code(GATEWAY_SRC))) fail('gateway', 'gateway/server.mjs serves a /v1/ai/* route');
+  notes.push(`gateway url declared once in src/background.js (port ${port}); ${path} routed`);
 }
 
 // ── 14. manifest version is documented in the changelog ───────────
@@ -333,7 +251,7 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   if (bad.length) fail('emoji', `found ${bad.map(c => JSON.stringify(c)).join(', ')} on a rebuilt surface`);
 }
 
-// ── 16. panel/header/.on move ONLY through setUiState ─────────────
+// ── 16. panel/header move ONLY through setUiState ─────────────
 {
   // The recording screen went blank because the active panel (sh), the header
   // (st), and the .rec-live.on toggle were set by separate call sites that could
@@ -344,63 +262,26 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   if (shCalls.length) fail('ui state', `direct panel switch bypasses setUiState: ${uniq(shCalls).join(', ')}`);
   const stCalls = (PANEL_C.match(/\bst\('[^']*'\)/g) || []);
   if (stCalls.length) fail('ui state', `direct header set bypasses setUiState: ${uniq(stCalls).join(', ')}`);
-  // The .on toggle may appear only inside the setUiState/assert/heal region.
-  const region = PANEL_C.slice(PANEL_C.indexOf('function setUiState'), PANEL_C.indexOf('// ─── Objective chips'));
-  const onAll = (PANEL_C.match(/recLive\.classList\.(add|remove|toggle)\([^)]*\)/g) || []);
-  const onRegion = (region.match(/recLive\.classList\.(add|remove|toggle)\([^)]*\)/g) || []);
-  if (onAll.length !== onRegion.length) fail('ui state', `.rec-live.on toggled outside setUiState (${onAll.length - onRegion.length} site(s))`);
   if (!/function setUiState/.test(PANEL_C)) fail('ui state', 'setUiState is missing');
-  notes.push(`ui state: ${onRegion.length} .on toggle(s), all inside setUiState; no sh(pnl…)/st('…') bypass`);
+  notes.push(`ui state: no sh(pnl…)/st('…') bypass of setUiState`);
 }
 
-// ── 17. content-script version handshake forces re-injection ──────
+// ── 17. prototype features stay removed (audit finding #10) ──────
 {
-  // The blank/ghost failure traces to a stale content script surviving an
-  // extension reload. ensureContentScript must PING, compare CONTENT_VERSION, and
-  // re-inject on absence OR mismatch — never drive an unverified script.
-  const fn = PANEL_C.slice(PANEL_C.indexOf('async function ensureContentScript'), PANEL_C.indexOf('async function ensureContentScript') + 700);
-  if (!fn) fail('handshake', 'ensureContentScript missing');
-  else {
-    if (!/MSG\.PING/.test(fn)) fail('handshake', 'ensureContentScript does not PING');
-    if (!/version\s*===?\s*CONTENT_VERSION/.test(fn)) fail('handshake', 'ensureContentScript does not compare CONTENT_VERSION');
-    if (!/executeScript/.test(fn)) fail('handshake', 'ensureContentScript never re-injects');
-    // The early-return must be gated on BOTH ok and a version match.
-    if (!/if\(r\?\.ok&&r\.version===CONTENT_VERSION\)return/.test(fn.replace(/\s+/g, ''))) {
-      fail('handshake', 'ensureContentScript returns without confirming version match');
-    }
-  }
-  notes.push('handshake: ensureContentScript PINGs + version-gates + re-injects');
-}
-
-// ── 18. captureVisibleTab is never reached without the flag check ─
-{
-  // Screen capture is opt-in (CAPTURE_SCREENSHOTS, default off). No path may call
-  // captureVisibleTab without first checking the flag. Deleting the guard in
-  // capturePageContext must fail this check.
-  const shots = (BG_C.match(/captureVisibleTab/g) || []).length;
-  if (shots === 0) {
-    notes.push('capture: captureVisibleTab not used');
-  } else {
-    if (shots > 1) fail('capture', `captureVisibleTab appears ${shots}× — keep it in one gated place`);
-    if (!/CAPTURE_SCREENSHOTS/.test(BG_C)) fail('capture', 'background.js calls captureVisibleTab but never checks CAPTURE_SCREENSHOTS');
-    // The guard must sit inside capturePageContext, before the ON-path capture call.
-    const fn = BG_C.slice(BG_C.indexOf('async function capturePageContext'));
-    const body = fn.slice(0, fn.indexOf('\n}\n') + 1);
-    const guardAt = body.search(/if\s*\(\s*!\s*CAPTURE_SCREENSHOTS\s*\)/);
-    const captureAt = body.search(/\baddFrame\s*\(/);
-    if (guardAt < 0) fail('capture', 'capturePageContext has no `if (!CAPTURE_SCREENSHOTS)` guard — captureVisibleTab is reachable unconditionally');
-    else if (captureAt >= 0 && guardAt > captureAt) fail('capture', 'the CAPTURE_SCREENSHOTS guard comes AFTER the capture call in capturePageContext');
-    notes.push('capture: captureVisibleTab is behind a CAPTURE_SCREENSHOTS guard');
-  }
+  const surfaces = { 'sidepanel.html': HTML, 'sidepanel.js': PANEL_C, 'src/background.js': BG_C };
+  const LEGACY = [/record a brief/i, /Motivation AI/, /getUserMedia/, /captureVisibleTab/, /\/v1\/ai\//, /TRANSCRIBE/, /panelRecord|panelConfigure|panelBrief|panelProcess/];
+  for (const [name, src] of Object.entries(surfaces)) for (const re of LEGACY) if (re.test(src)) fail('prototype residue', `${name} matches ${re}`);
+  if (MANIFEST.options_ui || MANIFEST.options_page) fail('prototype residue', 'manifest still declares an options page');
+  notes.push('prototype: no recorder, brief, capture or portal surfaces');
 }
 
 // ── 20. provider credentials stay in the local gateway ──────────
 {
-  for (const [name, src] of Object.entries({ 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C })) {
+  for (const [name, src] of Object.entries({ 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C })) {
     if (/KEYS\.(API_KEY|MC_API_KEY)/.test(src)) fail('credentials', `${name} references a credential storage key`);
     if (/chrome\.storage/.test(src) && name === 'src/mc-overlay.js') fail('credentials', 'the Mailchimp overlay must not read chrome.storage');
   }
-  for (const [name, src] of Object.entries({ 'sidepanel.js': PANEL_C, 'src/content.js': CONTENT_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C })) {
+  for (const [name, src] of Object.entries({ 'sidepanel.js': PANEL_C, 'src/scan.js': SCAN_C, 'src/mc-overlay.js': OVERLAY_C })) {
     if (/api\.persado\.com\/api|api\.mailchimp\.com\/3\.0|Authorization/.test(src)) fail('credentials', `${name} calls Persado/Mailchimp directly — only the service worker may`);
   }
   if (/x-persado-api-key|apiKeyHeaders/.test(PANEL_C)) fail('credentials', 'sidepanel.js still forwards the Persado key');
@@ -417,28 +298,10 @@ const PANEL_C = code(PANEL), BG_C = code(BG), CONTENT_C = code(CONTENT), SCAN_C 
   // Every content script the manifest declares must exist and stay off the key.
   for (const cs of MANIFEST.content_scripts || []) for (const f of cs.js || []) if (!existsSync(join(EXT, f))) fail('missing asset', `content script ${f}`);
   // No mock scores survive anywhere in the shipped extension.
-  for (const [name, src] of Object.entries({ 'sidepanel.js': PANEL_C, 'src/config.js': code(CONFIG) })) {
+  for (const [name, src] of Object.entries({ 'sidepanel.js': PANEL_C })) {
     if (/MOCK_SCORES|MOCK_LIFTS|predictedLift\s*:/.test(src)) fail('fabricated scores', `${name} still carries mock scores or lift`);
   }
   notes.push(`credentials: gateway-only; overlay sends ${sentByOverlay.join(', ')}`);
-}
-
-// ── 19. asset types used in the panel are all in config ASSET_TYPES ─
-{
-  const cfgBlock = (CONFIG.match(/const ASSET_TYPES\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\)/) || [, ''])[1];
-  const allowed = new Set(all(/'([a-z-]+)'/g, cfgBlock));
-  if (!allowed.size) fail('asset types', 'ASSET_TYPES not found / empty in config.js');
-  // Values the panel maps element types TO, and the labelled keys it renders.
-  const mapVals = all(/:\s*'([a-z-]+)'/g, (PANEL_C.match(/const ELEMENT_TO_ASSET=\{[^}]*\}/) || [''])[0]);
-  const labelKeys = all(/'([a-z-]+)'\s*:/g, (PANEL_C.match(/const ASSET_LABELS=\{[^}]*\}/) || [''])[0]);
-  const dflt = all(/\|\|\s*'([a-z-]+)'/g, (PANEL_C.match(/function inferAssetType[^}]*\}/) || [''])[0]);
-  const used = uniq([...mapVals, ...labelKeys, ...dflt]);
-  const bad = used.filter(v => !allowed.has(v));
-  if (bad.length) fail('asset types', `panel uses ${bad.join(', ')} not in config ASSET_TYPES (${[...allowed].join(', ')})`);
-  // Every allowed type should be labelled, or the override select shows a blank.
-  const unlabelled = [...allowed].filter(a => !labelKeys.includes(a));
-  if (unlabelled.length) fail('asset types', `no ASSET_LABELS entry for ${unlabelled.join(', ')}`);
-  notes.push(`asset types: ${used.length} panel values ⊆ ${allowed.size} allowed`);
 }
 
 // ── report ───────────────────────────────────────────────────────
